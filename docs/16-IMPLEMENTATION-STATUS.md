@@ -8,7 +8,7 @@ This ledger is for Claude Code, Codex and human maintainers. Keep it factual; do
 |---|---|
 | Active milestone | R0 (foundation) |
 | Next ticket | R0-03 (local DB/auth), blocked on choosing a local-only database path (ADR-015) |
-| Repository baseline | Next.js 16 App Router; design system, public landing, workspace shell and labelled `/preview`; `main` pushed to `github.com/Arnie06/WedGood` (public repo) |
+| Repository baseline | Next.js 16 App Router; design system, public landing, workspace shell and labelled `/preview`. Committed on local `main` (`401a1a1` + this handoff commit). **Not pushed:** `git push` to `github.com/Arnie06/WedGood` (public) returned 403 because the signed-in GitHub account has read-only access. Remote `origin` is configured. |
 | Stack versions | Locked; see ADR-013 and `pnpm-lock.yaml` (R0-02 added lucide-react 1.70.0, @playwright/test 1.65.1, @axe-core/playwright 4.14.0) |
 | Migrations applied | None (no database yet; local-only per ADR-015) |
 | Last verified commands | 2026-11-19: format:check, lint, typecheck, test:unit (125/125), test:e2e (62/62), build, all passing locally |
@@ -19,9 +19,20 @@ This ledger is for Claude Code, Codex and human maintainers. Keep it factual; do
 
 | Ticket | Status (not started / in progress / blocked / done) | Branch/commit | Evidence / notes |
 |---|---|---|---|
-| R0-01 | done | `main` | See 2026-11-19 R0-01 entry |
-| R0-02 | done locally; GitHub CI result pending its first run | `main` | See 2026-11-19 R0-02 entry |
+| R0-01 | done | `main` @ `401a1a1` | See 2026-11-19 R0-01 entry |
+| R0-02 | done locally; CI not yet run (not pushed) | `main` @ `401a1a1` | See 2026-11-19 R0-02 entry |
 | R0-03 | blocked | — | Needs a local-only database choice (ADR-015); Docker not installed |
+
+## Next session: start here
+
+1. Read `AGENTS.md`, this ledger, ADR-013 to ADR-015 in `docs/15-DECISIONS.md`, and `git log` / `git status`. `.claude/settings.json` may show uncommitted local permission entries; they are personal tool approvals, not project work.
+2. Verify the baseline before changing anything (commands in `docs/13-DEVOPS.md`): `npx pnpm@12.21.0 install --frozen-lockfile`, then `lint`, `typecheck`, `test:unit` (expect 125) and `test:e2e` (expect 62). The E2E suite needs `playwright install chromium` once per machine.
+3. Open items for the owner, in order:
+   - Fix GitHub write access (add the signed-in account as a collaborator, or `gh auth login` as the repo owner), then `git push -u origin main` and confirm both CI jobs (`verify`, `e2e`) pass. Record the result here.
+   - Choose the local-only database for R0-03: install Docker for the local Supabase CLI stack (closest to the expected hosted path), or a native local Postgres. Record the choice in ADR-015.
+4. Then implement **R0-03** (`docs/14-BACKLOG.md`): local DB/auth, migrations and generated types; create a wedding atomically with its owner; two-tenant RLS isolation tests against the real local database; private storage defaults. Use `prompts/02-VERTICAL-SLICE.md`. The real workspace routes belong under `/app/[w]` and reuse `WorkspaceShell` (`src/components/shell/`) with `basePath`. Keep `/preview` and its fixture segregated from real data.
+5. Carry-over gaps: no screen-reader, 200% zoom or reduced-motion check by hand; Chromium only (add WebKit/Firefox smoke in R0-05); CSP header deferred to auth work (ADR-013); ESLint 9 and TS 6 pinned for peer compatibility (ADR-013).
+6. Conventions established: semantic colour aliases only (raw palette is disabled in Tailwind; `tokens.test.ts` guards contrast); money in integer minor units via `src/domain/money`; date-only values via `src/domain/dates`; no fake success states. Unbuilt tools are labelled "Not available yet", not linked.
 
 ## Session log
 
@@ -50,7 +61,7 @@ This ledger is for Claude Code, Codex and human maintainers. Keep it factual; do
 - **Integrations / flags:** none configured. No secrets in repo; `.env.local` is gitignored and holds only the public localhost URL.
 - **Risks:** ESLint 9 is end of support and TS 7 is deferred because of peer ranges (ADR-013). `/` is an honest "foundation build" placeholder with no actions.
 - **Next:** R0-02, after the owner picks an ADR-014 option. R0-03 needs Docker (or another documented isolated Postgres) for local Supabase; Docker is not installed on this machine.
-- **Worktree:** committed and pushed with R0-02 at the owner's request.
+- **Worktree:** committed with R0-02 at the owner's request (`401a1a1`). The push failed with a 403 (see Current state).
 
 ## Session handoff template (append one per completed session)
 
