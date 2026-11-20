@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pnpm -v)",
+      "Bash(npm -v)",
+      "Bash(git --version)",
+      "Bash(curl -s https://nodejs.org/dist/index.json)",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\([ \\(x['version'],x['lts'],x['date']\\) for x in d if x['lts']][:4]\\)\")",
+      "Bash(npm view *)",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\([ \\(x['version'],x['lts'],x['date']\\) for x in d if x['lts']][:3]\\)\")",
+      "Bash(npx --yes pnpm@12.21.0 install)",
+      "Bash(python3 -c \"import json,sys; v=json.load\\(sys.stdin\\); print\\([x for x in v if x.startswith\\('9.'\\)][-3:]\\)\")",
+      "Bash(npx --yes pnpm@12.21.0 ignored-builds)",
+      "Bash(npx --yes pnpm@12.21.0 exec eslint --stdin --stdin-filename src/probe.tsx)",
+      "Bash(gh repo *)",
+      "Bash(npx --yes pnpm@12.21.0 exec vitest run src/styles)",
+      "Bash(npx --yes pnpm@12.21.0 exec vitest run)",
+      "Bash(python3 -)",
+      "Bash(curl -s https://api.github.com/repos/actions/upload-artifact/releases/latest)",
+      "Bash(python3 -c \"import json,sys; print\\(json.load\\(sys.stdin\\).get\\('tag_name'\\)\\)\")",
+      "Bash(git add *)"
+    ]
+  }
+}
