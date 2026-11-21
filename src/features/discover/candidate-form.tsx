@@ -1,13 +1,15 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useRef, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { SelectField } from "@/components/ui/select-field";
 import { TextAreaField } from "@/components/ui/text-area-field";
 import { TextField } from "@/components/ui/text-field";
 import { PRICE_BASES, VENDOR_CATEGORIES, type CandidateKind } from "@/domain/candidates/categories";
 import type { CandidateField } from "@/domain/candidates/input";
+import { applyLookup } from "@/domain/links/apply";
 import type { CandidateActionState } from "@/server/candidates/actions";
+import { lookupLink } from "@/server/links/actions";
 
 export type CandidateFormDefaults = Record<CandidateField, string>;
 
@@ -22,6 +24,7 @@ export function CandidateForm({
   hidden,
   submitLabel,
   pendingLabel,
+  lookupWorkspaceId,
 }: {
   action: Action;
   kind: CandidateKind;
@@ -30,6 +33,8 @@ export function CandidateForm({
   hidden: Record<string, string>;
   submitLabel: string;
   pendingLabel: string;
+  /** When set, shows "Paste a link" so details can be prefilled from the page (ADR-029). */
+  lookupWorkspaceId?: string;
 }) {
   const [state, formAction, pending] = useActionState(action, {
     status: "idle",
@@ -38,13 +43,100 @@ export function CandidateForm({
   const errors = state.status === "error" ? state.fieldErrors : {};
   const v = (k: CandidateField) => echoed?.[k] ?? defaults[k];
   const noun = kind === "venue" ? "venue" : "vendor";
+  const formRef = useRef<HTMLFormElement>(null);
+  const [linkText, setLinkText] = useState("");
+  const [looking, startLookup] = useTransition();
+  const [lookupNote, setLookupNote] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
+
+  /** Reads and writes the uncontrolled fields directly, so typed text is never lost. */
+  function runLookup() {
+    const form = formRef.current;
+    if (!form || !lookupWorkspaceId) return;
+    const field = (name: string) => form.elements.namedItem(name) as HTMLInputElement | null;
+    setLookupNote(null);
+    startLookup(async () => {
+      const result = await lookupLink(lookupWorkspaceId, linkText);
+      if (result.status === "error") {
+        setLookupNote({ tone: "error", text: result.message });
+        return;
+      }
+      const keys = ["name", "location", "sourceUrl", "sourceCheckedOn", "notes"] as const;
+      const current = Object.fromEntries(keys.map((k) => [k, field(k)?.value ?? ""])) as Record<
+        (typeof keys)[number],
+        string
+      >;
+      const today = new Date().toLocaleDateString("en-CA");
+      const applied = applyLookup(current, result.details, result.finalUrl, today);
+      for (const k of keys) {
+        const el = field(k);
+        if (el && applied.values[k] !== current[k]) {
+          el.value = applied.values[k];
+          el.setAttribute("data-just-added", "");
+          window.setTimeout(() => el.removeAttribute("data-just-added"), 2500);
+        }
+      }
+      const onlyLink = applied.filled.every(
+        (f) => f === "Source link" || f === "Source last checked",
+      );
+      setLookupNote({
+        tone: "ok",
+        text: onlyLink
+          ? "We opened the page but found no details we could use. The link is saved in the form. Please fill in the rest yourself."
+          : `Filled from the page: ${applied.filled.join(", ")}. These come from their website, not from us. Please check each one before saving.`,
+      });
+    });
+  }
 
   return (
-    <form action={formAction} className="space-y-5" noValidate>
+    <form ref={formRef} action={formAction} className="space-y-5" noValidate>
       <input type="hidden" name="kind" value={kind} />
       {Object.entries(hidden).map(([name, value]) => (
         <input key={name} type="hidden" name={name} value={value} />
       ))}
+      {lookupWorkspaceId && (
+        <div className="space-y-3 rounded-card border border-border-hairline p-4">
+          <TextField
+            label="Paste a link"
+            hint={`Optional. Paste the ${noun}'s web page and we'll read its name and details for you to check. Nothing is saved until you press ${submitLabel}.`}
+            value={linkText}
+            onChange={(e) => setLinkText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                if (linkText.trim() !== "" && !looking) runLookup();
+              }
+            }}
+            type="text"
+            inputMode="url"
+            autoComplete="off"
+            placeholder="https://"
+            maxLength={2048}
+          />
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            disabled={looking || linkText.trim() === ""}
+            onClick={runLookup}
+          >
+            {looking ? "Looking…" : "Look up this page"}
+          </Button>
+          <div aria-live="polite" className="min-h-6">
+            {lookupNote && (
+              <p
+                role={lookupNote.tone === "error" ? "alert" : undefined}
+                className={
+                  lookupNote.tone === "error"
+                    ? "text-body-md text-danger"
+                    : "text-body-md text-action-secondary"
+                }
+              >
+                {lookupNote.text}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
       <TextField
         label="Name"
         name="name"
@@ -145,7 +237,7 @@ export function CandidateForm({
       <div className="grid gap-5 sm:grid-cols-2">
         <TextField
           label="Source link"
-          hint={`Optional. Where you found this ${noun}. We save the link but never open it.`}
+          hint={`Optional. Where you found this ${noun}. The app only reads a page when you press “Look up this page”.`}
           name="sourceUrl"
           type="url"
           inputMode="url"

@@ -70,6 +70,7 @@ export default async function NewCandidatePage({
         submitLabel="Save"
         pendingLabel="Saving…"
         defaults={EMPTY}
+        lookupWorkspaceId={access.wedding.id}
         hidden={{ workspaceId: access.wedding.id, idempotencyKey: randomUUID() }}
       />
       <p>

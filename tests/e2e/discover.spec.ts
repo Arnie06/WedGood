@@ -294,3 +294,60 @@ test("discover pages pass axe and reflow at 320px and 1280px", async ({ page }) 
     }
   }
 });
+
+test("paste a link: bad and unreadable addresses give honest messages and keep what was typed", async ({
+  page,
+}) => {
+  const owner = await appUser("disc-link");
+  const wedding = await createWedding(owner, { name: "Link Lookup" });
+  await signInViaUi(page, owner);
+  await page.goto(`/app/${wedding}/discover/new`);
+
+  const lookup = page.getByRole("button", { name: "Look up this page" });
+  await expect(lookup).toBeDisabled();
+
+  await page.getByLabel(/^Name/).fill("My own name");
+  await page.getByLabel("Paste a link").fill("not a web address at all");
+  await lookup.click();
+  await expect(page.getByText("Paste a full web address")).toBeVisible();
+
+  // Addresses on the inside of the network are never read, and the message says nothing about why.
+  for (const target of [
+    "http://127.0.0.1/",
+    "http://localhost:3000/",
+    "http://169.254.169.254/latest/meta-data/",
+    "http://10.0.0.1/",
+    "ftp://example.com/file",
+  ]) {
+    await page.getByLabel("Paste a link").fill(target);
+    await lookup.click();
+    await expect(page.getByText("That address can't be read")).toBeVisible();
+  }
+
+  // Pressing Enter in the link box looks it up; it does not submit (save) the form.
+  await page.getByLabel("Paste a link").fill("http://127.0.0.1/");
+  await page.getByLabel("Paste a link").press("Enter");
+  await expect(page).toHaveURL(/\/discover\/new/);
+  await expect(page.getByLabel(/^Name/)).toHaveValue("My own name");
+  const saved = await withSuperuser((db) =>
+    db.query("select count(*)::int n from public.candidates where wedding_id=$1", [wedding]),
+  );
+  expect(saved.rows[0].n).toBe(0);
+});
+
+test("paste a link is not offered to a viewer, and the add page is not reachable", async ({
+  page,
+}) => {
+  const owner = await appUser("disc-link-o");
+  const viewer = await appUser("disc-link-v");
+  const wedding = await createWedding(owner, { name: "Link Viewer" });
+  await withSuperuser((db) =>
+    db.query("insert into public.memberships (wedding_id, user_id, role) values ($1,$2,'viewer')", [
+      wedding,
+      viewer.id,
+    ]),
+  );
+  await signInViaUi(page, viewer);
+  const response = await page.goto(`/app/${wedding}/discover/new`);
+  expect(response?.status()).toBe(404);
+});
