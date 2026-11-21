@@ -76,16 +76,20 @@ test("add a guest, find it, edit it with private details, archive and restore it
   await expect(page.getByRole("heading", { level: 1, name: "Guest list" })).toBeVisible();
   await expect(page.getByText("No guests yet")).toBeVisible();
 
-  await page.getByText("Add a guest").click();
+  await page.getByRole("button", { name: "Add a guest" }).click();
   await page.getByLabel(/^Name/).fill("Ada Example");
   await page.getByLabel("Household", { exact: false }).fill("The Examples");
+  await page.getByText("More details").click();
   await page.getByLabel("Tags").fill("Family, College");
   await page.getByRole("button", { name: "Add guest" }).click();
   await expect(page.getByText("Added Ada Example.")).toBeVisible();
+  await page.keyboard.press("Escape");
   await expect(page.getByRole("link", { name: "Ada Example" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "The Examples" })).toBeVisible();
+  await page.getByRole("button", { name: "Add a guest" }).click();
 
   // Validation keeps what was typed and says what is wrong.
+  await page.getByText("More details").click();
   await page.getByLabel("Email", { exact: true }).fill("not-an-email");
   await page.getByLabel(/^Name/).fill("Bad Email");
   await page.getByRole("button", { name: "Add guest" }).click();
@@ -93,6 +97,8 @@ test("add a guest, find it, edit it with private details, archive and restore it
   await expect(page.getByLabel(/^Name/)).toHaveValue("Bad Email");
   expect(await guestNames(wedding)).toEqual(["Ada Example"]);
 
+  // The sheet is modal; close it to reach the list behind it.
+  await page.keyboard.press("Escape");
   await page.getByRole("link", { name: "Ada Example" }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Ada Example" })).toBeVisible();
   await page.getByLabel("Dietary needs or allergies").fill("Vegetarian");
@@ -197,13 +203,11 @@ test("search and filters narrow the list on a phone", async ({ page }) => {
   await page.goto(`/app/${wedding}/guests`);
   await expect(page.getByText("Showing 3 guests.")).toBeVisible();
   await page.getByLabel("Search by name or email").fill("kit");
-  await page.getByRole("button", { name: "Apply filters" }).click();
   await expect(page.getByText("Showing 1 guest that match.")).toBeVisible();
-  await page.getByRole("link", { name: "Clear" }).click();
+  await page.getByRole("button", { name: "Clear" }).click();
   await expect(page.getByText("Showing 3 guests.")).toBeVisible();
   await page.getByRole("search").getByLabel("Tag").selectOption("Family");
   await page.getByRole("search").getByLabel("Adult or child").selectOption("adult");
-  await page.getByRole("button", { name: "Apply filters" }).click();
   await expect(page.getByText("Showing 1 guest that match.")).toBeVisible();
   await expect(page.getByRole("link", { name: "Ada Adult" })).toBeVisible();
 });
@@ -292,4 +296,67 @@ test("guest pages pass axe and reflow at 320px and 1280px", async ({ page }) => 
       });
     }
   }
+});
+
+test("quick add keeps the sheet open, refocuses Name, confirms and can undo", async ({ page }) => {
+  const owner = await appUser("guest-quick");
+  const wedding = await createWedding(owner, { name: "Quick Guests" });
+  await signInViaUi(page, owner);
+  await page.goto(`/app/${wedding}/guests`);
+
+  await page.getByRole("button", { name: "Add a guest" }).click();
+  const dialog = page.getByRole("dialog", { name: "Add a guest" });
+  await expect(page.getByLabel(/^Name/)).toBeFocused();
+  // Only name and household are visible up front.
+  await expect(dialog.getByLabel("Email", { exact: true })).toBeHidden();
+
+  await page.getByLabel(/^Name/).fill("Quinn One");
+  await page.getByRole("button", { name: "Add guest" }).click();
+  await expect(dialog.getByText("Added Quinn One.")).toBeVisible();
+  await expect(page.getByLabel(/^Name/)).toBeFocused();
+  await expect(page.getByLabel(/^Name/)).toHaveValue("");
+
+  await page.getByLabel(/^Name/).fill("Quinn Two");
+  await page.getByRole("button", { name: "Add guest" }).click();
+  await expect(dialog.getByText("Added Quinn Two.")).toBeVisible();
+  expect((await guestNames(wedding)).sort()).toEqual(["Quinn One", "Quinn Two"]);
+
+  await dialog.getByRole("button", { name: "Undo" }).click();
+  await expect(dialog.getByText(/Removed/)).toBeVisible();
+  const active = await withSuperuser((db) =>
+    db.query("select full_name from public.guests where wedding_id=$1 and archived_at is null", [
+      wedding,
+    ]),
+  );
+  expect(active.rows.map((r) => r.full_name)).toEqual(["Quinn One"]);
+});
+
+test("an error in More details opens it and focuses the field", async ({ page }) => {
+  const owner = await appUser("guest-more");
+  const wedding = await createWedding(owner, { name: "More Guests" });
+  await signInViaUi(page, owner);
+  await page.goto(`/app/${wedding}/guests`);
+  await page.getByRole("button", { name: "Add a guest" }).click();
+  await page.getByLabel(/^Name/).fill("Bad Email");
+  await page.getByText("More details").click();
+  await page.getByLabel("Email", { exact: true }).fill("nope");
+  await page.getByText("Fewer details").click();
+  await page.getByRole("button", { name: "Add guest" }).click();
+  await expect(page.getByLabel("Email", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Email", { exact: true })).toBeFocused();
+  expect(await guestNames(wedding)).toEqual([]);
+});
+
+test("filters apply as you type, with no apply button", async ({ page }) => {
+  const owner = await appUser("guest-filter");
+  const wedding = await createWedding(owner, { name: "Filter Guests" });
+  await seedGuests(owner, wedding, [{ name: "Ada Adult" }, { name: "Kit Child" }]);
+  await signInViaUi(page, owner);
+  await page.goto(`/app/${wedding}/guests`);
+  await expect(page.getByRole("button", { name: "Apply filters" })).toHaveCount(0);
+  await page.getByLabel("Search by name or email").fill("kit");
+  await expect(page.getByText("Showing 1 guest that match.")).toBeVisible();
+  await expect(page.getByLabel("Search by name or email")).toBeFocused();
+  await page.getByLabel("Search by name or email").fill("");
+  await expect(page.getByText("Showing 2 guests.")).toBeVisible();
 });

@@ -55,6 +55,15 @@ This ledger is for Claude Code, Codex and human maintainers. Keep it factual; do
 
 ## Session log
 
+### 2026-11-20 · Claude Code · UX-04b (guests) · branch `main`
+
+- **Scope:** Guest list entry. "Add a guest" opens a sheet that stays open for rapid entry: only Name and Household up front, the rest under "More details" (opens itself if a hidden field has an error), focus returns to Name after each save, and confirmation plus Undo (versioned archive) show inside the sheet (a global toast would sit behind the modal backdrop). Search and filters apply as you type or choose (debounced, URL kept in sync, still a plain GET form with a `noscript` button). Header: a one-line summary instead of a zero-filled totals card, a three-link tool row (Invitations, Seating, Guest website), Import beside Add, CSV download moved below the list. Filters hide until guests exist.
+- **Bug found by tests and fixed:** "Clear" left the typed search text in the box (uncontrolled input), so the next filter silently still applied it. Clear is now a button that empties the fields and reloads the list.
+- **Tests:** guests.spec updated for the sheet and auto-apply; 3 new e2e (quick add keeps sheet open, refocuses Name, confirms, Undo removes; error in More details opens it and focuses the field; filters apply with no button and keep focus). guests, website, day-of, comments, seating, rsvp specs pass.
+- **Commands, exit 0:** `format:check`, `lint`, `typecheck`, `test:unit` 518, e2e (chromium) for the specs above.
+- **Not verified:** 768/1440; screen reader; Firefox. Full e2e not re-run for this part.
+- **Next:** UX-04c (venue paste-a-link; needs ADR and SSRF-safe fetch adapter first).
+
 ### 2026-11-20 · Claude Code · UX-04a (checklist) · branch `main`
 
 - **Scope:** Checklist list-first. "Add a task" moved from an always-open form into a sheet (`components/ui/sheet.tsx` on native `<dialog>`: bottom sheet on phones, centred on larger screens; focus trapped, Escape closes, focus returns to the button, closes after saving). Groups other than "Needs attention" show five items and fold the rest behind "Show N more"; `revealElement` opens a closed fold when a new item lands inside it. Dropped the repeated per-row "Moves with your wedding date" and phase text (page intro already says it); tasks with a user-set date say "Date set by you, so it won't move".

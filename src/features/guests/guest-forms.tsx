@@ -69,6 +69,7 @@ export function GuestForm({
   guest,
   showPrivate,
   submitLabel,
+  quick = false,
 }: {
   workspaceId: string;
   householdNames: readonly string[];
@@ -76,21 +77,59 @@ export function GuestForm({
   guest?: { id: string; version: number };
   showPrivate: boolean;
   submitLabel: string;
+  /**
+   * Fast entry for a new guest: only name and household up front, the rest under "More
+   * details", focus back on Name after each save, and an Undo toast instead of inline text.
+   */
+  quick?: boolean;
 }) {
+  // Fast entry keeps its sheet open (modal), so confirmation and Undo live inside it.
+  const [added, setAdded] = useState<{ id: string; message: string; undone: boolean } | null>(null);
+  const [undoError, setUndoError] = useState<string | null>(null);
   const [created, setCreated] = useState(0);
   const [keyBase] = useState(() => crypto.randomUUID());
   const listId = useId();
   const [state, formAction, pending] = useActionState(
     async (prev: GuestActionState, form: FormData) => {
+      if (quick) {
+        setAdded(null);
+        setUndoError(null);
+      }
       const next = await saveGuest(prev, form);
-      if (next.status === "ok" && !guest) setCreated((n) => n + 1);
+      if (next.status === "ok" && !guest) {
+        setCreated((n) => n + 1);
+        if (quick) {
+          setUndoError(null);
+          setAdded(next.id ? { id: next.id, message: next.message, undone: false } : null);
+        }
+      }
       return next;
     },
     idle,
   );
+  async function undoAdd() {
+    if (!added) return;
+    const undo = new FormData();
+    undo.set("workspaceId", workspaceId);
+    undo.set("guestId", added.id);
+    undo.set("version", "1");
+    undo.set("archived", "true");
+    const result = await setGuestArchived({ status: "idle" }, undo);
+    if (result.status === "error") setUndoError(result.message);
+    else setAdded({ ...added, undone: true });
+  }
   const echoed = state.status === "error" ? state.values : undefined;
   const errors = state.status === "error" ? state.fieldErrors : {};
   const v = (k: keyof GuestFormValues) => echoed?.[k] ?? initial[k];
+  const moreHasError = [
+    "email",
+    "phone",
+    "ageGroup",
+    "tags",
+    "dietary",
+    "accessibility",
+    "notes",
+  ].some((k) => Boolean(errors[k]));
   return (
     <form action={formAction} className="space-y-4" noValidate key={guest ? "edit" : created}>
       <Hidden
@@ -105,31 +144,12 @@ export function GuestForm({
         label="Name"
         name="fullName"
         required
+        autoFocus={quick}
         maxLength={120}
         autoComplete="off"
         defaultValue={v("fullName")}
         error={errors.fullName}
       />
-      <div className="grid gap-4 sm:grid-cols-2">
-        <TextField
-          label="Email"
-          name="email"
-          type="email"
-          maxLength={254}
-          autoComplete="off"
-          defaultValue={v("email")}
-          error={errors.email}
-        />
-        <TextField
-          label="Phone"
-          name="phone"
-          type="tel"
-          maxLength={30}
-          autoComplete="off"
-          defaultValue={v("phone")}
-          error={errors.phone}
-        />
-      </div>
       <TextField
         label="Household"
         hint="People in the same household are invited together. Type a new name or pick an existing one."
@@ -145,64 +165,203 @@ export function GuestForm({
           <option key={n} value={n} />
         ))}
       </datalist>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <SelectField
-          key={`age:${v("ageGroup")}`}
-          label="Adult or child"
-          name="ageGroup"
-          defaultValue={v("ageGroup")}
-          error={errors.ageGroup}
+      {quick ? (
+        <details
+          open={moreHasError || undefined}
+          className="group rounded-card border border-border-hairline"
         >
-          <option value="">Not set</option>
-          <option value="adult">Adult</option>
-          <option value="child">Child</option>
-        </SelectField>
-        <TextField
-          label="Tags"
-          hint="Separate with commas, for example Family, College friends."
-          name="tags"
-          autoComplete="off"
-          defaultValue={v("tags")}
-          error={errors.tags}
-        />
-      </div>
-      {showPrivate && (
-        <fieldset className="space-y-4 rounded-card border border-border-hairline p-4">
-          <legend className="px-2 text-label-lg font-semibold">Private details</legend>
-          <p className="text-body-sm text-ink-muted">
-            Only the owner and partner can see these. They are left out of exports and are never
-            shown to guests.
-          </p>
-          <TextAreaField
-            label="Dietary needs or allergies"
-            name="dietary"
-            rows={2}
-            maxLength={500}
-            defaultValue={v("dietary")}
-            error={errors.dietary}
-          />
-          <TextAreaField
-            label="Accessibility needs"
-            name="accessibility"
-            rows={2}
-            maxLength={500}
-            defaultValue={v("accessibility")}
-            error={errors.accessibility}
-          />
-          <TextAreaField
-            label="Private notes"
-            name="notes"
-            rows={2}
-            maxLength={500}
-            defaultValue={v("notes")}
-            error={errors.notes}
-          />
-        </fieldset>
+          <summary className="flex min-h-11 cursor-pointer items-center px-4 text-label-lg font-semibold text-action-emphasis">
+            <span className="group-open:hidden">More details</span>
+            <span className="hidden group-open:inline">Fewer details</span>
+          </summary>
+          <div className="space-y-4 px-4 pb-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <TextField
+                label="Email"
+                name="email"
+                type="email"
+                maxLength={254}
+                autoComplete="off"
+                defaultValue={v("email")}
+                error={errors.email}
+              />
+              <TextField
+                label="Phone"
+                name="phone"
+                type="tel"
+                maxLength={30}
+                autoComplete="off"
+                defaultValue={v("phone")}
+                error={errors.phone}
+              />
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <SelectField
+                key={`age:${v("ageGroup")}`}
+                label="Adult or child"
+                name="ageGroup"
+                defaultValue={v("ageGroup")}
+                error={errors.ageGroup}
+              >
+                <option value="">Not set</option>
+                <option value="adult">Adult</option>
+                <option value="child">Child</option>
+              </SelectField>
+              <TextField
+                label="Tags"
+                hint="Separate with commas, for example Family, College friends."
+                name="tags"
+                autoComplete="off"
+                defaultValue={v("tags")}
+                error={errors.tags}
+              />
+            </div>
+            {showPrivate && (
+              <fieldset className="space-y-4 rounded-card border border-border-hairline p-4">
+                <legend className="px-2 text-label-lg font-semibold">Private details</legend>
+                <p className="text-body-sm text-ink-muted">
+                  Only the owner and partner can see these. They are left out of exports and are
+                  never shown to guests.
+                </p>
+                <TextAreaField
+                  label="Dietary needs or allergies"
+                  name="dietary"
+                  rows={2}
+                  maxLength={500}
+                  defaultValue={v("dietary")}
+                  error={errors.dietary}
+                />
+                <TextAreaField
+                  label="Accessibility needs"
+                  name="accessibility"
+                  rows={2}
+                  maxLength={500}
+                  defaultValue={v("accessibility")}
+                  error={errors.accessibility}
+                />
+                <TextAreaField
+                  label="Private notes"
+                  name="notes"
+                  rows={2}
+                  maxLength={500}
+                  defaultValue={v("notes")}
+                  error={errors.notes}
+                />
+              </fieldset>
+            )}
+          </div>
+        </details>
+      ) : (
+        <>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <TextField
+              label="Email"
+              name="email"
+              type="email"
+              maxLength={254}
+              autoComplete="off"
+              defaultValue={v("email")}
+              error={errors.email}
+            />
+            <TextField
+              label="Phone"
+              name="phone"
+              type="tel"
+              maxLength={30}
+              autoComplete="off"
+              defaultValue={v("phone")}
+              error={errors.phone}
+            />
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <SelectField
+              key={`age:${v("ageGroup")}`}
+              label="Adult or child"
+              name="ageGroup"
+              defaultValue={v("ageGroup")}
+              error={errors.ageGroup}
+            >
+              <option value="">Not set</option>
+              <option value="adult">Adult</option>
+              <option value="child">Child</option>
+            </SelectField>
+            <TextField
+              label="Tags"
+              hint="Separate with commas, for example Family, College friends."
+              name="tags"
+              autoComplete="off"
+              defaultValue={v("tags")}
+              error={errors.tags}
+            />
+          </div>
+          {showPrivate && (
+            <fieldset className="space-y-4 rounded-card border border-border-hairline p-4">
+              <legend className="px-2 text-label-lg font-semibold">Private details</legend>
+              <p className="text-body-sm text-ink-muted">
+                Only the owner and partner can see these. They are left out of exports and are never
+                shown to guests.
+              </p>
+              <TextAreaField
+                label="Dietary needs or allergies"
+                name="dietary"
+                rows={2}
+                maxLength={500}
+                defaultValue={v("dietary")}
+                error={errors.dietary}
+              />
+              <TextAreaField
+                label="Accessibility needs"
+                name="accessibility"
+                rows={2}
+                maxLength={500}
+                defaultValue={v("accessibility")}
+                error={errors.accessibility}
+              />
+              <TextAreaField
+                label="Private notes"
+                name="notes"
+                rows={2}
+                maxLength={500}
+                defaultValue={v("notes")}
+                error={errors.notes}
+              />
+            </fieldset>
+          )}
+        </>
       )}
       <Button type="submit" disabled={pending}>
         {pending ? "Saving…" : submitLabel}
       </Button>
-      <Feedback state={state} />
+      {quick ? (
+        <div aria-live="polite" className="min-h-11">
+          {state.status === "error" && (
+            <p role="alert" className="text-body-md text-danger">
+              {state.message}
+            </p>
+          )}
+          {added && state.status === "ok" && (
+            <p className="flex flex-wrap items-center gap-x-3 text-body-md text-action-secondary">
+              <span>{added.undone ? "Removed. You can add them again." : added.message}</span>
+              {!added.undone && (
+                <button
+                  type="button"
+                  onClick={undoAdd}
+                  className="inline-flex min-h-11 items-center font-semibold underline underline-offset-4"
+                >
+                  Undo
+                </button>
+              )}
+            </p>
+          )}
+          {undoError && (
+            <p role="alert" className="text-body-md text-danger">
+              {undoError}
+            </p>
+          )}
+        </div>
+      ) : (
+        <Feedback state={state} />
+      )}
     </form>
   );
 }

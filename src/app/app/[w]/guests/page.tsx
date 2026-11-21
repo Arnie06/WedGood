@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
-import { buttonClasses } from "@/components/ui/button";
+import { ButtonLink, buttonClasses } from "@/components/ui/button";
+import { SheetButton } from "@/components/ui/sheet";
 import { Card, CardTitle } from "@/components/ui/card";
-import { SelectField } from "@/components/ui/select-field";
-import { TextField } from "@/components/ui/text-field";
 import { nameKey } from "@/domain/guests/import";
+import { GuestFilters } from "@/features/guests/guest-filters";
 import { GuestForm } from "@/features/guests/guest-forms";
 import { hasCapability, requireWorkspace } from "@/server/auth/workspace-guard";
 import { loadGuests, type GuestRecord } from "@/server/guests/queries";
@@ -79,131 +79,84 @@ export default async function GuestsPage({
 
   return (
     <div className="max-w-3xl space-y-8">
-      <header className="space-y-2">
+      <header className="space-y-3">
         <h1 className="font-serif text-headline-mobile md:text-headline-lg">Guest list</h1>
         <p className="text-body-lg text-ink-muted">
           Everyone you may invite, grouped by household. Nothing is sent to anyone from here.
         </p>
-        <p className="flex flex-wrap gap-x-6 gap-y-1 text-body-md">
-          <Link
-            href={`${base}/guests/import`}
-            className={`${link} inline-flex min-h-11 items-center`}
-          >
-            Import from a spreadsheet
-          </Link>
-          <Link
-            href={`${base}/guests/invitations`}
-            className={`${link} inline-flex min-h-11 items-center`}
-          >
-            Events and invitations
-          </Link>
-          <Link href={`${base}/seating`} className={`${link} inline-flex min-h-11 items-center`}>
-            Seating
-          </Link>
-          <Link href={`${base}/website`} className={`${link} inline-flex min-h-11 items-center`}>
-            Guest website
-          </Link>
-          <a href={`${base}/guests/export`} className={`${link} inline-flex min-h-11 items-center`}>
-            Download as CSV
-          </a>
-        </p>
+        {active.length > 0 && (
+          <p className="text-body-md text-ink-muted">
+            {active.length} {active.length === 1 ? "guest" : "guests"} ·{" "}
+            {new Set(active.map((g) => g.householdId).filter(Boolean)).size} households · {adults}{" "}
+            {adults === 1 ? "adult" : "adults"} · {children} {children === 1 ? "child" : "children"}
+            {active.length - adults - children > 0 &&
+              ` · ${active.length - adults - children} not yet marked adult or child`}
+          </p>
+        )}
+        <nav aria-label="Guest tools" className="flex flex-wrap gap-2">
+          {[
+            ["Invitations", `${base}/guests/invitations`],
+            ["Seating", `${base}/seating`],
+            ["Guest website", `${base}/website`],
+          ].map(([label, href]) => (
+            <Link
+              key={href}
+              href={href!}
+              className={`${buttonClasses({ variant: "outline", size: "sm" })}`}
+            >
+              {label}
+            </Link>
+          ))}
+        </nav>
       </header>
 
-      <section aria-label="Totals">
-        <Card>
-          <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-            {[
-              ["Guests", active.length],
-              ["Households", new Set(active.map((g) => g.householdId).filter(Boolean)).size],
-              ["Adults", adults],
-              ["Children", children],
-            ].map(([label, n]) => (
-              <div key={label}>
-                <dt className="text-label-lg text-ink-muted">{label}</dt>
-                <dd className="font-serif text-headline-sm">{n}</dd>
-              </div>
-            ))}
-          </dl>
-          {active.length - adults - children > 0 && (
-            <p className="mt-2 text-body-sm text-ink-muted">
-              {active.length - adults - children}{" "}
-              {active.length - adults - children === 1 ? "guest has" : "guests have"} no adult or
-              child set yet.
-            </p>
-          )}
-        </Card>
-      </section>
-
-      <section aria-labelledby="add" className="space-y-3">
-        <details className="group">
-          <summary
-            id="add"
-            className={`${buttonClasses({ variant: "primary" })} cursor-pointer list-none`}
-          >
-            Add a guest
-          </summary>
-          <Card className="mt-3">
-            <GuestForm
-              workspaceId={wid}
-              householdNames={data.households.map((h) => h.name)}
-              showPrivate={canSeePrivate}
-              submitLabel="Add guest"
-            />
-          </Card>
-        </details>
+      <section aria-label="Add guests" className="flex flex-wrap gap-3">
+        <SheetButton
+          label="Add a guest"
+          title="Add a guest"
+          description="Just a name is enough. This stays open so you can keep adding."
+        >
+          <GuestForm
+            quick
+            workspaceId={wid}
+            householdNames={data.households.map((h) => h.name)}
+            showPrivate={canSeePrivate}
+            submitLabel="Add guest"
+          />
+        </SheetButton>
+        <ButtonLink href={`${base}/guests/import`} variant="outline">
+          Import a spreadsheet
+        </ButtonLink>
       </section>
 
       <section aria-labelledby="list" className="space-y-4">
         <h2 id="list" className="font-serif text-headline-sm">
           {showArchived ? "Archived guests" : "Your guests"}
         </h2>
-        <form method="get" action={`${base}/guests`} className="space-y-3" role="search">
-          {showArchived && <input type="hidden" name="view" value="archived" />}
-          <TextField
-            label="Search by name or email"
-            name="q"
-            type="search"
-            defaultValue={q}
-            autoComplete="off"
-            maxLength={100}
-          />
-          <div className="grid gap-3 sm:grid-cols-2">
-            <SelectField label="Adult or child" name="age" defaultValue={age}>
-              <option value="">Everyone</option>
-              <option value="adult">Adults</option>
-              <option value="child">Children</option>
-            </SelectField>
-            <SelectField label="Tag" name="tag" defaultValue={tag}>
-              <option value="">All tags</option>
-              {allTags.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </SelectField>
-          </div>
-          <div className="flex flex-wrap gap-3">
-            <button type="submit" className={buttonClasses({ variant: "secondary" })}>
-              Apply filters
-            </button>
-            {(filtering || showArchived) && (
-              <Link href={`${base}/guests`} className={buttonClasses({ variant: "outline" })}>
-                Clear
-              </Link>
-            )}
-          </div>
-        </form>
+        {data.guests.length > 0 && (
+          <>
+            <GuestFilters
+              base={base}
+              q={q}
+              age={age}
+              tag={tag}
+              allTags={allTags}
+              showArchived={showArchived}
+              filtering={filtering}
+            />
 
-        <p role="status" className="text-body-sm text-ink-muted">
-          Showing {visible.length} {visible.length === 1 ? "guest" : "guests"}
-          {filtering ? " that match" : ""}.
-        </p>
+            <p role="status" className="text-body-sm text-ink-muted">
+              Showing {visible.length} {visible.length === 1 ? "guest" : "guests"}
+              {filtering ? " that match" : ""}.
+            </p>
+          </>
+        )}
 
         {ordered.length === 0 ? (
           <Card>
             <p className="text-body-md text-ink-muted">
               {data.guests.length === 0
-                ? "No guests yet. Add your first guest above, or import a spreadsheet."
+                ? "No guests yet. Use Add a guest above, or import a spreadsheet."
                 : "No guests match. Try clearing the filters."}
             </p>
           </Card>
@@ -253,6 +206,11 @@ export default async function GuestsPage({
             })}
           </ul>
         )}
+        <p className="text-body-sm">
+          <a href={`${base}/guests/export`} className={`${link} inline-flex min-h-11 items-center`}>
+            Download the list as CSV
+          </a>
+        </p>
         <p className="text-body-sm text-ink-muted">
           {showArchived ? (
             <Link href={`${base}/guests`} className={link}>
