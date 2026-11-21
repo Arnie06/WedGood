@@ -52,8 +52,47 @@ ADR-015 — Local-only development until hosted storage is approved
 Date / status: 2026-11-19 · accepted by project owner.
 Context: The owner is not ready for non-local (hosted) storage. Supabase or an equivalent hosted backend is expected later. Docker is not installed, so the local Supabase stack cannot run here today.
 Decision: No hosted database, storage, auth provider or deployment for now. Work continues locally. R0-02 needs no persistence; its preview uses in-repo synthetic fixtures labelled as sample data. Before R0-03, choose a local-only database path, for example installing Docker for the local Supabase CLI stack, or a local Postgres, so that RLS and integration tests are real rather than mocked.
-Consequences: R0-03 onward is blocked until that local option is selected. No mock persistence will be presented as real.
+Consequences: No mock persistence will be presented as real.
+Resolution (2026-11-19): owner chose Docker with the local Supabase CLI stack. OrbStack supplies Docker on the dev machine; Supabase CLI 2.120.0; Postgres 17 image. Hosted storage remains unapproved.
 Follow-up: Revisit when the owner approves a hosted provider; production auth and data never fall back to demo fixtures.
+
+ADR-016 — Membership administration model (R0-04)
+Date / status: 2026-11-19 / accepted by Claude Code as a small reversible implementation decision; owner may amend.
+Context: R0-04 needs partner invites, role changes, removal and last-owner protection (docs/10-SECURITY.md role matrix).
+Decision:
+- Roles are `owner`, `partner`, `editor`, `viewer`. Multiple owners are allowed; promoting to owner is owner-only. A wedding can never lose its last active owner (serialized by locking the wedding row; concurrent mutual removal is tested).
+- Partners are trusted by default but have no member administration. An owner may grant a partner `manage_members`, which lets that partner invite and administer only editors and viewers. Grants are stored in `memberships.permissions`, whitelisted, and cleared when the role leaves partner or the member is removed.
+- Invitations are email-matched, one-time, expire (default 7 days, max 30) and revocable. The app generates a 256-bit token and sends only its SHA-256 digest to the database; the raw token appears once in the owner's UI as a copyable link. No email is sent (copy-link fallback, per docs/04-UX-FLOWS.md). Every redemption failure returns one generic message. Redemption is a POST action (never a GET), requires a confirmed email on the account, and the invite page sets noindex and `no-referrer`.
+- Non-members and unknown workspace ids get the same 404, in both the route guard and the RPC error codes, so existence is not leaked.
+- All writes are SECURITY DEFINER RPCs that re-check the actor; clients hold SELECT only. `token_hash` is not selectable by any client role.
+Consequences: Owner transfer "with recent confirmation" (security spec) is not built; multi-owner promotion has no re-authentication step yet. No rate limiting on redemption yet (no infrastructure). Removed members who are re-invited reactivate the same membership row.
+Files/tests: `supabase/migrations/20261120120000_membership_admin.sql`, `tests/integration/membership.test.ts`, `src/domain/permissions`, `src/server/{auth,members,supabase}`, `tests/e2e/membership.spec.ts`.
+Follow-up: add recent-auth confirmation for owner promotion/removal, redemption rate limiting, and optional email delivery behind the R1-17 provider adapter.
+
+ADR-017 — Checklist scheduling and date-change review (R1-02)
+Date / status: 2026-11-19, accepted (made under the R1-02 ticket; owner may revisit)
+Context: Domain rules require date changes to preview relative tasks, never silently move fixed deadlines, and make template regeneration non-duplicating and non-destructive.
+Decision:
+- Tasks are `fixed` or `relative`. Relative tasks (suggested template, stable `template_key`, signed `offset_days` from the wedding date) store a derived `due_date`. Manual tasks are fixed. Editing the date of a relative task makes it fixed (a customization that never moves again). Completed tasks never move.
+- The suggested checklist lives in `src/domain/tasks/templates.ts` and is passed to `generate_checklist`, which validates it and inserts with `on conflict (wedding_id, template_key) do nothing`. Archiving is a soft delete that keeps the key, so regeneration never resurrects a removed task. Generation is an explicit user action, not automatic on workspace creation.
+- Saving a new wedding date does not touch tasks. Drift (open relative tasks whose stored date differs from date + offset) is derived, shown as a banner on Home and Plan, and resolved on `/plan/review-dates`. `reschedule_relative_tasks` applies only the reviewed `{id, version}` pairs, recomputes each date from the stored offset in SQL (client dates are never trusted), and aborts the whole batch if any task changed since the preview.
+- `plan.edit` (owner, partner) is enforced in the database; editors and viewers read only. Editor plan editing "by explicit grant" (security spec) has no grant mechanism yet.
+Consequences: After a date change, relative tasks keep their old dates until someone reviews them; the old date is not recorded in the audit (only changed field names). Task writes do not bump `weddings.revision` yet (needed once packages exist, R1-16). Assignees are validated as active members at write time; a later removal leaves a stale `assignee_user_id` that the UI shows as unassigned.
+Files/tests: `supabase/migrations/20261122090000_tasks.sql`, `src/domain/tasks`, `src/server/plan`, `src/features/plan`, `src/app/app/[w]/plan`, `tests/integration/tasks.test.ts`, `tests/e2e/checklist.spec.ts`.
+Follow-up: calendar/agenda view, dependencies and reminders are later tickets; revisit apply-before-commit if the owner wants a true "what if" preview of a date before saving it.
+
+ADR-018 — Budget model, reserve and currency guard (R1-06)
+Date / status: 2026-11-20, accepted (made under the R1-06 ticket; owner may revisit)
+Context: docs/07 defines target, allocated, committed, paid, forecast and reserve, and test T01 fixes the reserve as a percentage of the known subtotal. Commitments and payments are R1-07, so the budget must work and stay honest before they exist.
+Decision:
+- Budget categories carry an optional target; items carry a cost mode (fixed, per guest with optional minimum, price x quantity). A null amount is unknown and never zero; a null or explicit zero target are different. `summarizeBudget` (`src/domain/budget/summary.ts`) is pure and already accepts commitments, allocations and payments, so R1-07 plugs in without changing it. The page passes none yet and says "nothing booked or paid is recorded yet".
+- Reserve is `budget_settings.reserve_bp` (basis points of committed plus uncommitted known costs, half-up via BigInt). It is a plan, never a payment.
+- An item covered by an active commitment counts once, as the commitment; an uncommitted item counts at least what was paid for it. Per-guest items use the wedding's guest target; there is no what-if guest scenario input yet (the domain function takes any guest count).
+- Amounts have no stored currency, so a trigger refuses a base-currency change (`55006`) while any category target or item amount exists, rather than silently reinterpreting them. This resolves the R1-01 and R1-04 carry-over for budget figures only; quotes keep their own stored currency.
+- Capability is `budget.manage` (owner and partner); writes are RPCs, versioned, audited by field name only, creates idempotent. Percent and tiered item pricing are not modelled (quotes in R1-04 do).
+Consequences: Allocation overage is a warning, not a gate. The currency guard also counts archived rows. Cap of 300 costs and 40 categories keeps sums exact in JS numbers.
+Files/tests: `supabase/migrations/20261126090000_budget.sql`, `src/domain/budget`, `src/server/budget`, `src/features/budget`, `src/app/app/[w]/plan/budget`, `tests/integration/budget.test.ts`, `tests/e2e/budget.spec.ts`.
+Follow-up: R1-07 adds commitments, allocations, installments and payments and feeds them to `summarizeBudget`; per-category paid amounts and a guest what-if are not built.
 
 ## Open decisions (do not invent answers)
 
@@ -65,6 +104,53 @@ Follow-up: Revisit when the owner approves a hosted provider; production auth an
 - Whether partner access defaults should be narrowed; retention, export and account deletion rules with legal guidance.
 - Final pricing, plans, guest limits and support; no billing enabled without approval.
 - User validation of complex seating editor, cultural/destination needs and marketplace strategy.
+
+## ADR-019: Booking and payment ledger (R1-07)
+
+Status: accepted (implementation decisions made within the R1-07 ticket; no product owner decision needed).
+
+Context: docs/07 and docs/06 define commitments, allocations, installments and payments; tests T03/T04 fix the figures. R1-06's `summarizeBudget` already accepts them.
+
+Decision:
+- Booking (`book_commitment`) is one atomic RPC: commitment, allocations, installment schedule and the vendor stage `booked`. It requires explicit confirmation, one active commitment per venue or vendor (more cost is an amendment), and a candidate version check. Selecting a quote never books.
+- An active allocation covers a budget item once (partial unique index plus a row lock), so a booked cost is counted once as the commitment. A cost with its own payments cannot be booked, and a booked or paid cost cannot be archived (`archive_budget_item` replaced).
+- Amendment (`amend_commitment`) keeps the old row as `superseded`, creates a new row that supersedes it, and moves recorded payments to it (count in the audit event). Signed rows are never edited in place.
+- Payments are append-only facts: a refund cannot exceed net paid on its target (checked under a row lock), the paid date cannot be in the future in the wedding's time zone, overpayment is allowed and flagged, and a mistake is voided (kept, with a reason), never deleted. Voiding a charge that refunds depend on is refused. A payment targets exactly one of a commitment or an unbooked planned cost. A repeated receipt reference is refused (unique per wedding).
+- Deviation from docs/06: `payments.installment_id` is not built. Installments are a plan; status is derived by matching net paid to installments oldest-due first. The schedule total may differ from the amount and is flagged, not blocked.
+- The base currency is locked once any commitment or payment exists (extends the R1-06 guard).
+
+Not built (follow-ups): cancellation with retained or non-refundable amounts (the stage `cancelled` stays unreachable), generated payment tasks, linking payments to specific installments, receipt documents (R1-08), contributions.
+
+## ADR-020: Private documents (R1-08)
+
+Status: accepted (implementation decisions within the R1-08 ticket; no product owner decision needed).
+
+Context: docs/10 requires private buckets, upload intent, MIME and signature validation, randomized keys, checksums, quarantine until scanned, and no claim of scanning without a scanner. No scanner is configured.
+
+Decision:
+- Documents are owner and partner only (matches the budget/contract row of the role matrix). Rows, links and storage reads are denied to editors, viewers and non-members by RLS and the storage policy (`can_read_document_object`), which replaces the R0-03 any-member read policy.
+- Clients never write storage or mark a file validated. `create_document_intent` (user JWT) records a `pending` row with a random key `<wedding>/<document>`; the server validates the bytes itself (signature, size, active-content heuristic for PDFs; PDF, JPEG, PNG, WebP; 10 MB), then uses the service role (`SUPABASE_SECRET_KEY`, server only, `src/server/supabase/admin.ts`) to store the object and call `complete_document` or `reject_document` (service_role only). `complete_document` checks the object exists with the declared size.
+- Validated files are `unscanned`, never `clean`. Downloads of unscanned files are refused unless `DOCUMENTS_ALLOW_UNSCANNED_DOWNLOADS=true` (set only for local dev and the e2e server). Downloads are a 60-second signed URL created with the user's session so the storage policy re-checks role, archive and scan state. The UI labels every file "Not virus-scanned".
+- Links use concrete nullable FKs (booking, payment, vendor, quote), exactly one per row, with composite tenant FKs (adds a `(wedding_id, id)` unique key on `payments`). Archive keeps the file and links but removes download access. Audit events carry field names only.
+- Deviation from docs/06: no `visibility` column (all documents are manager-only now) and `commitments.document_id`, `payments.receipt_document_id` and `proposals.source_document_id` are not built; links replace them.
+
+Follow-ups: a malware scanner adapter (flips `unscanned` to `clean`), cleanup of abandoned `pending` rows and orphaned objects, erasure of storage objects on wedding deletion, EXIF stripping, restore from archive, vendor-scoped document access, upload rate limiting beyond the in-flight cap.
+
+## ADR-022: Events, invitations and accountless RSVP (R1-10)
+
+Status: accepted (implementation decisions within the R1-10 ticket; no product owner decision needed).
+
+Decision:
+- Capability flow: the app generates a 256-bit token per invitation and passes only its SHA-256 digest to the database. The guest page `/rsvp/[token]` and its action call service-role-only RPCs (`rsvp_view`, `rsvp_submit`) on every request; there is no guest session. The token stays in the path (the spec prefers removing it where practical; a session redirect was not built). Mitigations: `Referrer-Policy: no-referrer`, `X-Robots-Tag: noindex`, `Cache-Control: no-store`, no third-party scripts.
+- Revoked, expired and unknown tokens return the same null and the same page text. Failed lookups are throttled in the database per hashed client key (20 failures per 10 minutes, then RS429).
+- Scope: an invitation belongs to one event and optionally a household; members are existing guests. Partial unique index allows one active membership per guest per event; revoking frees the guest. A guest sees only their invitation's members, never contact or private details or the workspace id.
+- Plus-ones: created only from the guest's own response, under the invitation row lock and the guest-write advisory lock, consuming quota; a repeat with the same name reuses the existing plus-one. Replays after success hit the version check.
+- Optimistic concurrency: invitation `version`; the deadline check precedes the version check so a late guest hears the real reason. After the deadline only the owner can change answers, with a mandatory audited reason.
+- Declining clears meal choice (check constraint). Raw links are shown once; "New link" rotates the token. Delivery is not modelled (R1-17); nothing is sent.
+- Owner and partner only, same gate as guests.
+
+Consequences: seating queue and stale-snapshot effects of a decline arrive with R1-11 (no seating exists yet). No event archive or delete. Editors have no invitation access.
+Files/tests: `20261130090000_events_rsvp.sql`, `src/domain/events`, `src/server/{events,rsvp}`, `src/features/events`, `tests/integration/rsvp.test.ts`, `tests/e2e/rsvp.spec.ts`.
 
 ## Decision template
 
@@ -78,3 +164,91 @@ Consequences and tradeoffs:
 Files/tests affected:
 Follow-up and reversal plan:
 ```
+
+## ADR-021: Guests, households and CSV import (R1-09)
+
+Status: accepted (implementation decisions within the R1-09 ticket; no product owner decision needed).
+
+Decision:
+- Guests are owner and partner only (RLS and RPC checks), matching the docs/10 matrix until a grant mechanism exists. Dietary, accessibility and private notes live in `guest_private_details` so a later grant can expose names without them. Exports and the guest list never include private fields or mailing addresses.
+- Identity is the id. Name or email matches are shown as "possible duplicate" in the import preview and left out by default; the user may include them. Nothing is merged silently.
+- Import is stateless and server-authoritative: the client sends raw CSV text and column choices; the server re-parses, re-validates and dedupes for both preview and commit, then calls one atomic RPC with a mandatory idempotency key. Invalid rows are never stored; the RPC also rejects the whole batch if any row is invalid. A consent acknowledgement is required; importing sends nothing to anyone.
+- CSV injection: values are stored verbatim (a name may legitimately begin with `+` or `-`), rendered as escaped text, and neutralized with a leading apostrophe on export. Limits: 256 KB, 500 rows, 40 columns per import; 2,000 active guests per wedding.
+- Households are found or created by name (case-insensitive, unique among active households); guests carry the name through the form or import.
+
+## ADR-023: Seating layouts, snapshots and the guests lock order (R1-11)
+
+Status: accepted (implementation decisions within the R1-11 ticket; no product owner decision needed).
+
+Decision:
+- One layout per event; owner and partner only. All writes are RPCs under the per-wedding guests advisory lock, the same lock RSVP submissions use, so capacity and eligibility checks serialize with answer changes (T10). Capacity counts tentative and confirmed seats; they are reported separately.
+- A confirmed seat needs an active accepted answer for that event and a non-archived guest. A tentative seat needs a waiting answer and the layout's `allow_tentative` switch (off by default). RSVP changes act on seating inside their own transaction: decline, archive and invitation revocation remove the seat; accepting confirms a tentative seat in place; resetting to waiting keeps it as tentative when allowed, else removes it. Nothing is ever placed automatically.
+- Finalizing freezes a jsonb snapshot (tables, guest names, meals, counts) at `layouts.revision`. Every plan-affecting change bumps `revision`, so stale means `revision <> finalized_revision`; there is no flag to drift. Finalize requires the revision the person reviewed. Old snapshots are never rewritten.
+- `lock_wedding_for_guests` now authorizes first, then takes the advisory lock, then `FOR SHARE` on the wedding row. The old order deadlocked (40P01) when two writers both held the share lock and one updated `weddings.revision`; found by the concurrent T10 test. This also fixes the latent same race in `revoke_invitation` and other guest RPCs.
+- Reports and CSV include names, tables, status and meals only; dietary and access notes are excluded until the package/redaction work (R1-13).
+
+## ADR-024: Design boards (R1-13)
+
+Status: accepted (implementation decisions within the R1-13 ticket; no product owner decision needed).
+
+Decision:
+- Every member can view boards and images (`design.view`); owner and partner write (`plan.edit`). All writes are RPCs with version checks and field-name-only audit events.
+- Saved links are validated (http/https, host, no credentials or spaces, 2048 characters) and stored as text. No server code requests them, so there is no SSRF surface and no link previews. They render as outbound links with `noopener noreferrer nofollow`.
+- Images reuse the ADR-020 pipeline in a separate private bucket `wedding-design` (JPEG, PNG, WebP, 5 MB): intent as the user, byte validation and storage with the service role, completion only by the service role. Each image records a rights statement (own, permission, inspiration only). Images are never described as scanned; the image route and previews follow the same `DOCUMENTS_ALLOW_UNSCANNED_DOWNLOADS` gate as documents.
+- Images are served through an authorized route that reads with the member's own session so the storage policy re-checks access, with `nosniff`, a sandboxing CSP and private caching.
+- Reordering uses move earlier/later buttons (the accessible alternative); drag-and-drop is not built.
+
+Follow-ups: storage cleanup job, EXIF stripping, scanner adapter, publication and rights approval for guest-website images (R1-14), revision bump for packages (R1-16).
+
+
+## ADR-025: Guest website (R1-14)
+
+Status: accepted (implementation decisions within the R1-14 ticket; no product owner decision needed).
+
+Decision:
+- One site per wedding. Owner and partner (`plan.edit`) edit and publish; other members cannot read the row. Clients have SELECT only (the published snapshot column is not selectable); all writes are RPCs with version checks and field-name-only audit events.
+- The draft is a JSON document of allowlisted keys, validated in the database as well as the app (`app_private.site_draft_ok`): text only, no HTML, https links only, event ids must belong to the wedding. React renders it as escaped text.
+- Publishing copies the draft into an immutable snapshot built from explicit keys plus the chosen events' current name, kind and date. Later draft or event edits do not reach the public page until republished (the editor shows "published, with unpublished changes"). Unpublishing deletes the snapshot; the slug stays reserved to its wedding.
+- Event visibility is `public` or `invited`. Public reads are service-role RPCs: the slug page returns only public events; the invitation route (`/w/[slug]/invite/[token]`) adds the one event the invitation is for, reuses the RSVP token hashing and failure throttle, collapses every failure to one message, is noindex/no-referrer, and links to the RSVP page.
+- Preview is the saved draft behind a signed-in owner/partner session; no shareable draft token. Public pages are `force-dynamic` so unpublish is immediate.
+- Images are out of scope. Publishing images needs the separate rights and approval step from ADR-020/024 and is deferred.
+
+Follow-ups: images with a publication/rights step, private (password/token) sites, custom domains, CSP (ADR-013), per-IP throttle on the anonymous slug page.
+
+## ADR-026: Sharing and comments (R1-15)
+
+Status: accepted (implementation decisions within the R1-15 ticket; no product owner decision needed).
+
+Decision:
+- "Sharing" in R1 is membership-based. Collaborators (partner, editor, viewer) see exactly what their role's RLS already allows; no new link, token or anonymous access is added. The `/app/[w]/shared` page is a role-aware summary and a recent-comments feed, not a new permission surface. Restricted packages and share links stay with R1-16.
+- Comments attach to three subjects every member can already read: vendor candidates, comparisons and design boards. Any active member, including a viewer, can read and post. A comment never exposes more than its author typed, and the subject must belong to the same wedding and be unarchived.
+- Authors edit and delete their own comments; owner and partner may also delete others' (moderation). Nobody edits another person's words. Deleting is a hard delete; the audit event stays.
+- Clients have SELECT only; writes and reads with author names are RPCs (`add_comment` idempotent, `edit_comment` version-checked, `delete_comment`, `list_comments`, `recent_comments`). Audit events carry the subject kind and a moderated flag, never the text. Limits: 2000 characters, 20 comments per user per minute, 500 per subject.
+- Text is stored and rendered as plain text (React escaping, `whitespace-pre-wrap`).
+
+Follow-ups: notifications and mentions, threaded replies, resolve/vote on decisions, comments on tasks and guests (sensitive: needs a scope rule), per-field collaborator grants for editors, an owner-facing activity view over audit events.
+
+
+
+## ADR-027: Package builder (R1-16)
+
+Status: accepted (implementation decisions, no owner question outstanding).
+
+- **Snapshot and staleness.** A package stores the redacted document model (the only thing renderers receive), its SHA-256 digest, the plan revision and template version. Most modules do not bump `weddings.revision`, so staleness is decided by re-deriving the document from the live plan and comparing digests, not by revision. The revision is stored as evidence and checked at creation. Digests from another template version show "Not checked".
+- **Consistency.** The projection is several RLS-scoped reads, not one database snapshot. Creation therefore re-derives the document and requires it to equal the approved preview digest and revision; a mismatch is refused with a reload message. The database stores what the server supplies and does not re-derive it; only owner/partner can call it, so this affects only their own export.
+- **Synchronous generation.** No worker exists, so no queued/rendering status: files are rendered in the request, stored privately, then package and file rows are inserted in one RPC. The package id is the idempotency key and the preview fixes `generatedAt`, so retries render identical bytes.
+- **Storage.** Dedicated private bucket `wedding-packages` with no `storage.objects` policy; only the service role reads it, after the app authorizes the user. Downloads verify size and SHA-256. Keys are derived in SQL.
+- **PDF.** `pdf-lib` 1.17.1 (MIT, no dependencies, unmaintained since 2022 but stable) with built-in Times and Helvetica (Windows-1252). Unsupported characters are simplified and counted in the preview; the CSV keeps them. Custom fonts, tagged PDF and document-level accessibility tags are not done.
+- **Scope of data.** Never included: guest names, contacts, dietary details, prices, links, files, relationship notes. Contacts and notes on agenda/design items are opt-in. Presets are suggestions; each section needs a capability and owner/partner only may create or read packages.
+- **CSV** is one flat long-format file (Section, Table, Row, Column, Value) with a BOM and formula neutralization; it is not a workbook.
+- **Deferred:** photographer, florist, family and guest-itinerary presets (need shot lists, travel data), archive preset, ZIP, expiring share grants (`share_grants`), package deletion/retention, download rate limiting, dietary details for caterers.
+
+## ADR-028: Invitation delivery ledger and calendar export (R1-17)
+
+Status: accepted (implementation decisions, no owner question outstanding).
+
+- **Truthful status.** `invitations.delivery_status` is `not_sent` or `shared_manually` only, plus `delivery_marked_at`. "Shared" records what the owner says they did; the app never claims delivered, opened or read. Set through `set_invitation_delivery` (owner/partner, versioned, audited, revoked refused). A trigger resets the status when the link is replaced (`reissue_invitation`), because the shared link no longer works.
+- **Mail adapter, no provider.** `src/server/mail/provider.ts` defines `MailProvider` with the typed outcomes from docs/09 and one implementation, `unconfigured`. Nothing calls `send` yet. A send button is deliberately absent: raw tokens are shown once and not stored, so a send needs a reviewed, per-recipient approval flow plus a provider decision. The page says honestly that email is not set up.
+- **ICS.** `src/domain/calendar/ics.ts` (pure): RFC 5545 CRLF, 75-octet folding, TEXT escaping with control characters dropped (no property injection), UTC instants for timed items, date-only events as all-day with exclusive end. Download at `/app/[w]/plan/calendar.ics` for `exports.create` (owner/partner), `no-store`. Includes event dates and scheduled (not cancelled) agenda items with title, location and "in charge" label only; contacts, notes and guests are never included. It is a snapshot, not a subscription; UIDs are stable and `SEQUENCE` follows the item version so a re-import updates entries in most apps.
+- **Deferred:** actual email send and provider choice, per-recipient send approval and reminders, calendar subscription feeds, guest-facing "add to calendar" on the RSVP page, timeline time zone beyond UTC instants.
+

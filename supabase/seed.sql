@@ -1,0 +1,3 @@
+-- Intentionally empty. Demo accounts need the Auth admin API, so they are
+-- created by `pnpm db:seed` (scripts/seed-local.ts), never by SQL here.
+-- Do not put real or personal data in seed files.

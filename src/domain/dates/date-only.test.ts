@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { daysBetween, formatDateOnly, isDateOnly, parseDateOnly } from "./date-only";
+import { daysBetween, formatDateOnly, isDateOnly, parseDateOnly, todayInZone } from "./date-only";
 
 describe("date-only values", () => {
   it("accepts real calendar dates only", () => {
@@ -26,5 +26,13 @@ describe("date-only values", () => {
     expect(formatDateOnly(parseDateOnly("2027-05-22"), "en-US", { weekday: "long" })).toBe(
       "Saturday",
     );
+  });
+});
+
+describe("todayInZone", () => {
+  it("uses the zone's calendar day, not the host's", () => {
+    const instant = new Date("2027-05-22T03:00:00Z");
+    expect(todayInZone("America/Los_Angeles", instant)).toBe("2027-05-21");
+    expect(todayInZone("Asia/Tokyo", instant)).toBe("2027-05-22");
   });
 });

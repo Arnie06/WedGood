@@ -4,8 +4,8 @@ import { cn } from "@/lib/cn";
 
 type TextFieldProps = Omit<ComponentProps<"input">, "id"> & {
   label: string;
-  hint?: string;
-  error?: string;
+  hint?: string | undefined;
+  error?: string | undefined;
 };
 
 /** Labelled input with hint and error text wired to aria-describedby. */

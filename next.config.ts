@@ -16,8 +16,21 @@ const nextConfig: NextConfig = {
   turbopack: { root: path.dirname(fileURLToPath(import.meta.url)) },
   reactStrictMode: true,
   poweredByHeader: false,
+  // Document uploads (R1-08) are capped at 10 MB; allow a little for form encoding.
+  experimental: { serverActions: { bodySizeLimit: "11mb" } },
   async headers() {
-    return [{ source: "/:path*", headers: securityHeaders }];
+    return [
+      { source: "/:path*", headers: securityHeaders },
+      // Invitation links carry a credential: no referrer, no indexing, no caching.
+      {
+        source: "/rsvp/:path*",
+        headers: [
+          { key: "Referrer-Policy", value: "no-referrer" },
+          { key: "X-Robots-Tag", value: "noindex, nofollow" },
+          { key: "Cache-Control", value: "no-store" },
+        ],
+      },
+    ];
   },
 };
 

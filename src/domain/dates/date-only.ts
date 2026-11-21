@@ -32,6 +32,14 @@ export function daysBetween(from: DateOnly, to: DateOnly): number {
   return epochDay(to) - epochDay(from);
 }
 
+/** The calendar date `days` after `value` (negative for before). */
+export function addDays(value: DateOnly, days: number): DateOnly {
+  if (!Number.isInteger(days)) throw new RangeError("days must be an integer");
+  const d = new Date((epochDay(value) + days) * MS_PER_DAY);
+  const iso = d.toISOString().slice(0, 10);
+  return parseDateOnly(iso);
+}
+
 export function formatDateOnly(
   value: DateOnly,
   locale = "en-US",
@@ -40,4 +48,16 @@ export function formatDateOnly(
   return new Intl.DateTimeFormat(locale, { ...options, timeZone: "UTC" }).format(
     new Date(epochDay(value) * MS_PER_DAY),
   );
+}
+
+/** Today's calendar date in an IANA zone (the wedding's, not the server's). */
+export function todayInZone(timeZone: string, now: Date = new Date()): DateOnly {
+  // en-CA formats as YYYY-MM-DD.
+  const text = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(now);
+  return parseDateOnly(text);
 }

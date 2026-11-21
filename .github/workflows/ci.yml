@@ -32,8 +32,26 @@ jobs:
         env:
           # Public, non-secret value; production builds fail fast without it.
           NEXT_PUBLIC_APP_URL: http://localhost:3000
-      # Integration tests against a real local database are added with R0-03;
-      # they are intentionally absent, not skipped.
+
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.120.0
+      - run: pnpm install --frozen-lockfile
+      # Real local Supabase stack (Docker); migrations apply from supabase/migrations.
+      - run: pnpm db:start
+      - run: pnpm test:integration
+      - if: ${{ !cancelled() }}
+        run: pnpm db:stop
 
   e2e:
     runs-on: ubuntu-latest
@@ -45,10 +63,19 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: pnpm
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.120.0
       - run: pnpm install --frozen-lockfile
-      - run: pnpm exec playwright install --with-deps chromium
+      # Real local stack so the auth/membership specs run instead of skipping.
+      - run: pnpm db:start
+      # Fresh reset + seed proves migrations and the seed script work from scratch.
+      - run: pnpm db:fresh
+      - run: pnpm exec playwright install --with-deps chromium firefox webkit
       # Builds and serves the app itself (playwright.config.ts webServer).
       - run: pnpm test:e2e
+      - if: ${{ !cancelled() }}
+        run: pnpm db:stop
       - if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
         with:
