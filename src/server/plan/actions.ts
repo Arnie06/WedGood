@@ -11,7 +11,7 @@ import { friendlyPlanError } from "./errors";
 
 export type PlanActionState =
   | { status: "idle" }
-  | { status: "ok"; message: string }
+  | { status: "ok"; message: string; taskId?: string; version?: number }
   | {
       status: "error";
       message: string;
@@ -107,7 +107,7 @@ export async function createTask(_: PlanActionState, form: FormData): Promise<Pl
   if (denied) return denied;
 
   const supabase = await createUserClient();
-  const { error } = await supabase.rpc("create_task", {
+  const { data: taskId, error } = await supabase.rpc("create_task", {
     p_wedding: ws.data,
     p_title: parsed.value.title,
     p_idempotency_key: key.data,
@@ -117,7 +117,7 @@ export async function createTask(_: PlanActionState, form: FormData): Promise<Pl
   });
   if (error) return fail(friendlyPlanError(error), {}, values);
   refresh(ws.data);
-  return { status: "ok", message: "Task added." };
+  return { status: "ok", message: "Task added.", ...(taskId ? { taskId } : {}) };
 }
 
 export async function updateTask(_: PlanActionState, form: FormData): Promise<PlanActionState> {
@@ -164,7 +164,7 @@ export async function setTaskStatus(_: PlanActionState, form: FormData): Promise
   if (denied) return denied;
 
   const supabase = await createUserClient();
-  const { error } = await supabase.rpc("set_task_status", {
+  const { data: newVersion, error } = await supabase.rpc("set_task_status", {
     p_wedding: parsed.data.workspaceId,
     p_task: parsed.data.taskId,
     p_expected_version: parsed.data.version,
@@ -172,7 +172,12 @@ export async function setTaskStatus(_: PlanActionState, form: FormData): Promise
   });
   if (error) return fail(friendlyPlanError(error));
   refresh(parsed.data.workspaceId);
-  return { status: "ok", message: parsed.data.done === "true" ? "Marked done." : "Reopened." };
+  return {
+    status: "ok",
+    message: parsed.data.done === "true" ? "Marked done." : "Reopened.",
+    taskId: parsed.data.taskId,
+    ...(typeof newVersion === "number" ? { version: newVersion } : {}),
+  };
 }
 
 export async function archiveTask(_: PlanActionState, form: FormData): Promise<PlanActionState> {
@@ -194,6 +199,35 @@ export async function archiveTask(_: PlanActionState, form: FormData): Promise<P
   if (error) return fail(friendlyPlanError(error));
   refresh(parsed.data.workspaceId);
   redirect(`/app/${parsed.data.workspaceId}/plan`);
+}
+
+/**
+ * Undo for "Task added": archives the task just created, without redirecting (the
+ * toast stays on the page). Goes through the same versioned command as removal, so a
+ * task someone has already edited is refused instead of silently removed.
+ */
+export async function undoTaskCreation(
+  _: PlanActionState,
+  form: FormData,
+): Promise<PlanActionState> {
+  const parsed = z.object({ workspaceId: uuid, taskId: uuid, version }).safeParse({
+    workspaceId: form.get("workspaceId"),
+    taskId: form.get("taskId"),
+    version: form.get("version"),
+  });
+  if (!parsed.success) return fail("Reload the page and try again.");
+  const denied = await authorize(parsed.data.workspaceId);
+  if (denied) return denied;
+
+  const supabase = await createUserClient();
+  const { error } = await supabase.rpc("archive_task", {
+    p_wedding: parsed.data.workspaceId,
+    p_task: parsed.data.taskId,
+    p_expected_version: parsed.data.version,
+  });
+  if (error) return fail(friendlyPlanError(error));
+  refresh(parsed.data.workspaceId);
+  return { status: "ok", message: "Task removed." };
 }
 
 /** Applies exactly the reviewed moves; the database recomputes every date itself. */

@@ -22,3 +22,8 @@ export function dueLabel(dueDate: string | null, today: DateOnly, done = false):
   if (days === 1) return `Due tomorrow, ${text}`;
   return `Due ${text}`;
 }
+
+/** True only for an open task with a date before today; undated tasks are never overdue. */
+export function isOverdue(dueDate: string | null, today: DateOnly, done = false): boolean {
+  return !done && dueDate !== null && daysBetween(today, parseDateOnly(dueDate)) < 0;
+}

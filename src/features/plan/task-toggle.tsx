@@ -3,6 +3,7 @@
 import { Circle, CircleCheck } from "lucide-react";
 import { useActionState } from "react";
 import { cn } from "@/lib/cn";
+import { useToast } from "@/components/ui/toast";
 import { setTaskStatus, type PlanActionState } from "@/server/plan/actions";
 
 /** One-tap complete/reopen. Disabled for read-only members; shows a stale-version error inline. */
@@ -21,9 +22,38 @@ export function TaskToggle({
   done: boolean;
   disabled: boolean;
 }) {
-  const [state, action, pending] = useActionState(setTaskStatus, {
-    status: "idle",
-  } as PlanActionState);
+  const { toast } = useToast();
+  const [state, action, pending] = useActionState(
+    async (prev: PlanActionState, form: FormData) => {
+      const next = await setTaskStatus(prev, form);
+      if (next.status === "ok") {
+        const newVersion = next.version;
+        toast({
+          message: next.message,
+          ...(newVersion !== undefined
+            ? {
+                action: {
+                  label: "Undo",
+                  run: async () => {
+                    const undo = new FormData();
+                    undo.set("workspaceId", workspaceId);
+                    undo.set("taskId", taskId);
+                    undo.set("version", String(newVersion));
+                    undo.set("done", done ? "true" : "false");
+                    const result = await setTaskStatus({ status: "idle" }, undo);
+                    return result.status === "error" ? { error: result.message } : undefined;
+                  },
+                },
+              }
+            : {}),
+        });
+      } else if (next.status === "error") {
+        toast({ message: next.message, tone: "error" });
+      }
+      return next;
+    },
+    { status: "idle" } as PlanActionState,
+  );
   const Icon = done ? CircleCheck : Circle;
   return (
     <form action={action} className="shrink-0">

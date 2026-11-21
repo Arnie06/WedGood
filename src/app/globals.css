@@ -47,6 +47,12 @@
   backdrop-filter: blur(12px);
 }
 
+/* A just-added or just-changed item, briefly highlighted after it is scrolled into view. */
+[data-just-added] {
+  background-color: var(--color-action-secondary-subtle);
+  transition: background-color 1.5s ease-out;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

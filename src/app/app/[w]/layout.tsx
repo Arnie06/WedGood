@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { WorkspaceShell } from "@/components/shell/workspace-shell";
+import { FormErrorFocus } from "@/components/ui/form-error-focus";
+import { ToastProvider } from "@/components/ui/toast";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ROLE_LABELS } from "@/domain/permissions";
@@ -44,7 +46,10 @@ export default async function WorkspaceLayout({
         </form>
       }
     >
-      {children}
+      <ToastProvider>
+        <FormErrorFocus />
+        {children}
+      </ToastProvider>
     </WorkspaceShell>
   );
 }

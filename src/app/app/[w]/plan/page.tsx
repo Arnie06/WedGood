@@ -1,14 +1,16 @@
 import type { Metadata } from "next";
 import { randomUUID } from "node:crypto";
+import { CalendarX } from "lucide-react";
 import Link from "next/link";
 import { Card, CardTitle } from "@/components/ui/card";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { todayInZone } from "@/domain/dates/date-only";
 import { previewReschedule } from "@/domain/tasks/schedule";
 import { groupTasks, progress } from "@/domain/tasks/summary";
+import { cn } from "@/lib/cn";
 import { phaseLabel } from "@/domain/tasks/templates";
 import { GenerateChecklistForm } from "@/features/plan/plan-actions";
-import { dueLabel } from "@/features/plan/format";
+import { dueLabel, isOverdue } from "@/features/plan/format";
 import { toScheduled, toSummary } from "@/features/plan/mappers";
 import { TaskForm } from "@/features/plan/task-form";
 import { TaskToggle } from "@/features/plan/task-toggle";
@@ -219,9 +221,14 @@ function TaskItem({
   canEdit: boolean;
 }) {
   const done = task.status === "done";
+  const overdue = isOverdue(task.dueDate, today, done);
   const who = task.assigneeUserId ? assignee.get(task.assigneeUserId) : undefined;
   return (
-    <Card as="li" className="flex items-start gap-3 p-4 sm:p-4">
+    <Card
+      as="li"
+      id={`task-${task.id}`}
+      className={cn("flex items-start gap-3 p-4 sm:p-4", overdue && "border-l-4 border-l-danger")}
+    >
       <TaskToggle
         workspaceId={workspaceId}
         taskId={task.id}
@@ -243,9 +250,18 @@ function TaskItem({
             task.title
           )}
         </p>
-        <p className="text-body-sm text-ink-muted">
-          {dueLabel(task.dueDate, today, done)}
-          {who ? ` · ${who}` : ""}
+        <p
+          className={
+            overdue
+              ? "flex items-center gap-1.5 text-body-sm font-semibold text-danger"
+              : "text-body-sm text-ink-muted"
+          }
+        >
+          {overdue && <CalendarX aria-hidden="true" className="size-4 shrink-0" />}
+          <span>
+            {dueLabel(task.dueDate, today, done)}
+            {who ? ` · ${who}` : ""}
+          </span>
         </p>
         {task.dateKind === "relative" && !done && (
           <p className="text-body-sm text-ink-muted">

@@ -55,6 +55,16 @@ This ledger is for Claude Code, Codex and human maintainers. Keep it factual; do
 
 ## Session log
 
+### 2026-11-20 · Claude Code · UX-03 · branch `main`
+
+- **Scope:** Feedback and validation. Toasts with Undo, scroll-to-and-highlight of a new item, focus on the first invalid field, visible errors, overdue styling.
+- **App:** `components/ui/toast.tsx` (persistent polite live region above the bottom nav; pauses while hovered or focused; errors last longer; no provider means a no-op) and `ui/form-error-focus.tsx` (mounted once in the workspace layout: after a submit returns `aria-invalid` fields, focus moves to the first one, so every existing form benefits without per-form code); `lib/reveal.ts`; `[data-just-added]` highlight (no motion needed, reduced-motion safe). Checklist: "Task added" and "Marked done/Reopened" toasts with Undo; failures now show a visible error toast (previously `sr-only`); new `undoTaskCreation` action (versioned archive without redirect); `createTask` returns the new id and `setTaskStatus` the new version; overdue tasks get a danger-coloured label with an icon and a left border (text still says "Overdue", never colour alone) via `isOverdue`. No migration.
+- **Tests:** 3 unit (`format.test.ts`); 6 Chromium e2e `feedback.spec.ts` (add toast, scroll into view below the fold and highlight, Undo removes; complete then Undo reopens; stale version shows an error toast and saves nothing; focus moves to first invalid field on task and venue forms; overdue marked, undated not; axe and no overflow at 320 and 1280 with a toast showing).
+- **Commands, all exit 0:** `format:check`, `lint`, `typecheck`, `test:unit` 518, full `test:e2e` on a fresh build (port 3201 config copy, 2 workers): 185 passed, 1 skipped (known WebKit case), 0 failed. Integration suite not re-run (no DB change).
+- **Decisions / deferred:** Undo covers add and complete. Undo for delete needs a restore command and migration, so delete is not given Undo yet. Undo-of-add assumes the new task is at version 1 and is refused (with a visible message) if it was edited in between. Other forms (guests, budget, ledger, venues) still show inline "saved" text; they get toasts as UX-04 touches them.
+- **Not verified:** screen-reader announcement of toasts by hand; 768/1440; Firefox.
+- **Next:** UX-04 (faster entry: checklist list-first with add sheet, guest quick-add, venue paste-a-link including the fetch adapter ADR).
+
 ### 2026-11-20 · Claude Code · UX-02 · branch `main`
 
 - **Scope:** Entry flow and Home. One workspace skips the picker; the Home page leads with stage-aware "Next up" actions; budget and guest targets are set inline; header shows days to go.

@@ -5,7 +5,9 @@ import { Button } from "@/components/ui/button";
 import { SelectField } from "@/components/ui/select-field";
 import { TextAreaField } from "@/components/ui/text-area-field";
 import { TextField } from "@/components/ui/text-field";
-import type { PlanActionState } from "@/server/plan/actions";
+import { useToast } from "@/components/ui/toast";
+import { revealElement } from "@/lib/reveal";
+import { undoTaskCreation, type PlanActionState } from "@/server/plan/actions";
 
 export type TaskFormDefaults = { title: string; notes: string; dueDate: string; assignee: string };
 
@@ -35,10 +37,34 @@ export function TaskForm({
   // Each successful create gets a fresh idempotency key (base key + count), so the next
   // task isn't mistaken for a replay while a retry after an error still is one.
   const [created, setCreated] = useState(0);
+  const { toast } = useToast();
   const [state, formAction, pending] = useActionState(
     async (prev: PlanActionState, form: FormData) => {
       const next = await action(prev, form);
-      if (rotateKey && next.status === "ok") setCreated((n) => n + 1);
+      if (rotateKey && next.status === "ok") {
+        setCreated((n) => n + 1);
+        const { taskId } = next;
+        const workspaceId = hidden.workspaceId;
+        toast({
+          message: next.message,
+          ...(taskId && workspaceId
+            ? {
+                action: {
+                  label: "Undo",
+                  run: async () => {
+                    const undo = new FormData();
+                    undo.set("workspaceId", workspaceId);
+                    undo.set("taskId", taskId);
+                    undo.set("version", "1");
+                    const result = await undoTaskCreation({ status: "idle" }, undo);
+                    return result.status === "error" ? { error: result.message } : undefined;
+                  },
+                },
+              }
+            : {}),
+        });
+        if (taskId) revealElement(`task-${taskId}`);
+      }
       return next;
     },
     { status: "idle" } as PlanActionState,
@@ -100,7 +126,7 @@ export function TaskForm({
             {state.message}
           </p>
         )}
-        {state.status === "ok" && (
+        {state.status === "ok" && !rotateKey && (
           <p className="text-body-md text-action-secondary">{state.message}</p>
         )}
       </div>
