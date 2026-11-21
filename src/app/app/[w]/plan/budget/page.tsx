@@ -70,6 +70,13 @@ export default async function BudgetPage({ params }: { params: Promise<{ w: stri
   const hasBookings = ledger.commitments.some((c) => c.status === "active");
   const lowerBound = s.incomplete ? "At least " : "";
   const hasPlan = budget.categories.length > 0;
+  // An empty budget leads with setup; the summary appears once there is something to summarise.
+  const showSummary =
+    hasPlan ||
+    hasBookings ||
+    s.targetMinor !== null ||
+    s.netPaidMinor > 0 ||
+    budget.items.length > 0;
   const catOptions = budget.categories.map((c) => ({ id: c.id, name: c.name }));
 
   return (
@@ -82,109 +89,118 @@ export default async function BudgetPage({ params }: { params: Promise<{ w: stri
         </p>
       </header>
 
-      <section aria-labelledby="summary" className="space-y-3">
-        <h2 id="summary" className="font-serif text-headline-sm">
-          Where you stand
-        </h2>
-        <Card>
-          <dl className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
-            <Figure
-              label="Your target"
-              value={s.targetMinor === null ? "Not set" : money(s.targetMinor)}
-              note={
-                s.targetMinor === null ? (
-                  <>
-                    Set one in{" "}
-                    <Link href={`${base}/settings/event`} className={link}>
-                      event settings
-                    </Link>{" "}
-                    when you&apos;re ready.
-                  </>
-                ) : undefined
-              }
-            />
-            <Figure
-              label="Forecast"
-              value={`${lowerBound}${money(s.forecastMinor)}`}
-              note={
-                s.incomplete
-                  ? `${s.unknownItemCount} ${s.unknownItemCount === 1 ? "cost has" : "costs have"} no amount yet, so the real total is higher.`
-                  : "Planned costs plus your reserve."
-              }
-            />
-            <Figure
-              label="Planned costs"
-              value={`${lowerBound}${money(s.subtotalMinor)}`}
-              note="Before the reserve."
-            />
-            <Figure
-              label="Reserve"
-              value={money(s.reserveMinor)}
-              note={
-                s.reserveBp === null
-                  ? "None planned."
-                  : `${reservePercentText(s.reserveBp)}% of planned costs. A plan, not money owed.`
-              }
-            />
-            <Figure
-              label="Left against your target"
-              value={
-                s.headroomMinor === null
-                  ? "Needs a target"
-                  : s.headroomMinor >= 0
-                    ? `${s.incomplete ? "At most " : ""}${money(s.headroomMinor)}`
-                    : `Over by ${s.incomplete ? "at least " : ""}${money(-s.headroomMinor)}`
-              }
-              note="Target minus forecast."
-            />
-            <Figure
-              label="Committed and paid"
-              value={`${money(s.committedMinor)} · ${money(s.netPaidMinor)}`}
-              note={
-                hasBookings || s.netPaidMinor > 0 ? (
-                  <>
-                    {money(s.outstandingMinor)} still owed on bookings.{" "}
-                    <Link href={`${base}/plan/budget/bookings`} className={link}>
-                      Bookings and payments
-                    </Link>
-                  </>
-                ) : (
-                  <>
-                    Nothing booked or paid yet. Record a booking from a venue or vendor, or see{" "}
-                    <Link href={`${base}/plan/budget/bookings`} className={link}>
-                      bookings and payments
-                    </Link>
-                    .
-                  </>
-                )
-              }
-            />
-          </dl>
-        </Card>
-        {s.allocationExceedsTarget && (
-          <p role="status" className="text-body-md text-ink">
-            <Badge tone="pending">Check</Badge> Your category targets add up to{" "}
-            {money(s.allocatedMinor)}, which is more than your target. That&apos;s allowed, but they
-            can&apos;t all be met.
-          </p>
-        )}
-        {guests === null && budget.items.some((i) => i.costMode === "per_guest") && (
-          <p role="status" className="text-body-md text-ink-muted">
-            Per-guest costs need a guest count. Add one in{" "}
-            <Link href={`${base}/settings/event`} className={link}>
-              event settings
-            </Link>
-            .
-          </p>
-        )}
-        {guests !== null && (
-          <p className="text-body-sm text-ink-muted">
-            Per-guest costs use your guest target of {guests}.
-          </p>
-        )}
-      </section>
+      {showSummary && (
+        <section aria-labelledby="summary" className="space-y-3">
+          <h2 id="summary" className="font-serif text-headline-sm">
+            Where you stand
+          </h2>
+          <Card>
+            <dl className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
+              <Figure
+                label="Your target"
+                value={s.targetMinor === null ? "Not set" : money(s.targetMinor)}
+                note={
+                  s.targetMinor === null ? (
+                    <>
+                      Set one in{" "}
+                      <Link href={`${base}/settings/event`} className={link}>
+                        event settings
+                      </Link>{" "}
+                      when you&apos;re ready.
+                    </>
+                  ) : undefined
+                }
+              />
+              <Figure
+                label="Forecast"
+                value={`${lowerBound}${money(s.forecastMinor)}`}
+                note={
+                  s.incomplete
+                    ? `${s.unknownItemCount} ${s.unknownItemCount === 1 ? "cost has" : "costs have"} no amount yet, so the real total is higher.`
+                    : "Planned costs plus your reserve."
+                }
+              />
+              <Figure
+                label="Left against your target"
+                value={
+                  s.headroomMinor === null
+                    ? "Needs a target"
+                    : s.headroomMinor >= 0
+                      ? `${s.incomplete ? "At most " : ""}${money(s.headroomMinor)}`
+                      : `Over by ${s.incomplete ? "at least " : ""}${money(-s.headroomMinor)}`
+                }
+                note="Target minus forecast."
+              />
+              <Figure
+                label="Committed and paid"
+                value={`${money(s.committedMinor)} · ${money(s.netPaidMinor)}`}
+                note={
+                  hasBookings || s.netPaidMinor > 0 ? (
+                    <>
+                      {money(s.outstandingMinor)} still owed on bookings.{" "}
+                      <Link href={`${base}/plan/budget/bookings`} className={link}>
+                        Bookings and payments
+                      </Link>
+                    </>
+                  ) : (
+                    <>
+                      Nothing booked or paid yet. Record a booking from a venue or vendor, or see{" "}
+                      <Link href={`${base}/plan/budget/bookings`} className={link}>
+                        bookings and payments
+                      </Link>
+                      .
+                    </>
+                  )
+                }
+              />
+            </dl>
+            <details className="mt-4 border-t border-border-hairline pt-2">
+              <summary className="min-h-11 cursor-pointer py-2 text-label-lg font-semibold text-action-emphasis">
+                How the forecast is built
+              </summary>
+              <dl className="grid gap-x-6 gap-y-4 pt-2 sm:grid-cols-2">
+                <Figure
+                  label="Planned costs"
+                  value={`${lowerBound}${money(s.subtotalMinor)}`}
+                  note="Before the reserve."
+                />
+                <Figure
+                  label="Reserve"
+                  value={money(s.reserveMinor)}
+                  note={
+                    s.reserveBp === null
+                      ? "None planned."
+                      : `${reservePercentText(s.reserveBp)}% of planned costs. A plan, not money owed.`
+                  }
+                />
+              </dl>
+            </details>
+          </Card>
+          {s.allocationExceedsTarget && (
+            <p role="status" className="text-body-md text-ink">
+              <Badge tone="pending">Check</Badge> Your category targets add up to{" "}
+              {money(s.allocatedMinor)}, which is more than your target. That&apos;s allowed, but
+              they can&apos;t all be met.
+            </p>
+          )}
+          {guests === null && budget.items.some((i) => i.costMode === "per_guest") && (
+            <p role="status" className="text-body-md text-ink-muted">
+              Per-guest costs need a guest count. Add one in{" "}
+              <Link href={`${base}/settings/event`} className={link}>
+                event settings
+              </Link>
+              .
+            </p>
+          )}
+          {guests !== null && (
+            <p className="text-body-sm text-ink-muted">
+              Per-guest costs use your guest target of {guests}.
+            </p>
+          )}
+        </section>
+      )}
 
-      {canEdit && (
+      {canEdit && showSummary && (
         <Card>
           <CardTitle>Reserve</CardTitle>
           <div className="mt-4">

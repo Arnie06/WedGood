@@ -102,7 +102,7 @@ test("empty state, then add a venue and a vendor by hand", async ({ page }) => {
   await page.getByLabel(/^Name/).fill("Garden House");
   await page.getByLabel(/^Seated capacity/).fill("120");
   await page.getByLabel(/^Amount/).fill("6,500");
-  await page.getByLabel(/^That price is/).selectOption("total");
+  await page.getByLabel(/^How is that priced/).selectOption("total");
   await page.getByLabel(/^Source link/).fill("https://example.com/garden");
   await page.getByRole("button", { name: "Save" }).click();
   await page.waitForURL(`**/app/${wedding}/discover`);

@@ -211,7 +211,7 @@ export function CandidateForm({
             error={errors.price}
           />
           <SelectField
-            label="That price is"
+            label="How is that priced?"
             name="priceBasis"
             defaultValue={v("priceBasis")}
             error={errors.priceBasis}

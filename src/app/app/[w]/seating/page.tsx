@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Card, CardTitle } from "@/components/ui/card";
 import { EVENT_KIND_LABELS } from "@/domain/events/event";
+import { EventForm } from "@/features/events/event-forms";
 import { hasCapability, requireWorkspace } from "@/server/auth/workspace-guard";
 import { loadEventData } from "@/server/events/queries";
 
@@ -40,15 +41,30 @@ export default async function SeatingIndexPage({ params }: { params: Promise<{ w
         </p>
       </header>
       {data.events.length === 0 && (
-        <Card className="space-y-3">
-          <p className="text-body-md text-ink-muted">
-            Add an event first, such as your reception, then invite guests to it.
-          </p>
+        <Card className="space-y-4">
+          <div className="space-y-1">
+            <CardTitle>Create your first event</CardTitle>
+            <p className="text-body-md text-ink-muted">
+              Seating is planned one event at a time, such as your reception. You can add the date
+              and capacity later.
+            </p>
+          </div>
+          <EventForm
+            workspaceId={wid}
+            initial={{
+              name: "Reception",
+              kind: "reception",
+              localDate: "",
+              targetAttendance: "",
+              capacity: "",
+            }}
+            submitLabel="Create event"
+          />
           <Link
             href={`${base}/guests/invitations`}
             className={`${link} inline-flex min-h-11 items-center`}
           >
-            Events and invitations
+            Or manage events and invitations
           </Link>
         </Card>
       )}
