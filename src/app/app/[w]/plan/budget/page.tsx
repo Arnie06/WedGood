@@ -215,11 +215,7 @@ export default async function BudgetPage({ params }: { params: Promise<{ w: stri
               </dl>
               {canEdit && (
                 <div className="pt-2">
-                  <TrayButton
-                    triggerStyle="link"
-                    label="Change the reserve"
-                    title="Reserve"
-                  >
+                  <TrayButton triggerStyle="link" label="Change the reserve" title="Reserve">
                     <ReserveForm
                       workspaceId={access.wedding.id}
                       version={budget.settingsVersion}

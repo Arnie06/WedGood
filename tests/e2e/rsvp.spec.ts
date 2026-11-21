@@ -69,19 +69,21 @@ test("owner creates an event, meals and a link; a guest answers without an accou
   await page.goto(`/app/${wedding}/guests/invitations`);
   await expect(page.getByText("No events yet")).toBeVisible();
 
+  await page.getByRole("button", { name: "Add an event" }).click();
   await page.getByLabel("Event name").fill("Reception");
   await page.getByRole("button", { name: "Add event" }).click();
-  await expect(page.getByText("Added Reception.")).toBeVisible();
+  await expect(page.getByText("Added Reception.").first()).toBeVisible();
   await expect(page.getByRole("heading", { name: "Reception", level: 2 })).toBeVisible();
 
-  await page.getByText(/^Meal choices \(/).click();
+  await page.getByRole("button", { name: /^Meal choices \(/ }).click();
   for (const meal of ["Chicken", "Vegetarian plate"]) {
     await page.getByLabel("Add a meal choice").fill(meal);
     await page.getByRole("button", { name: "Add meal choice" }).click();
     await expect(page.getByText(`Added ${meal}.`)).toBeVisible();
   }
 
-  await page.getByText("Invite guests to Reception").click();
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Invite guests", exact: true }).click();
   await page.getByLabel(/The Examples/).check();
   await page.getByLabel("Plus-ones allowed").selectOption("1");
   await page.getByRole("button", { name: "Create invitation links" }).click();

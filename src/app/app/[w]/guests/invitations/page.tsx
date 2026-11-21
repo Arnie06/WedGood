@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Badge, type BadgeTone } from "@/components/ui/badge";
 import { Card, CardTitle } from "@/components/ui/card";
+import { TrayButton } from "@/components/ui/tray";
 import { EVENT_KIND_LABELS } from "@/domain/events/event";
 import { invitationState, type InvitationState } from "@/domain/events/invitation";
 import { summarizeResponses } from "@/domain/guests/rsvp";
@@ -90,9 +91,18 @@ export default async function InvitationsPage({ params }: { params: Promise<{ w:
             ? "Email sending is set up, but nothing is sent unless you approve it."
             : "Email sending isn't set up, so copy each link and share it yourself. “Shared” means you told us you shared it, not that it was delivered or read."}
         </p>
-        <Link href={`${base}/guests`} className={`${link} inline-flex min-h-11 items-center`}>
-          Back to the guest list
-        </Link>
+        <div className="flex flex-wrap items-center gap-3 pt-1">
+          <TrayButton
+            label="Add an event"
+            title="Add an event"
+            description="Such as your ceremony or reception. Guests are invited to each event separately."
+          >
+            <EventForm workspaceId={wid} submitLabel="Add event" />
+          </TrayButton>
+          <Link href={`${base}/guests`} className={`${link} inline-flex min-h-11 items-center`}>
+            Back to the guest list
+          </Link>
+        </div>
       </header>
 
       {data.events.length === 0 && (
@@ -191,11 +201,28 @@ export default async function InvitationsPage({ params }: { params: Promise<{ w:
               )}
             </Card>
 
-            <details className="rounded-card border border-border-hairline p-4">
-              <summary className="min-h-11 cursor-pointer font-semibold">
-                Meal choices ({activeMeals.length} offered)
-              </summary>
-              <div className="mt-3 space-y-3">
+            <div className="flex flex-wrap gap-3">
+              <TrayButton
+                label="Invite guests"
+                size="sm"
+                title={`Invite guests to ${event.name}`}
+                description="Creating a link sends nothing. You share it yourself."
+              >
+                <InviteForm
+                  workspaceId={wid}
+                  eventId={event.id}
+                  households={householdPicks}
+                  guests={soloPicks}
+                  defaultExpires={defaultExpires}
+                />
+              </TrayButton>
+              <TrayButton
+                label={`Meal choices (${activeMeals.length})`}
+                variant="outline"
+                size="sm"
+                title="Meal choices"
+                description={event.name}
+              >
                 {meals.length === 0 && (
                   <p className="text-body-sm text-ink-muted">
                     No meal choices yet. Guests won&apos;t be asked about a meal.
@@ -209,12 +236,14 @@ export default async function InvitationsPage({ params }: { params: Promise<{ w:
                   ))}
                 </ul>
                 <MealOptionForm workspaceId={wid} eventId={event.id} />
-              </div>
-            </details>
-
-            <details className="rounded-card border border-border-hairline p-4">
-              <summary className="min-h-11 cursor-pointer font-semibold">Edit this event</summary>
-              <div className="mt-3">
+              </TrayButton>
+              <TrayButton
+                label="Edit event"
+                variant="outline"
+                size="sm"
+                title="Edit event"
+                description={event.name}
+              >
                 <EventForm
                   workspaceId={wid}
                   event={{ id: event.id, version: event.version }}
@@ -228,23 +257,8 @@ export default async function InvitationsPage({ params }: { params: Promise<{ w:
                   }}
                   submitLabel="Save event"
                 />
-              </div>
-            </details>
-
-            <details className="rounded-card border border-border-hairline p-4">
-              <summary className="min-h-11 cursor-pointer font-semibold">
-                Invite guests to {event.name}
-              </summary>
-              <div className="mt-3">
-                <InviteForm
-                  workspaceId={wid}
-                  eventId={event.id}
-                  households={householdPicks}
-                  guests={soloPicks}
-                  defaultExpires={defaultExpires}
-                />
-              </div>
-            </details>
+              </TrayButton>
+            </div>
 
             <div className="space-y-3">
               <h3 className="font-serif text-headline-sm">Invitations ({invitations.length})</h3>
@@ -295,11 +309,14 @@ export default async function InvitationsPage({ params }: { params: Promise<{ w:
                     </ul>
                     {state !== "revoked" && (
                       <>
-                        <details>
-                          <summary className="min-h-11 cursor-pointer font-semibold text-action-emphasis">
-                            Change an answer
-                          </summary>
-                          <div className="mt-3 space-y-4">
+                        <TrayButton
+                          triggerStyle="link"
+                          label="Change an answer"
+                          ariaLabel={`Change an answer for ${inv.label}`}
+                          title="Change an answer"
+                          description={inv.label}
+                        >
+                          <div className="space-y-4">
                             {invMembers
                               .filter((m) => m.active)
                               .map((m) => (
@@ -316,7 +333,7 @@ export default async function InvitationsPage({ params }: { params: Promise<{ w:
                                 />
                               ))}
                           </div>
-                        </details>
+                        </TrayButton>
                         <InvitationActions
                           workspaceId={wid}
                           invitation={{
@@ -335,15 +352,6 @@ export default async function InvitationsPage({ params }: { params: Promise<{ w:
           </section>
         );
       })}
-
-      <section aria-labelledby="add-event" className="space-y-3">
-        <h2 id="add-event" className="font-serif text-headline-sm">
-          Add an event
-        </h2>
-        <Card>
-          <EventForm workspaceId={wid} submitLabel="Add event" />
-        </Card>
-      </section>
     </div>
   );
 }

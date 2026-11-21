@@ -35,7 +35,8 @@ type ActionState = { status: string; message?: string };
 /**
  * `useActionState` for forms that may live in a tray. Outside a tray it behaves exactly like
  * `useActionState`. Inside one, a successful result (`status: "ok"`) closes the tray and shows
- * the result's message as a toast, unless `keepOpen` is set (forms that add several in a row).
+ * the result's message as a toast, unless `keepOpen` is set (forms that repeat) or the result carries
+ * a one-time `links` / `inviteUrl` that the person still needs to see.
  */
 export function useTrayActionState<S extends ActionState>(
   action: (state: S, form: FormData) => Promise<S>,
@@ -46,7 +47,10 @@ export function useTrayActionState<S extends ActionState>(
   // Action states are plain objects, so `Awaited<S>` is `S`; React's generic signature just can't see that.
   return useActionState(async (prev: Awaited<S>, form: FormData) => {
     const next = await action(prev as S, form);
-    if (ctx && next.status === "ok" && !options.keepOpen) ctx.complete(next.message);
+    // A result that carries something the person still needs (a one-time link) must stay on screen.
+    const carriesData = "links" in next || "inviteUrl" in next;
+    if (ctx && next.status === "ok" && !options.keepOpen && !carriesData)
+      ctx.complete(next.message);
     return next as Awaited<S>;
   }, initial as Awaited<S>);
 }

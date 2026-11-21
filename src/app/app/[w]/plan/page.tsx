@@ -264,7 +264,7 @@ function TaskItem({
         disabled={!canEdit}
       />
       <div className="min-w-0 flex-1 space-y-1">
-        <p className={done ? "text-body-lg text-ink-muted line-through" : "text-body-lg"}>
+        <div className={done ? "text-body-lg text-ink-muted line-through" : "text-body-lg"}>
           {canEdit ? (
             <TrayButton
               triggerStyle="plain"
@@ -307,7 +307,7 @@ function TaskItem({
           ) : (
             task.title
           )}
-        </p>
+        </div>
         <p
           className={
             overdue

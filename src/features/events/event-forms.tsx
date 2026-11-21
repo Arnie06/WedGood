@@ -1,7 +1,8 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { useTrayActionState } from "@/components/ui/tray";
+import { useToast } from "@/components/ui/toast";
+import { useTrayActionState, useTrayClose } from "@/components/ui/tray";
 import { Button } from "@/components/ui/button";
 import { SelectField } from "@/components/ui/select-field";
 import { TextField } from "@/components/ui/text-field";
@@ -121,9 +122,15 @@ export function EventForm({
 }) {
   const [created, setCreated] = useState(0);
   const [keyBase] = useState(() => crypto.randomUUID());
+  const closeTray = useTrayClose();
+  const { toast } = useToast();
   const [state, formAction, pending] = useActionState(
     async (prev: EventActionState, form: FormData) => {
       const next = await saveEvent(prev, form);
+      if (next.status === "ok") {
+        closeTray();
+        toast({ message: next.message });
+      }
       if (next.status === "ok" && !event) setCreated((n) => n + 1);
       return next;
     },
@@ -230,7 +237,9 @@ export function MealToggle({
   workspaceId: string;
   option: { id: string; name: string; active: boolean; version: number };
 }) {
-  const [state, formAction, pending] = useTrayActionState(setMealOptionActive, idle);
+  const [state, formAction, pending] = useTrayActionState(setMealOptionActive, idle, {
+    keepOpen: true,
+  });
   return (
     <form action={formAction} className="flex flex-wrap items-center gap-3">
       <Hidden
@@ -437,7 +446,9 @@ export function OverrideForm({
   member: { id: string; name: string; status: string; mealOptionId: string | null };
   meals: { id: string; name: string }[];
 }) {
-  const [state, formAction, pending] = useTrayActionState(overrideResponse, idle);
+  const [state, formAction, pending] = useTrayActionState(overrideResponse, idle, {
+    keepOpen: true,
+  });
   const errors = state.status === "error" ? state.fieldErrors : {};
   return (
     <form action={formAction} className="space-y-3" noValidate>
