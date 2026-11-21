@@ -12,6 +12,9 @@ export function revealElement(id: string, options: { timeoutMs?: number } = {}):
   const attempt = () => {
     const el = document.getElementById(id);
     if (el) {
+      // Items past the fold of a collapsed group live inside a closed <details>.
+      for (let d = el.closest("details"); d; d = d.parentElement?.closest("details") ?? null)
+        d.open = true;
       el.scrollIntoView({ block: "center", behavior: reduced ? "auto" : "smooth" });
       el.setAttribute("data-just-added", "");
       window.setTimeout(() => el.removeAttribute("data-just-added"), 2500);

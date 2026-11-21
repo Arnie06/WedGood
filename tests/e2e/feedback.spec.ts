@@ -87,6 +87,8 @@ test("adding a task confirms with a toast, scrolls to it, and Undo removes it", 
   await signInViaUi(page, owner);
   await page.goto(`/app/${wedding}/plan`);
 
+  await page.getByRole("button", { name: "Add a task" }).click();
+
   await page.getByLabel(/^Task/).fill("Order the cake");
   await page.getByRole("button", { name: "Add task" }).click();
 
@@ -115,8 +117,9 @@ test("completing a task offers Undo, which reopens it", async ({ page }) => {
   expect((await taskStatus(wedding, "Book the band"))?.status).toBe("done");
 
   await notifications.getByRole("button", { name: "Undo" }).click();
+  // The toast shows as soon as the action returns; the page re-renders a moment later.
+  await expect.poll(async () => (await taskStatus(wedding, "Book the band"))?.status).toBe("open");
   await expect(page.getByRole("button", { name: 'Mark "Book the band" done' })).toBeVisible();
-  expect((await taskStatus(wedding, "Book the band"))?.status).toBe("open");
 });
 
 test("a refused change shows a visible error toast, not just hidden text", async ({ page }) => {
@@ -141,6 +144,7 @@ test("a failed submit moves focus to the first invalid field", async ({ page }) 
   await signInViaUi(page, owner);
 
   await page.goto(`/app/${wedding}/plan`);
+  await page.getByRole("button", { name: "Add a task" }).click();
   await page.getByRole("button", { name: "Add task" }).click();
   await expect(page.getByLabel(/^Task/)).toBeFocused();
   await expect(page.getByLabel(/^Task/)).toHaveAttribute("aria-invalid", "true");
@@ -181,6 +185,7 @@ test("the checklist with a toast showing passes axe and reflows at 320 and 1280"
   for (const width of [320, 1280]) {
     await page.setViewportSize({ width, height: 800 });
     await page.goto(`/app/${wedding}/plan`);
+    await page.getByRole("button", { name: "Add a task" }).click();
     await page.getByLabel(/^Task/).fill(`Check ${width}`);
     await page.getByRole("button", { name: "Add task" }).click();
     await expect(page.getByRole("region", { name: "Notifications" })).toContainText("Task added.");
@@ -193,4 +198,71 @@ test("the checklist with a toast showing passes axe and reflows at 320 and 1280"
     );
     expect(overflow).toBeLessThanOrEqual(0);
   }
+});
+
+test("the add-task sheet traps focus, closes on Escape and after saving, and returns focus", async ({
+  page,
+}) => {
+  const owner = await appUser("fb-sheet");
+  const wedding = await createWedding(owner, { name: "Feedback Sheet" });
+  await signInViaUi(page, owner);
+  await page.goto(`/app/${wedding}/plan`);
+
+  const trigger = page.getByRole("button", { name: "Add a task" });
+  await trigger.click();
+  const dialog = page.getByRole("dialog", { name: "Add a task" });
+  await expect(dialog).toBeVisible();
+  await expect(page.getByLabel(/^Task/)).toBeFocused();
+
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  await expect(trigger).toBeFocused();
+
+  await trigger.click();
+  await page.getByLabel(/^Task/).fill("Taste the menu");
+  await page.getByRole("button", { name: "Add task" }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole("link", { name: "Taste the menu" })).toBeVisible();
+});
+
+test("long groups fold after five and a new item inside the fold is still revealed", async ({
+  page,
+}) => {
+  const owner = await appUser("fb-fold");
+  const wedding = await createWedding(owner, { name: "Feedback Fold" });
+  await addTasks(
+    owner,
+    wedding,
+    Array.from({ length: 8 }, (_, i) => `Folded task ${i + 1}`),
+  );
+  await signInViaUi(page, owner);
+  await page.goto(`/app/${wedding}/plan`);
+
+  await expect(page.getByRole("link", { name: /^Folded task/ })).toHaveCount(5);
+  await page.getByText("Show 3 more").click();
+  await expect(page.getByRole("link", { name: /^Folded task/ })).toHaveCount(8);
+  await page.getByText("Show fewer").click();
+  await expect(page.getByRole("link", { name: /^Folded task/ })).toHaveCount(5);
+
+  await page.getByRole("button", { name: "Add a task" }).click();
+  await page.getByLabel(/^Task/).fill("Zed last task");
+  await page.getByRole("button", { name: "Add task" }).click();
+  const row = page.getByRole("listitem").filter({ hasText: "Zed last task" });
+  await expect(row).toBeVisible();
+  await expect(row).toBeInViewport();
+});
+
+test("a viewer sees no add button", async ({ page }) => {
+  const owner = await appUser("fb-view-o");
+  const viewer = await appUser("fb-view-v");
+  const wedding = await createWedding(owner, { name: "Feedback Viewer" });
+  await withSuperuser((db) =>
+    db.query("insert into public.memberships (wedding_id, user_id, role) values ($1,$2,'viewer')", [
+      wedding,
+      viewer.id,
+    ]),
+  );
+  await signInViaUi(page, viewer);
+  await page.goto(`/app/${wedding}/plan`);
+  await expect(page.getByRole("button", { name: "Add a task" })).toHaveCount(0);
 });

@@ -55,6 +55,14 @@ This ledger is for Claude Code, Codex and human maintainers. Keep it factual; do
 
 ## Session log
 
+### 2026-11-20 · Claude Code · UX-04a (checklist) · branch `main`
+
+- **Scope:** Checklist list-first. "Add a task" moved from an always-open form into a sheet (`components/ui/sheet.tsx` on native `<dialog>`: bottom sheet on phones, centred on larger screens; focus trapped, Escape closes, focus returns to the button, closes after saving). Groups other than "Needs attention" show five items and fold the rest behind "Show N more"; `revealElement` opens a closed fold when a new item lands inside it. Dropped the repeated per-row "Moves with your wedding date" and phase text (page intro already says it); tasks with a user-set date say "Date set by you, so it won't move".
+- **Tests:** 3 new e2e in `feedback.spec.ts` (sheet focus, Escape, close after save and focus return; fold after five, show more/fewer, new item inside the fold revealed; viewer sees no add button). Existing checklist and feedback specs updated to open the sheet first. A race in my own Undo test (toast shows before the page re-renders) fixed by polling the database; 36/36 over 4 repeats.
+- **Commands, exit 0:** `format:check`, `lint`, `typecheck`, `test:unit` 518; e2e (chromium) feedback and checklist specs. Full suite not re-run for this part.
+- **Not verified:** 768/1440 beyond screenshots at 390 and 1280; screen reader on the dialog; Firefox.
+- **Next:** UX-04b (guest quick-add, filters apply on change, secondary links menu), then UX-04c (venue paste-a-link, needs ADR first).
+
 ### 2026-11-20 · Claude Code · UX-03 · branch `main`
 
 - **Scope:** Feedback and validation. Toasts with Undo, scroll-to-and-highlight of a new item, focus on the first invalid field, visible errors, overdue styling.

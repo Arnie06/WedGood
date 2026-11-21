@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { SelectField } from "@/components/ui/select-field";
 import { TextAreaField } from "@/components/ui/text-area-field";
 import { TextField } from "@/components/ui/text-field";
+import { useSheetClose } from "@/components/ui/sheet";
 import { useToast } from "@/components/ui/toast";
 import { revealElement } from "@/lib/reveal";
 import { undoTaskCreation, type PlanActionState } from "@/server/plan/actions";
@@ -23,6 +24,7 @@ export function TaskForm({
   pendingLabel,
   rotateKey = false,
   compact = false,
+  autoFocusTitle = false,
 }: {
   action: Action;
   defaults: TaskFormDefaults;
@@ -33,16 +35,20 @@ export function TaskForm({
   /** Creation: a fresh idempotency key after each success so the next task isn't a replay. */
   rotateKey?: boolean;
   compact?: boolean;
+  /** Focus the title when the form appears (inside a sheet). */
+  autoFocusTitle?: boolean;
 }) {
   // Each successful create gets a fresh idempotency key (base key + count), so the next
   // task isn't mistaken for a replay while a retry after an error still is one.
   const [created, setCreated] = useState(0);
   const { toast } = useToast();
+  const closeSheet = useSheetClose();
   const [state, formAction, pending] = useActionState(
     async (prev: PlanActionState, form: FormData) => {
       const next = await action(prev, form);
       if (rotateKey && next.status === "ok") {
         setCreated((n) => n + 1);
+        closeSheet();
         const { taskId } = next;
         const workspaceId = hidden.workspaceId;
         toast({
@@ -87,6 +93,7 @@ export function TaskForm({
         label="Task"
         name="title"
         required
+        autoFocus={autoFocusTitle}
         maxLength={160}
         autoComplete="off"
         placeholder="e.g. Call the florist"

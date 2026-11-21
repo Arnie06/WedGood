@@ -4,11 +4,11 @@ import { CalendarX } from "lucide-react";
 import Link from "next/link";
 import { Card, CardTitle } from "@/components/ui/card";
 import { ProgressBar } from "@/components/ui/progress-bar";
+import { SheetButton } from "@/components/ui/sheet";
 import { todayInZone } from "@/domain/dates/date-only";
 import { previewReschedule } from "@/domain/tasks/schedule";
 import { groupTasks, progress } from "@/domain/tasks/summary";
 import { cn } from "@/lib/cn";
-import { phaseLabel } from "@/domain/tasks/templates";
 import { GenerateChecklistForm } from "@/features/plan/plan-actions";
 import { dueLabel, isOverdue } from "@/features/plan/format";
 import { toScheduled, toSummary } from "@/features/plan/mappers";
@@ -105,21 +105,25 @@ export default async function PlanPage({ params }: { params: Promise<{ w: string
       )}
 
       {canEdit && (
-        <Card>
-          <CardTitle>Add a task</CardTitle>
-          <div className="mt-4">
+        <div>
+          <SheetButton
+            label="Add a task"
+            title="Add a task"
+            description="Leave the date blank if you're not sure yet."
+          >
             <TaskForm
               action={createTask}
               rotateKey
               compact
+              autoFocusTitle
               assignees={assignees}
               submitLabel="Add task"
               pendingLabel="Adding…"
               defaults={{ title: "", notes: "", dueDate: "", assignee: "" }}
               hidden={{ workspaceId: access.wedding.id, idempotencyKey: randomUUID() }}
             />
-          </div>
-        </Card>
+          </SheetButton>
+        </div>
       )}
 
       {total === 0 ? (
@@ -151,19 +155,38 @@ export default async function PlanPage({ params }: { params: Promise<{ w: string
                   {title}{" "}
                   <span className="text-body-md text-ink-muted">({groups[key].length})</span>
                 </h2>
-                <ul className="space-y-3">
-                  {groups[key].map((s) => (
-                    <TaskItem
-                      key={s.id}
-                      task={byId.get(s.id)!}
-                      base={base}
-                      workspaceId={access.wedding.id}
-                      today={today}
-                      assignee={names}
-                      canEdit={canEdit}
-                    />
-                  ))}
-                </ul>
+                {(() => {
+                  const list = groups[key];
+                  // Overdue always shows in full; long groups show the first few and fold the rest.
+                  const head = key === "overdue" ? list : list.slice(0, VISIBLE_PER_GROUP);
+                  const rest = key === "overdue" ? [] : list.slice(VISIBLE_PER_GROUP);
+                  const items = (rows: typeof list) =>
+                    rows.map((s) => (
+                      <TaskItem
+                        key={s.id}
+                        task={byId.get(s.id)!}
+                        base={base}
+                        workspaceId={access.wedding.id}
+                        today={today}
+                        assignee={names}
+                        canEdit={canEdit}
+                      />
+                    ));
+                  return (
+                    <>
+                      <ul className="space-y-3">{items(head)}</ul>
+                      {rest.length > 0 && (
+                        <details className="group">
+                          <summary className="flex min-h-11 cursor-pointer items-center text-label-lg font-semibold text-action-emphasis underline underline-offset-4">
+                            <span className="group-open:hidden">Show {rest.length} more</span>
+                            <span className="hidden group-open:inline">Show fewer</span>
+                          </summary>
+                          <ul className="mt-3 space-y-3">{items(rest)}</ul>
+                        </details>
+                      )}
+                    </>
+                  );
+                })()}
               </section>
             ),
           )}
@@ -204,6 +227,8 @@ export default async function PlanPage({ params }: { params: Promise<{ w: string
     </div>
   );
 }
+
+const VISIBLE_PER_GROUP = 5;
 
 function TaskItem({
   task,
@@ -263,10 +288,8 @@ function TaskItem({
             {who ? ` · ${who}` : ""}
           </span>
         </p>
-        {task.dateKind === "relative" && !done && (
-          <p className="text-body-sm text-ink-muted">
-            {task.phase ? `${phaseLabel(task.phase)} · ` : ""}Moves with your wedding date
-          </p>
+        {task.dateKind !== "relative" && task.dueDate && !done && (
+          <p className="text-body-sm text-ink-muted">Date set by you, so it won&apos;t move.</p>
         )}
       </div>
     </Card>

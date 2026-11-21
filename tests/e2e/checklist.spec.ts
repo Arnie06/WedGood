@@ -114,12 +114,15 @@ test("add, complete, edit and remove tasks; edits to a date make a flexible task
   await signInViaUi(page, owner);
   await page.goto(`/app/${wedding}/plan`);
 
+  await page.getByRole("button", { name: "Add a task" }).click();
+
   await page.getByLabel(/^Task/).fill("Call the florist");
   await page.getByRole("button", { name: "Add task" }).click();
   await expect(page.getByText("Task added.")).toBeVisible();
   await expect(page.getByRole("link", { name: "Call the florist" })).toBeVisible();
 
   // A second task right after the first must not be mistaken for a replay.
+  await page.getByRole("button", { name: "Add a task" }).click();
   await page.getByLabel(/^Task/).fill("Order the cake");
   await page.getByRole("button", { name: "Add task" }).click();
   await expect(page.getByRole("link", { name: "Order the cake" })).toBeVisible();
@@ -158,6 +161,7 @@ test("field errors keep the person's input", async ({ page }) => {
   const wedding = await createWedding(owner, { name: "Err", date: FUTURE });
   await signInViaUi(page, owner);
   await page.goto(`/app/${wedding}/plan`);
+  await page.getByRole("button", { name: "Add a task" }).click();
   await page.getByLabel(/^Due date/).fill("2031-02-01");
   await page.getByRole("button", { name: "Add task" }).click();
   await expect(page.getByText("Give the task a name.")).toBeVisible();
@@ -175,6 +179,7 @@ test("changing the wedding date moves nothing until the preview is reviewed and 
   await page.getByRole("button", { name: "Add the suggested checklist" }).click();
   await expect(page.getByRole("heading", { name: "Coming up" })).toBeVisible();
   // A task whose date the couple chose (e.g. a contract deadline) is fixed.
+  await page.getByRole("button", { name: "Add a task" }).click();
   await page.getByLabel(/^Task/).fill("Venue deposit due");
   await page.getByLabel(/^Due date/).fill("2030-11-01");
   await page.getByRole("button", { name: "Add task" }).click();
