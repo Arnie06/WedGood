@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { AuthFrame } from "@/components/auth/auth-frame";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -13,7 +14,11 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default async function AppHomePage() {
+export default async function AppHomePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ all?: string }>;
+}) {
   const user = await requireSessionUser("/app");
   const supabase = await createUserClient();
   const { data, error } = await supabase
@@ -28,6 +33,11 @@ export default async function AppHomePage() {
     const w = Array.isArray(m.weddings) ? m.weddings[0] : m.weddings;
     return w && isMembershipRole(m.role) ? [{ id: m.id, role: m.role, wedding: w }] : [];
   });
+
+  // One workspace: go straight in. `?all=1` (linked from More) keeps the full list reachable.
+  const { all } = await searchParams;
+  const only = rows.length === 1 ? rows[0] : undefined;
+  if (only && all === undefined) redirect(`/app/${only.wedding.id}`);
 
   return (
     <AuthFrame

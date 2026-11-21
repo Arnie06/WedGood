@@ -89,7 +89,7 @@ test("optional details persist across reload and show a date-only countdown", as
 
   await page.reload();
   await expect(page.getByText("May 22, 2099")).toBeVisible();
-  await expect(page.getByText(/days to go/)).toBeVisible();
+  await expect(page.getByRole("main").getByText(/days to go/)).toBeVisible();
   await expect(page.getByText("$40,000.00")).toBeVisible();
   await expect(page.getByText("120", { exact: true })).toBeVisible();
   await expect(page.getByText("Napa Valley")).toBeVisible();

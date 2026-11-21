@@ -103,6 +103,7 @@ test("without a date, suggested tasks are undated and the dashboard asks for one
   expect(await taskCount(wedding, "due_date is null")).toBe(await taskCount(wedding));
   await page.goto(`/app/${wedding}`);
   await expect(page.getByRole("link", { name: "Add your date" })).toBeVisible();
+  await expect(page.getByText("Pick your wedding date")).toBeVisible();
 });
 
 test("add, complete, edit and remove tasks; edits to a date make a flexible task fixed", async ({

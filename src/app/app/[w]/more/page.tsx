@@ -65,6 +65,11 @@ const sections: ReadonlyArray<{ id: string; title: string; links: readonly MoreL
         href: "settings/members",
         capability: "members.view",
       },
+      {
+        name: "All workspaces",
+        description: "Switch weddings or start a new workspace.",
+        href: "/app?all=1",
+      },
     ],
   },
 ];
@@ -95,7 +100,7 @@ export default async function MorePage({ params }: { params: Promise<{ w: string
                 <li key={link.href}>
                   <Card className="p-0 sm:p-0">
                     <Link
-                      href={`${base}/${link.href}`}
+                      href={link.href.startsWith("/") ? link.href : `${base}/${link.href}`}
                       className="flex min-h-16 items-center justify-between gap-4 rounded-card p-4 sm:p-5"
                     >
                       <span className="min-w-0 space-y-1">

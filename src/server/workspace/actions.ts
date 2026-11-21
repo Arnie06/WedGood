@@ -6,7 +6,12 @@ import { z } from "zod";
 import { previewReschedule } from "@/domain/tasks/schedule";
 import { toScheduled } from "@/features/plan/mappers";
 import { loadTasks } from "@/server/plan/queries";
-import { parseSettingsInput, type SettingsField } from "@/domain/wedding/settings";
+import {
+  minorToMajorInput,
+  parseSettingsInput,
+  type SettingsField,
+} from "@/domain/wedding/settings";
+import { loadWeddingSettings } from "./queries";
 import { requireSessionUser } from "@/server/auth/session";
 import { ForbiddenError, requireCapability } from "@/server/auth/workspace-guard";
 import { createUserClient } from "@/server/supabase/server";
@@ -154,4 +159,81 @@ export async function updateWorkspaceSettings(
     version: data,
     ...(moves > 0 && { reviewMoves: moves }),
   };
+}
+
+/**
+ * One-field quick set for the home page (budget target or guest count target).
+ * Merges the single change into the saved settings and goes through the same
+ * validation and versioned RPC as the full form, so no rule is duplicated.
+ */
+export async function quickSetTarget(
+  _: SettingsFormState,
+  form: FormData,
+): Promise<SettingsFormState> {
+  const which = z.enum(["targetBudget", "targetGuestCount"]).safeParse(form.get("which"));
+  const ids = z
+    .object({ workspaceId: uuid, version: z.coerce.number().int().min(1) })
+    .safeParse({ workspaceId: form.get("workspaceId"), version: form.get("version") });
+  const raw = form.get("value");
+  const value = typeof raw === "string" ? raw : "";
+  if (!which.success || !ids.success) {
+    return {
+      status: "error",
+      message: "Reload the page and try again.",
+      fieldErrors: {},
+      values: {},
+    };
+  }
+  const field = which.data;
+  try {
+    await requireCapability(ids.data.workspaceId, "settings.edit");
+  } catch (e) {
+    if (e instanceof ForbiddenError) {
+      return {
+        status: "error",
+        message: friendlyWorkspaceError({ code: "42501" }),
+        fieldErrors: {},
+        values: { [field]: value },
+      };
+    }
+    throw e;
+  }
+
+  const current = await loadWeddingSettings(ids.data.workspaceId);
+  const merged: Partial<Record<SettingsField, string>> = {
+    name: current.name,
+    date: current.date ?? "",
+    timezone: current.timezone,
+    baseCurrency: current.baseCurrency,
+    location: current.location ?? "",
+    targetBudget: minorToMajorInput(current.targetBudgetMinor, current.baseCurrency),
+    targetGuestCount: current.targetGuestCount === null ? "" : String(current.targetGuestCount),
+    [field]: value,
+  };
+  const parsed = parseSettingsInput(merged);
+  if (!parsed.ok) {
+    return {
+      status: "error",
+      message: parsed.errors[field] ?? "Please check that value.",
+      fieldErrors: { [field]: parsed.errors[field] ?? "Please check that value." },
+      values: { [field]: value },
+    };
+  }
+
+  const supabase = await createUserClient();
+  const { data, error } = await supabase.rpc("update_wedding_settings", {
+    p_wedding: ids.data.workspaceId,
+    p_expected_version: ids.data.version,
+    ...rpcArgs(parsed.value),
+  });
+  if (error || typeof data !== "number") {
+    return {
+      status: "error",
+      message: friendlyWorkspaceError(error ?? {}),
+      fieldErrors: {},
+      values: { [field]: value },
+    };
+  }
+  revalidatePath(`/app/${ids.data.workspaceId}`, "layout");
+  return { status: "ok", message: "Saved.", version: data };
 }

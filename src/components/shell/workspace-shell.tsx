@@ -10,6 +10,7 @@ import { BottomNav, SidebarNav } from "./workspace-nav";
 export function WorkspaceShell({
   basePath,
   workspaceName,
+  workspaceSubtitle,
   badge,
   notice,
   sidebarFooter,
@@ -17,6 +18,7 @@ export function WorkspaceShell({
 }: {
   basePath: string;
   workspaceName: string;
+  workspaceSubtitle?: string | undefined;
   badge?: ReactNode;
   notice?: ReactNode;
   sidebarFooter?: ReactNode;
@@ -37,7 +39,12 @@ export function WorkspaceShell({
               <span className="shrink-0 lg:hidden">
                 <Hallmark compact />
               </span>
-              <p className="truncate font-serif text-headline-sm text-ink">{workspaceName}</p>
+              <div className="min-w-0">
+                <p className="truncate font-serif text-headline-sm text-ink">{workspaceName}</p>
+                {workspaceSubtitle && (
+                  <p className="truncate text-body-sm text-ink-muted">{workspaceSubtitle}</p>
+                )}
+              </div>
             </div>
             {badge}
           </div>

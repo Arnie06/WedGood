@@ -55,6 +55,16 @@ This ledger is for Claude Code, Codex and human maintainers. Keep it factual; do
 
 ## Session log
 
+### 2026-11-20 · Claude Code · UX-02 · branch `main`
+
+- **Scope:** Entry flow and Home. One workspace skips the picker; the Home page leads with stage-aware "Next up" actions; budget and guest targets are set inline; header shows days to go.
+- **App:** `/app` redirects when the member has exactly one workspace (`/app?all=1` keeps the list, linked from More as "All workspaces"). `src/domain/home/next-actions.ts` (pure): setup guidance early, overdue first once the basics exist, overdue always visible during setup, capped at three, only what the member may do. `quickSetTarget` server action merges one field into saved settings and reuses `parseSettingsInput` and the versioned `update_wedding_settings` RPC (no new migration). `requireWorkspace` now also returns date and time zone, so the header shows a countdown without an extra query. Removed the "Still to decide" card and the stale "coming releases" copy.
+- **Tests:** 8 unit (`next-actions.test.ts`); 6 Chromium e2e in `home.spec.ts` (single-workspace redirect and `?all=1`, picker for several, guided empty workspace with inline save and rejected input, stale version saves nothing, viewer sees no prompts, header countdown plus axe and no overflow at 320 and 1280). Existing checklist and onboarding specs adjusted for the new Home text (not weakened).
+- **Commands, exit 0:** `format:check`, `lint`, `typecheck`, `test:unit` 515; e2e (chromium, port 3201 config copy) home, checklist, navigation, onboarding, membership. Full e2e and integration not re-run.
+- **Deferred from the plan:** snooze ("Not now") needs persisted per-member state and a migration, so it is not built; remember-last-workspace needs a cookie set from a route handler or the proxy. After a quick-set, the prompt disappears on revalidation with no confirmation; the toast in UX-03 covers it.
+- **Not verified:** 390/768/1440 beyond the screenshots at 390 and 1280 reviewed by eye; WebKit/Firefox; screen reader.
+- **Next:** UX-03 (feedback toasts with Undo, field-level errors, overdue styling).
+
 ### 2026-11-20 · Claude Code · UX-01 (UX pass, from the hands-on analysis) · branch `main`
 
 - **Scope:** Fix broken or misleading surfaces found by using the app. Plan for UX-01 to UX-07: More hub, landing/auth copy, placeholders, then single-workspace redirect and Home cockpit, feedback/validation, faster entry flows (incl. link prefill), empty states, richer demo data, polish.

@@ -16,7 +16,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export type WorkspaceAccess = {
   user: SessionUser;
-  wedding: { id: string; name: string };
+  wedding: { id: string; name: string; date: string | null; timezone: string };
   membership: { id: string; role: MembershipRole; grants: PartnerGrants; version: number };
 };
 
@@ -33,7 +33,7 @@ export const requireWorkspace = cache(async (workspaceId: string): Promise<Works
   const supabase = await createUserClient();
   const { data, error } = await supabase
     .from("memberships")
-    .select("id, role, permissions, version, weddings!inner(id, name)")
+    .select("id, role, permissions, version, weddings!inner(id, name, date, timezone)")
     .eq("wedding_id", workspaceId)
     .eq("user_id", user.id)
     .eq("status", "active")
@@ -46,7 +46,12 @@ export const requireWorkspace = cache(async (workspaceId: string): Promise<Works
 
   return {
     user,
-    wedding: { id: wedding.id, name: wedding.name },
+    wedding: {
+      id: wedding.id,
+      name: wedding.name,
+      date: wedding.date,
+      timezone: wedding.timezone,
+    },
     membership: {
       id: data.id,
       role: data.role,

@@ -1,15 +1,18 @@
 import Link from "next/link";
+import { ButtonLink } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import { daysBetween, formatDateOnly, parseDateOnly, todayInZone } from "@/domain/dates/date-only";
 import { formatMinor } from "@/domain/money/money";
+import { nextActions, type HomeAction } from "@/domain/home/next-actions";
+import { QuickSetForm } from "@/features/workspace/quick-set-form";
 import { previewReschedule } from "@/domain/tasks/schedule";
-import { nextSteps, progress } from "@/domain/tasks/summary";
+import { groupTasks, nextSteps, progress } from "@/domain/tasks/summary";
 import { dueLabel } from "@/features/plan/format";
 import { toScheduled, toSummary } from "@/features/plan/mappers";
 import { loadTasks } from "@/server/plan/queries";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { hasCapability, requireWorkspace } from "@/server/auth/workspace-guard";
-import { loadWeddingSettings } from "@/server/workspace/queries";
+import { loadHomeCounts, loadWeddingSettings } from "@/server/workspace/queries";
 
 const linkClass = "font-semibold text-action-emphasis underline underline-offset-4";
 
@@ -22,9 +25,10 @@ function countdown(days: number): string {
 
 export default async function WorkspaceHomePage({ params }: { params: Promise<{ w: string }> }) {
   const access = await requireWorkspace((await params).w);
-  const [s, tasks] = await Promise.all([
+  const [s, tasks, counts] = await Promise.all([
     loadWeddingSettings(access.wedding.id),
     loadTasks(access.wedding.id),
+    loadHomeCounts(access.wedding.id),
   ]);
   const base = `/app/${access.wedding.id}`;
 
@@ -39,30 +43,23 @@ export default async function WorkspaceHomePage({ params }: { params: Promise<{ 
   const byId = new Map(tasks.map((t) => [t.id, t]));
   const canEditPlan = hasCapability(access, "plan.edit");
 
-  // Missing facts become gentle prompts, never defaults.
-  const prompts: { text: string; href: string; label: string }[] = [];
-  const canEditSettings = hasCapability(access, "settings.edit");
-  if (canEditSettings) {
-    const settingsHref = `${base}/settings/event`;
-    if (!s.date)
-      prompts.push({
-        text: "Pick a date to give your checklist deadlines.",
-        href: settingsHref,
-        label: "Add your date",
-      });
-    if (s.targetBudgetMinor === null)
-      prompts.push({
-        text: "A budget target is optional, and useful once you start comparing.",
-        href: settingsHref,
-        label: "Set a budget target",
-      });
-    if (s.targetGuestCount === null)
-      prompts.push({
-        text: "A rough guest count helps with venue and catering estimates.",
-        href: settingsHref,
-        label: "Set a guest target",
-      });
-  }
+  // Missing facts become gentle, ordered prompts, never defaults (src/domain/home).
+  const actions = nextActions({
+    hasDate: s.date !== null,
+    hasBudgetTarget: s.targetBudgetMinor !== null,
+    hasGuestTarget: s.targetGuestCount !== null,
+    checklistTotal: total,
+    overdueCount: groupTasks(summaries, today).overdue.length,
+    venueCount: counts.venueCount,
+    guestCount: counts.guestCount,
+    can: {
+      settings: hasCapability(access, "settings.edit"),
+      plan: canEditPlan,
+      guests: hasCapability(access, "guests.manage"),
+      vendors: hasCapability(access, "vendors.manage"),
+    },
+  });
+  const [primary, ...others] = actions;
 
   const facts: { label: string; value: string; note?: string }[] = [
     date
@@ -84,7 +81,26 @@ export default async function WorkspaceHomePage({ params }: { params: Promise<{ 
 
   return (
     <div className="space-y-6">
-      <h1 className="font-serif text-headline-mobile md:text-headline-lg">{s.name}</h1>
+      <header className="space-y-1">
+        <h1 className="font-serif text-headline-mobile md:text-headline-lg">{s.name}</h1>
+      </header>
+      {primary && (
+        <Card as="section" aria-labelledby="next-up" className="space-y-4">
+          <p id="next-up" className="text-label-lg font-semibold text-ink-muted uppercase">
+            Next up
+          </p>
+          <ActionBlock action={primary} base={base} s={s} workspaceId={access.wedding.id} lead />
+          {others.length > 0 && (
+            <ul className="divide-y divide-border-hairline border-t border-border-hairline">
+              {others.map((a) => (
+                <li key={a.id} className="py-4 last:pb-0">
+                  <ActionBlock action={a} base={base} s={s} workspaceId={access.wedding.id} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      )}
       <Card>
         <CardTitle>Event details</CardTitle>
         <dl className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -161,25 +177,10 @@ export default async function WorkspaceHomePage({ params }: { params: Promise<{ 
           </div>
         )}
       </Card>
-      {prompts.length > 0 && (
-        <Card>
-          <CardTitle>Still to decide</CardTitle>
-          <ul className="mt-3 space-y-3">
-            {prompts.map((p) => (
-              <li key={p.label}>
-                <p className="text-body-md text-ink-muted">{p.text}</p>
-                <Link href={p.href} className={linkClass}>
-                  {p.label}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </Card>
-      )}
       <Card>
         <CardTitle>People</CardTitle>
         <p className="mt-2 text-body-md text-ink-muted">
-          Budget, vendors and guests arrive in the coming releases.
+          Invite your partner or helpers, and see what has been shared with you.
         </p>
         <p className="mt-4">
           <Link href={`${base}/settings/members`} className={linkClass}>
@@ -194,6 +195,57 @@ export default async function WorkspaceHomePage({ params }: { params: Promise<{ 
           </Link>
         </p>
       </Card>
+    </div>
+  );
+}
+
+function ActionBlock({
+  action,
+  base,
+  s,
+  workspaceId,
+  lead = false,
+}: {
+  action: HomeAction;
+  base: string;
+  s: Awaited<ReturnType<typeof loadWeddingSettings>>;
+  workspaceId: string;
+  lead?: boolean;
+}) {
+  return (
+    <div className="space-y-2">
+      <p className={lead ? "font-serif text-headline-sm" : "text-body-lg font-semibold"}>
+        {action.title}
+      </p>
+      <p className="text-body-md text-ink-muted">{action.reason}</p>
+      {action.inline === "budget" ? (
+        <QuickSetForm
+          which="targetBudget"
+          workspaceId={workspaceId}
+          version={s.version}
+          label={`Budget target (${s.baseCurrency})`}
+          hint="A rough number is fine. You can change it any time."
+          inputMode="decimal"
+          currency={s.baseCurrency}
+        />
+      ) : action.inline === "guests" ? (
+        <QuickSetForm
+          which="targetGuestCount"
+          workspaceId={workspaceId}
+          version={s.version}
+          label="Guest count target"
+          hint="A rough number is fine."
+          inputMode="numeric"
+        />
+      ) : (
+        <ButtonLink
+          href={`${base}/${action.path}`}
+          variant={lead ? "primary" : "outline"}
+          size="sm"
+        >
+          {action.cta}
+        </ButtonLink>
+      )}
     </div>
   );
 }
