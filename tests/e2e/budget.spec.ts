@@ -1,5 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import {
   adminClient,
@@ -84,43 +84,51 @@ test("empty budget: suggested categories, add costs, T01 figures, unknown stays 
   await expect(page.getByRole("heading", { level: 3, name: "Catering and bar" })).toBeVisible();
 
   // Catering: $95 per guest, minimum 120 guests.
-  const add = page.locator("form").filter({
-    has: page.getByRole("button", { name: "Add cost" }),
+  const addCost = async (fill: (add: Locator) => Promise<void>) => {
+    await page.getByRole("button", { name: "Add a cost" }).click();
+    const add = page.getByRole("dialog", { name: "Add a cost" });
+    await fill(add);
+    await add.getByRole("button", { name: "Add cost" }).click();
+    await expect(add).toBeHidden();
+    await expect(page.getByText("Cost added.").last()).toBeVisible();
+  };
+  await addCost(async (add) => {
+    await add.getByLabel(/^What is this cost/).fill("Dinner");
+    await add.getByLabel(/^Category/).selectOption({ label: "Catering and bar" });
+    await add.getByLabel(/^How is it priced/).selectOption("per_guest");
+    await add.getByLabel(/^Price per guest/).fill("95");
+    await add.getByLabel(/^Minimum guests/).fill("120");
   });
-  await add.getByLabel(/^What is this cost/).fill("Dinner");
-  await add.getByLabel(/^Category/).selectOption({ label: "Catering and bar" });
-  await add.getByLabel(/^How is it priced/).selectOption("per_guest");
-  await add.getByLabel(/^Price per guest/).fill("95");
-  await add.getByLabel(/^Minimum guests/).fill("120");
-  await add.getByRole("button", { name: "Add cost" }).click();
-  await expect(page.getByText("Cost added.")).toBeVisible();
   await expect(page.getByText("$95.00 × 120 guests")).toBeVisible();
 
   // A bar at $30 per guest and a fixed venue hire of $20,000.
-  await add.getByLabel(/^What is this cost/).fill("Bar");
-  await add.getByLabel(/^Category/).selectOption({ label: "Catering and bar" });
-  await add.getByLabel(/^How is it priced/).selectOption("per_guest");
-  await add.getByLabel(/^Price per guest/).fill("30");
-  await add.getByRole("button", { name: "Add cost" }).click();
+  await addCost(async (add) => {
+    await add.getByLabel(/^What is this cost/).fill("Bar");
+    await add.getByLabel(/^Category/).selectOption({ label: "Catering and bar" });
+    await add.getByLabel(/^How is it priced/).selectOption("per_guest");
+    await add.getByLabel(/^Price per guest/).fill("30");
+  });
   await expect(page.getByText("$30.00 × 120 guests")).toBeVisible();
-  await add.getByLabel(/^What is this cost/).fill("Venue hire");
-  await add.getByLabel(/^Category/).selectOption({ label: "Venue" });
-  await add.getByLabel(/^Amount/).fill("20000");
-  await add.getByRole("button", { name: "Add cost" }).click();
-  await expect(page.getByText("Cost added.")).toBeVisible();
+  await addCost(async (add) => {
+    await add.getByLabel(/^What is this cost/).fill("Venue hire");
+    await add.getByLabel(/^Category/).selectOption({ label: "Venue" });
+    await add.getByLabel(/^Amount/).fill("20000");
+  });
 
   // $35,000 planned, no reserve yet.
+  await page.getByText("How the forecast is built").click();
   await expect(figure(page, "Planned costs")).toHaveText("$35,000.00");
+  await page.getByRole("button", { name: "Change the reserve" }).click();
   await page.getByLabel(/^Reserve for the unexpected/).fill("10");
   await page.getByRole("button", { name: "Save reserve" }).click();
   await expect(figure(page, "Forecast")).toHaveText("$38,500.00");
   await expect(figure(page, "Left against your target")).toHaveText("$11,500.00"); // 50,000 - 38,500
 
   // A cost with no amount is flagged and never counted as zero.
-  await add.getByLabel(/^What is this cost/).fill("Photographer");
-  await add.getByLabel(/^Category/).selectOption({ label: "Photography and video" });
-  await add.getByRole("button", { name: "Add cost" }).click();
-  await expect(page.getByText("Cost added.")).toBeVisible();
+  await addCost(async (add) => {
+    await add.getByLabel(/^What is this cost/).fill("Photographer");
+    await add.getByLabel(/^Category/).selectOption({ label: "Photography and video" });
+  });
   await expect(page.getByText(/1 cost has no amount yet/)).toBeVisible();
   await expect(figure(page, "Forecast")).toHaveText("At least $38,500.00");
   await expect(page.getByText("Not known yet")).toBeVisible();
@@ -177,9 +185,9 @@ test("edit a cost, field errors keep input, a stale edit is refused without over
   const page = await ctx.newPage();
   await signInViaUi(page, owner);
   await page.goto(page_(wedding));
-  await page.getByText("Edit DJ", { exact: true }).click();
+  await page.getByRole("button", { name: "Edit DJ" }).click();
 
-  const form = page.locator("details[open]").first();
+  const form = page.getByRole("dialog", { name: "Edit cost" });
   await form.getByLabel(/^Amount/).fill("abc");
   await form.getByRole("button", { name: "Save changes" }).click();
   await expect(form.getByText("Enter an amount like 950")).toBeVisible();
@@ -203,11 +211,11 @@ test("edit a cost, field errors keep input, a stale edit is refused without over
   ).toBe(120_000);
 
   await page.reload();
-  await page.getByText("Edit DJ", { exact: true }).click();
-  const fresh = page.locator("details[open]").first();
+  await page.getByRole("button", { name: "Edit DJ" }).click();
+  const fresh = page.getByRole("dialog", { name: "Edit cost" });
   await fresh.getByLabel(/^Amount/).fill("900");
   await fresh.getByRole("button", { name: "Save changes" }).click();
-  await expect(fresh.getByText("Saved.")).toBeVisible();
+  await expect(fresh).toBeHidden();
   expect(
     await scalar("select amount_minor::int as v from public.budget_items where id=$1", [id]),
   ).toBe(90_000);
@@ -242,9 +250,9 @@ test("a viewer sees the budget without edit controls; a non-member gets a 404", 
   await expect(page.getByRole("heading", { level: 3, name: "Venue" })).toBeVisible();
   await expect(page.getByText("Hire")).toBeVisible();
   await expect(
-    page.getByRole("button", { name: /Add cost|Save reserve|Add category/ }),
+    page.getByRole("button", { name: /Add a cost|Add a category|Change the reserve/ }),
   ).toHaveCount(0);
-  await expect(page.getByText(/^Edit /)).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^Edit / })).toHaveCount(0);
 
   const outsider = await appUser("bud-outsider");
   const ctx = await browser.newContext();

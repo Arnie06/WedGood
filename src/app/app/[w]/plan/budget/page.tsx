@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardTitle } from "@/components/ui/card";
+import { TrayButton } from "@/components/ui/tray";
 import { reservePercentText } from "@/domain/budget/input";
 import { summarizeBudget } from "@/domain/budget/summary";
 import { formatMinor } from "@/domain/money/money";
@@ -87,6 +88,44 @@ export default async function BudgetPage({ params }: { params: Promise<{ w: stri
           Your target, what you&apos;ve planned, and what you&apos;ve actually committed and paid,
           kept separate. Amounts are in {cur}.
         </p>
+        {canEdit && (
+          <div className="flex flex-wrap gap-3 pt-2">
+            {hasPlan && (
+              <TrayButton
+                label="Add a cost"
+                title="Add a cost"
+                description="What you expect to spend. Leave the amount blank if you don't know yet."
+              >
+                <ItemForm
+                  action={createItem}
+                  rotateKey
+                  workspaceId={access.wedding.id}
+                  currency={cur}
+                  categories={catOptions}
+                  defaults={EMPTY_ITEM}
+                  submitLabel="Add cost"
+                  pendingLabel="Adding…"
+                />
+              </TrayButton>
+            )}
+            <TrayButton
+              label="Add a category"
+              variant="outline"
+              title="Add a category"
+              description="A group of costs, like Flowers. The target is guidance, not a limit."
+            >
+              <CategoryForm
+                action={createCategory}
+                rotateKey
+                workspaceId={access.wedding.id}
+                currency={cur}
+                defaults={{ name: "", allocation: "" }}
+                submitLabel="Add category"
+                pendingLabel="Adding…"
+              />
+            </TrayButton>
+          </div>
+        )}
       </header>
 
       {showSummary && (
@@ -174,6 +213,21 @@ export default async function BudgetPage({ params }: { params: Promise<{ w: stri
                   }
                 />
               </dl>
+              {canEdit && (
+                <div className="pt-2">
+                  <TrayButton
+                    triggerStyle="link"
+                    label="Change the reserve"
+                    title="Reserve"
+                  >
+                    <ReserveForm
+                      workspaceId={access.wedding.id}
+                      version={budget.settingsVersion}
+                      percent={reservePercentText(budget.reserveBp)}
+                    />
+                  </TrayButton>
+                </div>
+              )}
             </details>
           </Card>
           {s.allocationExceedsTarget && (
@@ -198,19 +252,6 @@ export default async function BudgetPage({ params }: { params: Promise<{ w: stri
             </p>
           )}
         </section>
-      )}
-
-      {canEdit && showSummary && (
-        <Card>
-          <CardTitle>Reserve</CardTitle>
-          <div className="mt-4">
-            <ReserveForm
-              workspaceId={access.wedding.id}
-              version={budget.settingsVersion}
-              percent={reservePercentText(budget.reserveBp)}
-            />
-          </div>
-        </Card>
       )}
 
       {!hasPlan ? (
@@ -280,116 +321,83 @@ export default async function BudgetPage({ params }: { params: Promise<{ w: stri
                             {itemBasisLabel(item, guests, cur)}
                           </p>
                           {canEdit && (
-                            <details>
-                              <summary className="min-h-11 cursor-pointer py-2 text-label-lg font-semibold text-action-emphasis">
-                                Edit {item.name}
-                              </summary>
-                              <div className="mt-3 space-y-4">
-                                <ItemForm
-                                  action={updateItem}
-                                  workspaceId={access.wedding.id}
-                                  currency={cur}
-                                  categories={catOptions}
-                                  idPrefix={`${item.id}-${item.version}`}
-                                  extraHidden={{ itemId: item.id, version: item.version }}
-                                  defaults={{
-                                    name: item.name,
-                                    category: item.categoryId,
-                                    costMode: item.costMode,
-                                    amount:
-                                      item.amountMinor === null
-                                        ? ""
-                                        : minorToMajorInput(item.amountMinor, cur),
-                                    quantity: item.quantity === null ? "" : String(item.quantity),
-                                    minQty: item.minQty === null ? "" : String(item.minQty),
-                                    notes: item.notes ?? "",
-                                  }}
-                                  submitLabel="Save changes"
-                                  pendingLabel="Saving…"
-                                />
-                                <ArchiveItemForm
-                                  workspaceId={access.wedding.id}
-                                  itemId={item.id}
-                                  version={item.version}
-                                  name={item.name}
-                                />
-                              </div>
-                            </details>
+                            <TrayButton
+                              triggerStyle="link"
+                              label="Edit"
+                              ariaLabel={`Edit ${item.name}`}
+                              title="Edit cost"
+                              description={item.name}
+                            >
+                              <ItemForm
+                                action={updateItem}
+                                workspaceId={access.wedding.id}
+                                currency={cur}
+                                categories={catOptions}
+                                idPrefix={`${item.id}-${item.version}`}
+                                extraHidden={{ itemId: item.id, version: item.version }}
+                                defaults={{
+                                  name: item.name,
+                                  category: item.categoryId,
+                                  costMode: item.costMode,
+                                  amount:
+                                    item.amountMinor === null
+                                      ? ""
+                                      : minorToMajorInput(item.amountMinor, cur),
+                                  quantity: item.quantity === null ? "" : String(item.quantity),
+                                  minQty: item.minQty === null ? "" : String(item.minQty),
+                                  notes: item.notes ?? "",
+                                }}
+                                submitLabel="Save changes"
+                                pendingLabel="Saving…"
+                              />
+                              <ArchiveItemForm
+                                workspaceId={access.wedding.id}
+                                itemId={item.id}
+                                version={item.version}
+                                name={item.name}
+                              />
+                            </TrayButton>
                           )}
                         </li>
                       ))}
                     </ul>
                   )}
                   {canEdit && (
-                    <details>
-                      <summary className="min-h-11 cursor-pointer py-2 text-label-lg font-semibold text-action-emphasis">
-                        Edit {row.name} category
-                      </summary>
-                      <div className="mt-3 space-y-4">
-                        <CategoryForm
-                          action={updateCategory}
-                          workspaceId={access.wedding.id}
-                          currency={cur}
-                          extraHidden={{ categoryId: cat.id, version: cat.version }}
-                          defaults={{
-                            name: cat.name,
-                            allocation:
-                              cat.allocationMinor === null
-                                ? ""
-                                : minorToMajorInput(cat.allocationMinor, cur),
-                          }}
-                          submitLabel="Save category"
-                          pendingLabel="Saving…"
-                        />
-                        <ArchiveCategoryForm
-                          workspaceId={access.wedding.id}
-                          categoryId={cat.id}
-                          version={cat.version}
-                          name={cat.name}
-                        />
-                      </div>
-                    </details>
+                    <TrayButton
+                      triggerStyle="link"
+                      label="Edit category"
+                      ariaLabel={`Edit category ${row.name}`}
+                      title="Edit category"
+                      description={row.name}
+                    >
+                      <CategoryForm
+                        action={updateCategory}
+                        workspaceId={access.wedding.id}
+                        currency={cur}
+                        extraHidden={{ categoryId: cat.id, version: cat.version }}
+                        defaults={{
+                          name: cat.name,
+                          allocation:
+                            cat.allocationMinor === null
+                              ? ""
+                              : minorToMajorInput(cat.allocationMinor, cur),
+                        }}
+                        submitLabel="Save category"
+                        pendingLabel="Saving…"
+                      />
+                      <ArchiveCategoryForm
+                        workspaceId={access.wedding.id}
+                        categoryId={cat.id}
+                        version={cat.version}
+                        name={cat.name}
+                      />
+                    </TrayButton>
                   )}
                 </Card>
               );
             })}
           </ul>
         </section>
-      )}
-
-      {canEdit && hasPlan && (
-        <Card>
-          <CardTitle>Add a cost</CardTitle>
-          <div className="mt-4">
-            <ItemForm
-              action={createItem}
-              rotateKey
-              workspaceId={access.wedding.id}
-              currency={cur}
-              categories={catOptions}
-              defaults={EMPTY_ITEM}
-              submitLabel="Add cost"
-              pendingLabel="Adding…"
-            />
-          </div>
-        </Card>
-      )}
-
-      {canEdit && (
-        <Card>
-          <CardTitle>Add a category</CardTitle>
-          <div className="mt-4">
-            <CategoryForm
-              action={createCategory}
-              rotateKey
-              workspaceId={access.wedding.id}
-              currency={cur}
-              defaults={{ name: "", allocation: "" }}
-              submitLabel="Add category"
-              pendingLabel="Adding…"
-            />
-          </div>
-        </Card>
       )}
     </div>
   );

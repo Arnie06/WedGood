@@ -1,7 +1,8 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { useTrayActionState } from "@/components/ui/tray";
+import { useToast } from "@/components/ui/toast";
+import { useTrayActionState, useTrayClose } from "@/components/ui/tray";
 import { Button } from "@/components/ui/button";
 import { SelectField } from "@/components/ui/select-field";
 import { TextAreaField } from "@/components/ui/text-area-field";
@@ -62,12 +63,18 @@ export function CategoryForm({
   /** Creating: a fresh idempotency key per successful submit, and the form clears. */
   rotateKey?: boolean;
 }) {
+  const closeTray = useTrayClose();
+  const { toast } = useToast();
   const [created, setCreated] = useState(0);
   const [keyBase] = useState(() => crypto.randomUUID());
   const [state, formAction, pending] = useActionState(
     async (prev: BudgetActionState, form: FormData) => {
       const next = await action(prev, form);
       if (rotateKey && next.status === "ok") setCreated((n) => n + 1);
+      if (next.status === "ok") {
+        closeTray();
+        toast({ message: next.message });
+      }
       return next;
     },
     idle,
@@ -163,6 +170,8 @@ export function ItemForm({
   rotateKey?: boolean;
   idPrefix?: string;
 }) {
+  const closeTray = useTrayClose();
+  const { toast } = useToast();
   const [created, setCreated] = useState(0);
   const [keyBase] = useState(() => crypto.randomUUID());
   const [mode, setMode] = useState<BudgetCostMode>(defaults.costMode as BudgetCostMode);
@@ -172,6 +181,10 @@ export function ItemForm({
       if (rotateKey && next.status === "ok") {
         setCreated((n) => n + 1);
         setMode("fixed");
+      }
+      if (next.status === "ok") {
+        closeTray();
+        toast({ message: next.message });
       }
       return next;
     },

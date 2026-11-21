@@ -171,7 +171,6 @@ test("enter a quote cost by cost; unknowns are never zero and the total says whe
   ).toBeNull();
 
   // Fill in the unknown through the edit tray; the total becomes complete.
-  const venueFee = lineCard(page, "Venue fee");
   await page.keyboard.press("Escape");
   await expect(add).toBeHidden();
   await page.getByRole("button", { name: "Edit Venue fee" }).click();
