@@ -147,7 +147,7 @@ export async function updateTask(_: PlanActionState, form: FormData): Promise<Pl
   });
   if (error) return fail(friendlyPlanError(error), {}, values);
   refresh(ids.data.workspaceId);
-  redirect(`/app/${ids.data.workspaceId}/plan`);
+  return { status: "ok", message: "Task saved." };
 }
 
 export async function setTaskStatus(_: PlanActionState, form: FormData): Promise<PlanActionState> {
@@ -198,7 +198,7 @@ export async function archiveTask(_: PlanActionState, form: FormData): Promise<P
   });
   if (error) return fail(friendlyPlanError(error));
   refresh(parsed.data.workspaceId);
-  redirect(`/app/${parsed.data.workspaceId}/plan`);
+  return { status: "ok", message: "Task removed." };
 }
 
 /**

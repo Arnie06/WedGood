@@ -4,17 +4,17 @@ import { CalendarX } from "lucide-react";
 import Link from "next/link";
 import { Card, CardTitle } from "@/components/ui/card";
 import { ProgressBar } from "@/components/ui/progress-bar";
-import { SheetButton } from "@/components/ui/sheet";
+import { TrayButton } from "@/components/ui/tray";
 import { todayInZone } from "@/domain/dates/date-only";
 import { previewReschedule } from "@/domain/tasks/schedule";
 import { groupTasks, progress } from "@/domain/tasks/summary";
 import { cn } from "@/lib/cn";
-import { GenerateChecklistForm } from "@/features/plan/plan-actions";
+import { ArchiveTaskForm, GenerateChecklistForm } from "@/features/plan/plan-actions";
 import { dueLabel, isOverdue } from "@/features/plan/format";
 import { toScheduled, toSummary } from "@/features/plan/mappers";
 import { TaskForm } from "@/features/plan/task-form";
 import { TaskToggle } from "@/features/plan/task-toggle";
-import { createTask } from "@/server/plan/actions";
+import { createTask, updateTask } from "@/server/plan/actions";
 import { loadAssigneeOptions, loadTasks, type TaskRecord } from "@/server/plan/queries";
 import { hasCapability, requireWorkspace } from "@/server/auth/workspace-guard";
 import { loadWeddingSettings } from "@/server/workspace/queries";
@@ -106,7 +106,7 @@ export default async function PlanPage({ params }: { params: Promise<{ w: string
 
       {canEdit && (
         <div>
-          <SheetButton
+          <TrayButton
             label="Add a task"
             title="Add a task"
             openOnParam="add"
@@ -123,7 +123,7 @@ export default async function PlanPage({ params }: { params: Promise<{ w: string
               defaults={{ title: "", notes: "", dueDate: "", assignee: "" }}
               hidden={{ workspaceId: access.wedding.id, idempotencyKey: randomUUID() }}
             />
-          </SheetButton>
+          </TrayButton>
         </div>
       )}
 
@@ -166,10 +166,10 @@ export default async function PlanPage({ params }: { params: Promise<{ w: string
                       <TaskItem
                         key={s.id}
                         task={byId.get(s.id)!}
-                        base={base}
                         workspaceId={access.wedding.id}
                         today={today}
                         assignee={names}
+                        assignees={assignees}
                         canEdit={canEdit}
                       />
                     ));
@@ -201,10 +201,10 @@ export default async function PlanPage({ params }: { params: Promise<{ w: string
                   <TaskItem
                     key={s.id}
                     task={byId.get(s.id)!}
-                    base={base}
                     workspaceId={access.wedding.id}
                     today={today}
                     assignee={names}
+                    assignees={assignees}
                     canEdit={canEdit}
                   />
                 ))}
@@ -233,17 +233,17 @@ const VISIBLE_PER_GROUP = 5;
 
 function TaskItem({
   task,
-  base,
   workspaceId,
   today,
   assignee,
+  assignees,
   canEdit,
 }: {
   task: TaskRecord;
-  base: string;
   workspaceId: string;
   today: ReturnType<typeof todayInZone>;
   assignee: Map<string, string>;
+  assignees: readonly { userId: string; label: string }[];
   canEdit: boolean;
 }) {
   const done = task.status === "done";
@@ -266,12 +266,44 @@ function TaskItem({
       <div className="min-w-0 flex-1 space-y-1">
         <p className={done ? "text-body-lg text-ink-muted line-through" : "text-body-lg"}>
           {canEdit ? (
-            <Link
-              href={`${base}/plan/tasks/${task.id}`}
-              className="underline-offset-4 hover:underline"
+            <TrayButton
+              triggerStyle="plain"
+              label={task.title}
+              ariaLabel={`Edit "${task.title}"`}
+              title="Edit task"
+              description={
+                task.dateKind === "relative"
+                  ? "This task moves with your wedding date. Choosing a date of your own keeps it there."
+                  : undefined
+              }
             >
-              {task.title}
-            </Link>
+              <TaskForm
+                action={updateTask}
+                assignees={assignees}
+                submitLabel="Save changes"
+                pendingLabel="Saving…"
+                defaults={{
+                  title: task.title,
+                  notes: task.notes ?? "",
+                  dueDate: task.dueDate ?? "",
+                  assignee: assignees.some((a) => a.userId === task.assigneeUserId)
+                    ? (task.assigneeUserId ?? "")
+                    : "",
+                }}
+                hidden={{
+                  workspaceId,
+                  taskId: task.id,
+                  version: String(task.version),
+                }}
+              />
+              <div className="border-t border-border-hairline pt-4">
+                <ArchiveTaskForm
+                  workspaceId={workspaceId}
+                  taskId={task.id}
+                  version={task.version}
+                />
+              </div>
+            </TrayButton>
           ) : (
             task.title
           )}

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { ButtonLink, buttonClasses } from "@/components/ui/button";
-import { SheetButton } from "@/components/ui/sheet";
+import { TrayButton } from "@/components/ui/tray";
 import { Card, CardTitle } from "@/components/ui/card";
 import { nameKey } from "@/domain/guests/import";
 import { GuestFilters } from "@/features/guests/guest-filters";
@@ -111,7 +111,7 @@ export default async function GuestsPage({
       </header>
 
       <section aria-label="Add guests" className="flex flex-wrap gap-3">
-        <SheetButton
+        <TrayButton
           label="Add a guest"
           title="Add a guest"
           openOnParam="add"
@@ -124,7 +124,7 @@ export default async function GuestsPage({
             showPrivate={canSeePrivate}
             submitLabel="Add guest"
           />
-        </SheetButton>
+        </TrayButton>
         <ButtonLink href={`${base}/guests/import`} variant="outline">
           Import a spreadsheet
         </ButtonLink>

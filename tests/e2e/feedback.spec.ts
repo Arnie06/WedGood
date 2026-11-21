@@ -100,7 +100,7 @@ test("adding a task confirms with a toast, scrolls to it, and Undo removes it", 
 
   await notifications.getByRole("button", { name: "Undo" }).click();
   await expect(notifications.getByText("Task removed.")).toHaveCount(0);
-  await expect(page.getByRole("link", { name: "Order the cake" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: 'Edit "Order the cake"' })).toHaveCount(0);
   expect((await taskStatus(wedding, "Order the cake"))?.archived_at).not.toBeNull();
 });
 
@@ -222,7 +222,7 @@ test("the add-task sheet traps focus, closes on Escape and after saving, and ret
   await page.getByLabel(/^Task/).fill("Taste the menu");
   await page.getByRole("button", { name: "Add task" }).click();
   await expect(dialog).toBeHidden();
-  await expect(page.getByRole("link", { name: "Taste the menu" })).toBeVisible();
+  await expect(page.getByRole("button", { name: 'Edit "Taste the menu"' })).toBeVisible();
 });
 
 test("long groups fold after five and a new item inside the fold is still revealed", async ({
@@ -238,11 +238,11 @@ test("long groups fold after five and a new item inside the fold is still reveal
   await signInViaUi(page, owner);
   await page.goto(`/app/${wedding}/plan`);
 
-  await expect(page.getByRole("link", { name: /^Folded task/ })).toHaveCount(5);
+  await expect(page.getByRole("button", { name: /^Edit "Folded task/ })).toHaveCount(5);
   await page.getByText("Show 3 more").click();
-  await expect(page.getByRole("link", { name: /^Folded task/ })).toHaveCount(8);
+  await expect(page.getByRole("button", { name: /^Edit "Folded task/ })).toHaveCount(8);
   await page.getByText("Show fewer").click();
-  await expect(page.getByRole("link", { name: /^Folded task/ })).toHaveCount(5);
+  await expect(page.getByRole("button", { name: /^Edit "Folded task/ })).toHaveCount(5);
 
   await page.getByRole("button", { name: "Add a task" }).click();
   await page.getByLabel(/^Task/).fill("Zed last task");

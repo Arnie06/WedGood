@@ -119,13 +119,13 @@ test("add, complete, edit and remove tasks; edits to a date make a flexible task
   await page.getByLabel(/^Task/).fill("Call the florist");
   await page.getByRole("button", { name: "Add task" }).click();
   await expect(page.getByText("Task added.")).toBeVisible();
-  await expect(page.getByRole("link", { name: "Call the florist" })).toBeVisible();
+  await expect(page.getByRole("button", { name: 'Edit "Call the florist"' })).toBeVisible();
 
   // A second task right after the first must not be mistaken for a replay.
   await page.getByRole("button", { name: "Add a task" }).click();
   await page.getByLabel(/^Task/).fill("Order the cake");
   await page.getByRole("button", { name: "Add task" }).click();
-  await expect(page.getByRole("link", { name: "Order the cake" })).toBeVisible();
+  await expect(page.getByRole("button", { name: 'Edit "Order the cake"' })).toBeVisible();
   expect(await taskCount(wedding)).toBe(2);
 
   await page.getByRole("button", { name: 'Mark "Call the florist" done' }).click();
@@ -135,24 +135,21 @@ test("add, complete, edit and remove tasks; edits to a date make a flexible task
   await page.getByText(/^Done \(1\)/).click();
   await expect(page.getByRole("button", { name: 'Reopen "Call the florist"' })).toBeVisible();
 
-  await page.getByRole("link", { name: "Order the cake" }).click();
-  // The form's client chunk can finish loading just after a soft navigation and remount the
-  // inputs; retry until the typed value survives that settling period.
-  await expect(async () => {
-    await page.getByLabel(/^Due date/).fill("2031-01-10");
-    await page.getByLabel(/^Notes/).fill("Lemon, two tiers");
-    await page.waitForTimeout(400);
-    await expect(page.getByLabel(/^Due date/)).toHaveValue("2031-01-10");
-    await expect(page.getByLabel(/^Notes/)).toHaveValue("Lemon, two tiers");
-  }).toPass();
-  await page.getByRole("button", { name: "Save changes" }).click();
-  await page.waitForURL(`**/app/${wedding}/plan`);
+  await page.getByRole("button", { name: 'Edit "Order the cake"' }).click();
+  const tray = page.getByRole("dialog", { name: "Edit task" });
+  await tray.getByLabel(/^Due date/).fill("2031-01-10");
+  await tray.getByLabel(/^Notes/).fill("Lemon, two tiers");
+  await tray.getByRole("button", { name: "Save changes" }).click();
+  await expect(tray).toBeHidden();
+  await expect(page.getByText("Task saved.")).toBeVisible();
   await expect(page.getByText("Due Jan 10, 2031")).toBeVisible();
 
-  await page.getByRole("link", { name: "Order the cake" }).click();
-  await page.getByRole("button", { name: "Remove this task" }).click();
-  await page.waitForURL(`**/app/${wedding}/plan`);
-  await expect(page.getByRole("link", { name: "Order the cake" })).toHaveCount(0);
+  await page.getByRole("button", { name: 'Edit "Order the cake"' }).click();
+  await page
+    .getByRole("dialog", { name: "Edit task" })
+    .getByRole("button", { name: "Remove this task" })
+    .click();
+  await expect(page.getByRole("button", { name: 'Edit "Order the cake"' })).toHaveCount(0);
   expect(await taskCount(wedding)).toBe(1);
 });
 
@@ -183,7 +180,7 @@ test("changing the wedding date moves nothing until the preview is reviewed and 
   await page.getByLabel(/^Task/).fill("Venue deposit due");
   await page.getByLabel(/^Due date/).fill("2030-11-01");
   await page.getByRole("button", { name: "Add task" }).click();
-  await expect(page.getByRole("link", { name: "Venue deposit due" })).toBeVisible();
+  await expect(page.getByRole("button", { name: 'Edit "Venue deposit due"' })).toBeVisible();
 
   const snapshot = () =>
     withSuperuser(async (db) => {
@@ -241,7 +238,7 @@ test("a viewer can read the checklist but not change it; a non-member gets a 404
   await expect(page.getByText("Owner-only edit")).toBeVisible();
   await expect(page.getByRole("button", { name: "Add task" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: 'Mark "Owner-only edit" done' })).toBeDisabled();
-  await expect(page.getByRole("link", { name: "Owner-only edit" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: 'Edit "Owner-only edit"' })).toHaveCount(0);
 
   await page.context().clearCookies();
   await signInViaUi(page, outsider);
@@ -278,7 +275,6 @@ test("checklist pages pass axe and reflow at 320px and 1280px", async ({ page })
     await page.setViewportSize({ width, height: 900 });
     for (const [path, name] of [
       [`/app/${wedding}/plan`, "plan"],
-      [`/app/${wedding}/plan/tasks/${taskId}`, "plan-edit-task"],
       [`/app/${wedding}/plan/review-dates`, "plan-review-dates"],
       [`/app/${wedding}`, "dashboard"],
     ] as const) {

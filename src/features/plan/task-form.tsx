@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { SelectField } from "@/components/ui/select-field";
 import { TextAreaField } from "@/components/ui/text-area-field";
 import { TextField } from "@/components/ui/text-field";
-import { useSheetClose } from "@/components/ui/sheet";
+import { useTrayClose } from "@/components/ui/tray";
 import { useToast } from "@/components/ui/toast";
 import { revealElement } from "@/lib/reveal";
 import { undoTaskCreation, type PlanActionState } from "@/server/plan/actions";
@@ -42,13 +42,13 @@ export function TaskForm({
   // task isn't mistaken for a replay while a retry after an error still is one.
   const [created, setCreated] = useState(0);
   const { toast } = useToast();
-  const closeSheet = useSheetClose();
+  const closeTray = useTrayClose();
   const [state, formAction, pending] = useActionState(
     async (prev: PlanActionState, form: FormData) => {
       const next = await action(prev, form);
       if (rotateKey && next.status === "ok") {
         setCreated((n) => n + 1);
-        closeSheet();
+        closeTray();
         const { taskId } = next;
         const workspaceId = hidden.workspaceId;
         toast({
@@ -70,6 +70,9 @@ export function TaskForm({
             : {}),
         });
         if (taskId) revealElement(`task-${taskId}`);
+      } else if (!rotateKey && next.status === "ok") {
+        closeTray();
+        toast({ message: next.message });
       }
       return next;
     },
@@ -132,9 +135,6 @@ export function TaskForm({
           <p role="alert" className="text-body-md text-danger">
             {state.message}
           </p>
-        )}
-        {state.status === "ok" && !rotateKey && (
-          <p className="text-body-md text-action-secondary">{state.message}</p>
         )}
       </div>
       <Button type="submit" variant="primary" disabled={pending} className="w-full sm:w-auto">

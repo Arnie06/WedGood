@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import { useTrayActionState } from "@/components/ui/tray";
 import { Button } from "@/components/ui/button";
 import {
   applyReschedule,
@@ -54,7 +55,7 @@ export function ArchiveTaskForm({
   taskId: string;
   version: number;
 }) {
-  const [state, action, pending] = useActionState(archiveTask, idle);
+  const [state, action, pending] = useTrayActionState(archiveTask, idle);
   return (
     <form action={action} className="space-y-2">
       <input type="hidden" name="workspaceId" value={workspaceId} />
