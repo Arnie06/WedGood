@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { useTrayActionState } from "@/components/ui/tray";
 import { Button } from "@/components/ui/button";
 import { SelectField } from "@/components/ui/select-field";
 import { TextAreaField } from "@/components/ui/text-area-field";
@@ -213,7 +214,7 @@ export function DeleteAgendaItemForm({
   itemId: string;
   version: number;
 }) {
-  const [state, action, pending] = useActionState(deleteTimelineItem, idle);
+  const [state, action, pending] = useTrayActionState(deleteTimelineItem, idle);
   return (
     <form action={action} className="space-y-2">
       <input type="hidden" name="workspaceId" value={workspaceId} />

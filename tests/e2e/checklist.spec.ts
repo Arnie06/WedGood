@@ -256,7 +256,7 @@ test("checklist pages pass axe and reflow at 320px and 1280px", async ({ page })
       { key: "b", title: "Another suggested task", phase: "final-weeks", offsetDays: -10 },
     ],
   });
-  const { data: taskId } = await owner.client.rpc("create_task", {
+  await owner.client.rpc("create_task", {
     p_wedding: wedding,
     p_title: "A task of our own",
     p_due_date: "2020-01-01",

@@ -101,23 +101,28 @@ test("add a guest, find it, edit it with private details, archive and restore it
   await page.keyboard.press("Escape");
   await page.getByRole("link", { name: "Ada Example" }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Ada Example" })).toBeVisible();
-  await page.getByLabel("Dietary needs or allergies").fill("Vegetarian");
-  await page.getByLabel("Phone").fill("+1 555 010 2000");
-  await page.getByRole("button", { name: "Save guest" }).click();
+  await page.getByRole("button", { name: "Edit guest" }).click();
+  const tray = page.getByRole("dialog", { name: "Edit guest" });
+  await tray.getByLabel("Dietary needs or allergies").fill("Vegetarian");
+  await tray.getByLabel("Phone").fill("+1 555 010 2000");
+  await tray.getByRole("button", { name: "Save guest" }).click();
+  await expect(tray).toBeHidden();
   await expect(page.getByText("Saved.").first()).toBeVisible();
   await page.reload();
-  await expect(page.getByLabel("Dietary needs or allergies")).toHaveValue("Vegetarian");
-  await expect(page.getByLabel("Phone")).toHaveValue("+1 555 010 2000");
+  await expect(page.getByText("Vegetarian")).toBeVisible();
+  await expect(page.getByText("+1 555 010 2000")).toBeVisible();
 
+  await page.getByRole("button", { name: "Archive this guest" }).click();
   await page.getByRole("button", { name: "Archive Ada Example" }).click();
-  await expect(page.getByText(/Archived\./)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Restore this guest" })).toBeVisible();
   await page.goto(`/app/${wedding}/guests`);
   await expect(page.getByText("No guests yet")).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Ada Example" })).toHaveCount(0);
   await page.getByRole("link", { name: /View 1 archived guest/ }).click();
   await page.getByRole("link", { name: "Ada Example" }).click();
+  await page.getByRole("button", { name: "Restore this guest" }).click();
   await page.getByRole("button", { name: "Restore Ada Example" }).click();
-  await expect(page.getByText("Restored.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Archive this guest" })).toBeVisible();
 });
 
 test("import a CSV: mapping, preview, duplicates, formulas stay text, export is safe", async ({

@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { useTrayActionState } from "@/components/ui/tray";
 import { Button } from "@/components/ui/button";
 import { SelectField } from "@/components/ui/select-field";
 import { TextAreaField } from "@/components/ui/text-area-field";
@@ -113,7 +114,7 @@ export function SuggestedCategoriesForm({
   workspaceId: string;
   label: string;
 }) {
-  const [state, action, pending] = useActionState(addSuggestedCategories, idle);
+  const [state, action, pending] = useTrayActionState(addSuggestedCategories, idle);
   return (
     <form action={action} className="space-y-2">
       <input type="hidden" name="workspaceId" value={workspaceId} />
@@ -290,7 +291,7 @@ function ArchiveForm({
   fields: Record<string, string | number>;
   label: string;
 }) {
-  const [state, formAction, pending] = useActionState(action, idle);
+  const [state, formAction, pending] = useTrayActionState(action, idle);
   return (
     <form action={formAction} className="space-y-2">
       <Hidden values={fields} />
@@ -337,7 +338,7 @@ export function ReserveForm({
   version: number;
   percent: string;
 }) {
-  const [state, action, pending] = useActionState(setReserve, idle);
+  const [state, action, pending] = useTrayActionState(setReserve, idle);
   const echoed = state.status === "error" ? state.values.reserve : undefined;
   return (
     <form action={action} className="space-y-3" noValidate key={`${version}-${percent}`}>

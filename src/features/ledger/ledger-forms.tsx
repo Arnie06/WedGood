@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { useTrayActionState } from "@/components/ui/tray";
 import { Button } from "@/components/ui/button";
 import { SelectField } from "@/components/ui/select-field";
 import { TextAreaField } from "@/components/ui/text-area-field";
@@ -62,7 +63,7 @@ export function BookingForm({
   confirmLabel: string;
 }) {
   const [keyBase] = useState(() => crypto.randomUUID());
-  const [state, formAction, pending] = useActionState(action, idle);
+  const [state, formAction, pending] = useTrayActionState(action, idle);
   const echoed = state.status === "error" ? state.values : undefined;
   const errors = state.status === "error" ? state.fieldErrors : {};
   const v = (k: string) => echoed?.[k] ?? defaults[k] ?? "";
@@ -346,7 +347,7 @@ export function VoidPaymentForm({
   workspaceId: string;
   paymentId: string;
 }) {
-  const [state, formAction, pending] = useActionState(voidPayment, idle);
+  const [state, formAction, pending] = useTrayActionState(voidPayment, idle);
   const echoed = state.status === "error" ? state.values.reason : undefined;
   return (
     <form action={formAction} className="space-y-3" noValidate>

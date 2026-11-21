@@ -98,25 +98,25 @@ test("empty state, then add a venue and a vendor by hand", async ({ page }) => {
   ).toBeVisible();
   await expect(page.getByRole("search")).toHaveCount(0);
 
-  await page.getByRole("link", { name: "Add a venue" }).click();
+  await page.getByRole("button", { name: "Add a venue" }).click();
   await page.getByLabel(/^Name/).fill("Garden House");
   await page.getByLabel(/^Seated capacity/).fill("120");
   await page.getByLabel(/^Amount/).fill("6,500");
   await page.getByLabel(/^How is that priced/).selectOption("total");
   await page.getByLabel(/^Source link/).fill("https://example.com/garden");
-  await page.getByRole("button", { name: "Save" }).click();
-  await page.waitForURL(`**/app/${wedding}/discover`);
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Add a venue" })).toBeHidden();
   const card = page.getByRole("listitem").filter({ hasText: "Garden House" });
   await expect(card).toContainText("$6,500.00 for the whole event");
   await expect(card).toContainText("Seats 120");
   await expect(card).toContainText("Entered by you · source not checked yet");
   await expect(card.getByRole("link", { name: /example\.com/ })).toHaveAttribute("rel", /noopener/);
 
-  await page.getByRole("link", { name: "Add a vendor" }).click();
+  await page.getByRole("button", { name: "Add a vendor" }).click();
   await page.getByLabel(/^Name/).fill("Lantern Photography");
   await page.getByLabel(/^What do they do/).selectOption("photographer");
-  await page.getByRole("button", { name: "Save" }).click();
-  await page.waitForURL(`**/app/${wedding}/discover`);
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Add a vendor" })).toBeHidden();
   const vendor = page.getByRole("listitem").filter({ hasText: "Lantern Photography" });
   await expect(vendor).toContainText("Price not entered yet");
   await expect(vendor).not.toContainText("$0");
@@ -128,7 +128,7 @@ test("field errors keep the person's input and save nothing", async ({ page }) =
   const owner = await appUser("disc-err");
   const wedding = await createWedding(owner, { name: "Err" });
   await signInViaUi(page, owner);
-  await page.goto(`/app/${wedding}/discover/new?kind=venue`);
+  await page.goto(`/app/${wedding}/discover?addVenue=1`);
   await page.getByLabel(/^Source link/).fill("javascript:alert(1)");
   await page.getByLabel(/^Amount/).fill("5000");
   await page.getByRole("button", { name: "Save" }).click();
@@ -193,7 +193,8 @@ test("edit details, clear a price back to unknown, then remove", async ({ page }
   await signInViaUi(page, owner);
   await page.goto(`/app/${wedding}/discover`);
   await page.getByRole("link", { name: "Garden House" }).click();
-  await expect(page.getByRole("heading", { name: "Edit Garden House" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Garden House" })).toBeVisible();
+  await page.getByRole("button", { name: "Edit details" }).click();
   await expect(page.getByLabel(/^Amount/)).toHaveValue("6500");
   await expect(async () => {
     await page.getByLabel(/^Location/).fill("Sonoma");
@@ -203,12 +204,14 @@ test("edit details, clear a price back to unknown, then remove", async ({ page }
     await expect(page.getByLabel(/^Amount/)).toHaveValue("");
   }).toPass();
   await page.getByRole("button", { name: "Save changes" }).click();
-  await page.waitForURL(`**/app/${wedding}/discover`);
+  await expect(page.getByRole("dialog", { name: /Edit Garden House/ })).toBeHidden();
+  await page.goto(`/app/${wedding}/discover`);
   const card = page.getByRole("listitem").filter({ hasText: "Garden House" });
   await expect(card).toContainText("Sonoma");
   await expect(card).toContainText("Price not entered yet");
 
   await page.getByRole("link", { name: "Garden House" }).click();
+  await page.getByRole("button", { name: "Edit details" }).click();
   await page.getByRole("button", { name: "Remove from my list" }).click();
   await page.waitForURL(`**/app/${wedding}/discover`);
   await expect(page.getByRole("link", { name: "Garden House" })).toHaveCount(0);
@@ -236,7 +239,7 @@ test("a viewer can read the list but not change it; a non-member gets a 404", as
   await signInViaUi(page, viewer);
   await page.goto(`/app/${wedding}/discover`);
   await expect(page.getByText("Owner Venue")).toBeVisible();
-  await expect(page.getByRole("link", { name: "Add a venue" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Add a venue" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Add Owner Venue to favorites" })).toBeDisabled();
   expect((await page.goto(`/app/${wedding}/discover/new`))?.status()).toBe(404);
   await page.goto(`/app/${wedding}/discover/${id}`);
@@ -273,8 +276,6 @@ test("discover pages pass axe and reflow at 320px and 1280px", async ({ page }) 
     for (const [path, name] of [
       [`/app/${wedding}/discover`, "discover"],
       [`/app/${wedding}/discover?seated=150&q=a`, "discover-filtered"],
-      [`/app/${wedding}/discover/new?kind=venue`, "discover-new-venue"],
-      [`/app/${wedding}/discover/new?kind=vendor`, "discover-new-vendor"],
       [`/app/${wedding}/discover/${id}`, "discover-edit"],
     ] as const) {
       await page.goto(path);
@@ -327,7 +328,7 @@ test("paste a link: bad and unreadable addresses give honest messages and keep w
   // Pressing Enter in the link box looks it up; it does not submit (save) the form.
   await page.getByLabel("Paste a link").fill("http://127.0.0.1/");
   await page.getByLabel("Paste a link").press("Enter");
-  await expect(page).toHaveURL(/\/discover\/new/);
+  await expect(page).toHaveURL(/\/discover/);
   await expect(page.getByLabel(/^Name/)).toHaveValue("My own name");
   const saved = await withSuperuser((db) =>
     db.query("select count(*)::int n from public.candidates where wedding_id=$1", [wedding]),

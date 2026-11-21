@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useTrayActionState } from "@/components/ui/tray";
 import { Button } from "@/components/ui/button";
 import { SelectField } from "@/components/ui/select-field";
 import { TextAreaField } from "@/components/ui/text-area-field";
@@ -54,7 +54,7 @@ export function SiteForm({
   draft: SiteDraft;
   events: EventChoice[];
 }) {
-  const [state, formAction, pending] = useActionState(saveSite, idle);
+  const [state, formAction, pending] = useTrayActionState(saveSite, idle);
   const echoed = state.status === "error" ? state.values : undefined;
   const errors = state.status === "error" ? state.fieldErrors : {};
   const val = (name: string, fallback: string | undefined) => echoed?.[name] ?? fallback ?? "";
@@ -271,7 +271,7 @@ export function PublishForm({
   currentSlug: string | null;
   republish: boolean;
 }) {
-  const [state, formAction, pending] = useActionState(publishSite, idle);
+  const [state, formAction, pending] = useTrayActionState(publishSite, idle);
   const echoed = state.status === "error" ? state.values : undefined;
   const errors = state.status === "error" ? state.fieldErrors : {};
   return (
@@ -319,7 +319,7 @@ export function PublishForm({
 }
 
 export function UnpublishForm({ workspaceId, version }: { workspaceId: string; version: number }) {
-  const [state, formAction, pending] = useActionState(unpublishSite, idle);
+  const [state, formAction, pending] = useTrayActionState(unpublishSite, idle);
   return (
     <form action={formAction} className="space-y-2">
       <input type="hidden" name="workspaceId" value={workspaceId} />

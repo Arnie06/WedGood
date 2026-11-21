@@ -128,8 +128,8 @@ test("quick add reaches a new task, guest, venue or vendor from any page", async
 
   await page.getByRole("banner").getByRole("button", { name: "Add" }).click();
   await page.getByRole("link", { name: "Save a vendor" }).click();
-  await expect(page).toHaveURL(/\/discover\/new\?kind=vendor/);
-  await expect(page.getByRole("heading", { level: 1, name: /vendor/i })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Add a vendor" })).toBeVisible();
+  await expect(page).toHaveURL(/\/discover$/);
 });
 
 test("quick add closes on Escape and outside click, returning focus; viewers don't get it", async ({

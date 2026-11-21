@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
+import { useTrayActionState } from "@/components/ui/tray";
 import { Button } from "@/components/ui/button";
 import { SelectField } from "@/components/ui/select-field";
 import { TextField } from "@/components/ui/text-field";
@@ -40,7 +41,7 @@ export function SettingsForm({
   detectTimeZone?: boolean;
   readOnly?: boolean;
 }) {
-  const [state, formAction, pending] = useActionState(action, {
+  const [state, formAction, pending] = useTrayActionState(action, {
     status: "idle",
   } as SettingsFormState);
   const echoed = state.status === "error" ? state.values : undefined;

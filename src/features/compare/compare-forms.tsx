@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useTrayActionState } from "@/components/ui/tray";
 import { Button } from "@/components/ui/button";
 import { TextAreaField as TextArea } from "@/components/ui/text-area-field";
 import { TextField } from "@/components/ui/text-field";
@@ -41,7 +41,7 @@ export function SettingsForm({
   criteria: Criterion[];
   acceptsUnknowns: boolean;
 }) {
-  const [state, action, pending] = useActionState(updateComparison, idle);
+  const [state, action, pending] = useTrayActionState(updateComparison, idle);
   const err = errorOf(state);
   const spare = Math.max(0, Math.min(2, MAX_CRITERIA - criteria.length));
   const rows = [
@@ -127,7 +127,7 @@ export function RatingsForm({
   criteria: Criterion[];
   options: { id: string; label: string; ratings: Record<string, number> }[];
 }) {
-  const [state, action, pending] = useActionState(saveRatings, idle);
+  const [state, action, pending] = useTrayActionState(saveRatings, idle);
   const err = errorOf(state);
   return (
     <form action={action} className="space-y-5" noValidate>
@@ -184,7 +184,7 @@ export function DecideForm({
   idempotencyKey: string;
   warnings: string[];
 }) {
-  const [state, action, pending] = useActionState(decideComparison, idle);
+  const [state, action, pending] = useTrayActionState(decideComparison, idle);
   const err = errorOf(state);
   return (
     <form action={action} className="space-y-3" noValidate>
@@ -216,7 +216,7 @@ export function DecideForm({
 }
 
 export function ArchiveForm({ hidden }: { hidden: Hidden }) {
-  const [state, action, pending] = useActionState(archiveComparison, idle);
+  const [state, action, pending] = useTrayActionState(archiveComparison, idle);
   return (
     <form action={action} className="space-y-2">
       <HiddenFields {...hidden} />

@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useTrayActionState } from "@/components/ui/tray";
 import { Button } from "@/components/ui/button";
 import { SelectField } from "@/components/ui/select-field";
 import { MOVABLE_STAGES, PIPELINE_STAGES, type PipelineStage } from "@/domain/proposals/stages";
@@ -41,7 +41,7 @@ export function StageForm({
   version: number;
   stage: PipelineStage;
 }) {
-  const [state, action, pending] = useActionState(setCandidateStage, idle);
+  const [state, action, pending] = useTrayActionState(setCandidateStage, idle);
   const reserved = stage === "booked" || stage === "cancelled";
   return (
     <form action={action} className="space-y-3">
@@ -87,7 +87,7 @@ export function ProposalStatusForm({
   version: number;
   status: "open" | "declined";
 }) {
-  const [state, action, pending] = useActionState(setProposalStatus, idle);
+  const [state, action, pending] = useTrayActionState(setProposalStatus, idle);
   return (
     <form action={action} className="space-y-2">
       <input type="hidden" name="workspaceId" value={workspaceId} />
@@ -113,7 +113,7 @@ export function ArchiveProposalForm({
   proposalId: string;
   version: number;
 }) {
-  const [state, action, pending] = useActionState(archiveProposal, idle);
+  const [state, action, pending] = useTrayActionState(archiveProposal, idle);
   return (
     <form action={action} className="space-y-2">
       <input type="hidden" name="workspaceId" value={workspaceId} />
@@ -139,7 +139,7 @@ export function RemoveLineForm({
   version: number;
   name: string;
 }) {
-  const [state, action, pending] = useActionState(removeProposalLine, idle);
+  const [state, action, pending] = useTrayActionState(removeProposalLine, idle);
   return (
     <form action={action} className="space-y-2">
       <input type="hidden" name="workspaceId" value={workspaceId} />

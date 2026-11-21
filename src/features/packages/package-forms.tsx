@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useTrayActionState } from "@/components/ui/tray";
 import { Button } from "@/components/ui/button";
 import { createPackage, type PackageActionState } from "@/server/packages/actions";
 
@@ -25,7 +25,7 @@ export type CreateFields = {
 
 /** Posts exactly what the preview showed; the server re-derives it and refuses on any change. */
 export function CreatePackageForm({ fields }: { fields: CreateFields }) {
-  const [state, formAction, pending] = useActionState(createPackage, idle);
+  const [state, formAction, pending] = useTrayActionState(createPackage, idle);
   const flat: [string, string][] = [
     ["workspaceId", fields.workspaceId],
     ["packageId", fields.packageId],

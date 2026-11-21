@@ -42,8 +42,8 @@ export default async function WorkspaceLayout({
       : []),
     ...(hasCapability(access, "vendors.manage")
       ? [
-          { label: "Save a venue", href: `${base}/discover/new` },
-          { label: "Save a vendor", href: `${base}/discover/new?kind=vendor` },
+          { label: "Save a venue", href: `${base}/discover?addVenue=1` },
+          { label: "Save a vendor", href: `${base}/discover?addVendor=1` },
         ]
       : []),
   ];

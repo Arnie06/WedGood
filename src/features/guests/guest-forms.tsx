@@ -2,6 +2,8 @@
 
 import { useActionState, useId, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { useTrayActionState, useTrayClose } from "@/components/ui/tray";
+import { useToast } from "@/components/ui/toast";
 import { SelectField } from "@/components/ui/select-field";
 import { TextAreaField } from "@/components/ui/text-area-field";
 import { TextField } from "@/components/ui/text-field";
@@ -84,6 +86,8 @@ export function GuestForm({
   quick?: boolean;
 }) {
   // Fast entry keeps its sheet open (modal), so confirmation and Undo live inside it.
+  const closeTray = useTrayClose();
+  const { toast } = useToast();
   const [added, setAdded] = useState<{ id: string; message: string; undone: boolean } | null>(null);
   const [undoError, setUndoError] = useState<string | null>(null);
   const [created, setCreated] = useState(0);
@@ -96,6 +100,10 @@ export function GuestForm({
         setUndoError(null);
       }
       const next = await saveGuest(prev, form);
+      if (next.status === "ok" && guest) {
+        closeTray();
+        toast({ message: next.message });
+      }
       if (next.status === "ok" && !guest) {
         setCreated((n) => n + 1);
         if (quick) {
@@ -379,7 +387,7 @@ export function ArchiveGuestForm({
   archived: boolean;
   name: string;
 }) {
-  const [state, formAction, pending] = useActionState(setGuestArchived, idle);
+  const [state, formAction, pending] = useTrayActionState(setGuestArchived, idle);
   return (
     <form action={formAction} className="space-y-2">
       <Hidden values={{ workspaceId, guestId, version, archived: String(!archived) }} />
@@ -403,7 +411,7 @@ export function HouseholdForm({
   workspaceId: string;
   household: { id: string; version: number; name: string; address: string; notes: string };
 }) {
-  const [state, formAction, pending] = useActionState(saveHousehold, idle);
+  const [state, formAction, pending] = useTrayActionState(saveHousehold, idle);
   const echoed = state.status === "error" ? state.values : undefined;
   const errors = state.status === "error" ? state.fieldErrors : {};
   const v = (k: "name" | "address" | "notes") => echoed?.[k] ?? household[k];

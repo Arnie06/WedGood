@@ -121,7 +121,7 @@ test("enter a quote cost by cost; unknowns are never zero and the total says whe
   await page.goto(`/app/${wedding}/discover/${id}`);
   await expect(page.getByText(/No quotes yet/)).toBeVisible();
 
-  await page.getByRole("link", { name: "Add a quote" }).click();
+  await page.getByRole("button", { name: "Add a quote" }).click();
   await page.getByLabel(/^Name this quote/).fill("Saturday package");
   await page.getByRole("button", { name: "Save and add costs" }).click();
   await page.waitForURL(/\/quotes\/[0-9a-f-]{36}$/);
@@ -129,7 +129,8 @@ test("enter a quote cost by cost; unknowns are never zero and the total says whe
   await expect(page.getByTestId("known-total")).toContainText("$0.00");
   await expect(page.getByTestId("completeness")).toHaveText("No costs entered yet.");
 
-  const add = page.getByRole("region", { name: "Add a cost" });
+  await page.getByRole("button", { name: "Add a cost" }).click();
+  const add = page.getByRole("dialog", { name: "Add a cost" });
   // Per-guest dinner with a 120-guest minimum, used as the base for a percentage.
   await add.getByLabel(/^What is this cost for/).fill("Dinner service");
   await add.getByLabel(/^How is it priced/).selectOption("per_guest");
@@ -169,16 +170,21 @@ test("enter a quote cost by cost; unknowns are never zero and the total says whe
     ),
   ).toBeNull();
 
-  // Fill in the unknown through the edit form; the total becomes complete.
+  // Fill in the unknown through the edit tray; the total becomes complete.
   const venueFee = lineCard(page, "Venue fee");
-  await venueFee.getByText("Edit", { exact: false }).first().click();
-  await venueFee.getByLabel(/^Amount/).fill("5,000");
-  await venueFee.getByRole("button", { name: "Save changes" }).click();
+  await page.keyboard.press("Escape");
+  await expect(add).toBeHidden();
+  await page.getByRole("button", { name: "Edit Venue fee" }).click();
+  const edit = page.getByRole("dialog", { name: "Edit cost" });
+  await edit.getByLabel(/^Amount/).fill("5,000");
+  await edit.getByRole("button", { name: "Save changes" }).click();
+  await expect(edit).toBeHidden();
   await expect(page.getByTestId("known-total")).toContainText("$18,908.00");
   await expect(page.getByTestId("known-total")).not.toContainText("so far");
   await expect(page.getByTestId("completeness")).toHaveText("Every required cost has an amount.");
 
   // An inclusion adds nothing.
+  await page.getByRole("button", { name: "Add a cost" }).click();
   await add.getByLabel(/^What is this cost for/).fill("Chairs");
   await add.getByLabel(/^How is it priced/).selectOption("included");
   await add.getByLabel(/^Already covered by/).selectOption({ label: "Venue fee" });
@@ -188,9 +194,12 @@ test("enter a quote cost by cost; unknowns are never zero and the total says whe
   await expect(page.getByTestId("known-total")).toContainText("$18,908.00");
 
   // The venue fee can't be removed while Chairs says it is included in it.
-  // (Its edit panel is still open from the save above.)
-  await venueFee.getByRole("button", { name: /^Remove/ }).click();
-  await expect(venueFee.getByText(/say they're included in this one/)).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(add).toBeHidden();
+  await page.getByRole("button", { name: "Edit Venue fee" }).click();
+  await edit.getByRole("button", { name: /^Remove/ }).click();
+  await expect(edit.getByText(/say they're included in this one/)).toBeVisible();
+  await page.keyboard.press("Escape");
 
   // The quote appears on the venue's page with its honest subtotal.
   await page.goto(`/app/${wedding}/discover/${id}`);
@@ -236,7 +245,8 @@ test("field errors keep the person's input and save nothing", async ({ page }) =
   await expect(page.getByLabel(/^Link to the quote/)).toHaveValue("javascript:alert(1)");
 
   await page.goto(`/app/${wedding}/discover/${id}/quotes/${quote}`);
-  const add = page.getByRole("region", { name: "Add a cost" });
+  await page.getByRole("button", { name: "Add a cost" }).click();
+  const add = page.getByRole("dialog", { name: "Add a cost" });
   await add.getByLabel(/^How is it priced/).selectOption("percent");
   await add.getByLabel(/^Percentage/).fill("250");
   await add.getByRole("button", { name: "Add this cost" }).click();
@@ -268,7 +278,7 @@ test("a viewer can read quotes but not change them; others get a 404", async ({ 
   await signInViaUi(page, viewer);
   await page.goto(`/app/${wedding}/discover/${id}`);
   await expect(page.getByRole("link", { name: "Saturday package" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Add a quote" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Add a quote" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Update stage" })).toHaveCount(0);
   await page.goto(`/app/${wedding}/discover/${id}/quotes/${quote}`);
   await expect(page.getByRole("heading", { level: 1, name: "Saturday package" })).toBeVisible();
@@ -331,7 +341,6 @@ test("quote pages pass axe and reflow at 320px and 1280px", async ({ page }) => 
     await page.setViewportSize({ width, height: 900 });
     for (const [path, name] of [
       [`/app/${wedding}/discover/${id}`, "quote-venue"],
-      [`/app/${wedding}/discover/${id}/quotes/new`, "quote-new"],
       [`/app/${wedding}/discover/${id}/quotes/${quote}`, "quote-detail"],
     ] as const) {
       await page.goto(path);

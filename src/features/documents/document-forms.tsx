@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { useTrayActionState } from "@/components/ui/tray";
 import { Button } from "@/components/ui/button";
 import { SelectField } from "@/components/ui/select-field";
 import { TextField } from "@/components/ui/text-field";
@@ -145,7 +146,7 @@ export function EditDocumentForm({
   title: string;
   kind: string;
 }) {
-  const [state, formAction, pending] = useActionState(updateDocument, idle);
+  const [state, formAction, pending] = useTrayActionState(updateDocument, idle);
   const echoed = state.status === "error" ? state.values : undefined;
   const errors = state.status === "error" ? state.fieldErrors : {};
   return (
@@ -190,7 +191,7 @@ export function ArchiveDocumentForm({
   documentId: string;
   version: number;
 }) {
-  const [state, formAction, pending] = useActionState(archiveDocument, idle);
+  const [state, formAction, pending] = useTrayActionState(archiveDocument, idle);
   return (
     <form action={formAction} className="space-y-3">
       <Hidden values={{ workspaceId, documentId, version }} />
@@ -214,7 +215,7 @@ export function AttachDocumentForm({
   documentId: string;
   options: readonly LinkOption[];
 }) {
-  const [state, formAction, pending] = useActionState(linkDocument, idle);
+  const [state, formAction, pending] = useTrayActionState(linkDocument, idle);
   const echoed = state.status === "error" ? state.values.link : undefined;
   return (
     <form action={formAction} className="space-y-3" noValidate>
@@ -249,7 +250,7 @@ export function DetachButton({
   link: string;
   label: string;
 }) {
-  const [state, formAction, pending] = useActionState(unlinkDocument, idle);
+  const [state, formAction, pending] = useTrayActionState(unlinkDocument, idle);
   return (
     <form action={formAction} className="inline">
       <Hidden values={{ workspaceId, documentId, link }} />

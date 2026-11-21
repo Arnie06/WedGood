@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useActionState, useState } from "react";
+import { useTrayActionState } from "@/components/ui/tray";
 import { Button } from "@/components/ui/button";
 import { SelectField } from "@/components/ui/select-field";
 import { TextAreaField } from "@/components/ui/text-area-field";
@@ -170,7 +171,7 @@ export function EditBoardForm({
   description: string;
   palette: string;
 }) {
-  const [state, formAction, pending] = useActionState(updateBoard, idle);
+  const [state, formAction, pending] = useTrayActionState(updateBoard, idle);
   const echoed = state.status === "error" ? state.values : undefined;
   const errors = state.status === "error" ? state.fieldErrors : {};
   return (
@@ -385,7 +386,7 @@ export function FavoriteButton({
   favorite: boolean;
   title: string;
 }) {
-  const [state, formAction, pending] = useActionState(setFavorite, idle);
+  const [state, formAction, pending] = useTrayActionState(setFavorite, idle);
   return (
     <form action={formAction} className="inline-flex flex-col">
       <Hidden values={{ workspaceId, itemId, version, favorite: favorite ? "false" : "true" }} />
@@ -421,7 +422,7 @@ export function MoveButtons({
   first: boolean;
   last: boolean;
 }) {
-  const [state, formAction, pending] = useActionState(moveItem, idle);
+  const [state, formAction, pending] = useTrayActionState(moveItem, idle);
   return (
     <form action={formAction} className="inline-flex flex-wrap items-center gap-2">
       <Hidden values={{ workspaceId, itemId }} />
@@ -474,7 +475,7 @@ export function EditItemForm({
   };
   vendors: readonly VendorChoice[];
 }) {
-  const [state, formAction, pending] = useActionState(updateItem, idle);
+  const [state, formAction, pending] = useTrayActionState(updateItem, idle);
   const echoed = state.status === "error" ? state.values : undefined;
   const errors = state.status === "error" ? state.fieldErrors : {};
   return (
@@ -535,7 +536,7 @@ export function RemoveItemForm({
   version: number;
   title: string;
 }) {
-  const [state, formAction, pending] = useActionState(removeItem, idle);
+  const [state, formAction, pending] = useTrayActionState(removeItem, idle);
   return (
     <form action={formAction} className="space-y-2">
       <Hidden values={{ workspaceId, itemId, version }} />

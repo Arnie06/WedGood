@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
+import { randomUUID } from "node:crypto";
 import Link from "next/link";
 import { Card, CardTitle } from "@/components/ui/card";
-import { ButtonLink, buttonClasses } from "@/components/ui/button";
+import { buttonClasses } from "@/components/ui/button";
+import { TrayButton } from "@/components/ui/tray";
 import { SelectField } from "@/components/ui/select-field";
 import { TextField } from "@/components/ui/text-field";
 import { VENDOR_CATEGORIES } from "@/domain/candidates/categories";
@@ -9,11 +11,27 @@ import { filterCandidates, parseFilters } from "@/domain/candidates/filter";
 import { MOVABLE_STAGES, PIPELINE_STAGES, isPipelineStage } from "@/domain/proposals/stages";
 import { parseMajorToMinor } from "@/domain/wedding/settings";
 import { CandidateCard } from "@/features/discover/candidate-card";
+import { CandidateForm } from "@/features/discover/candidate-form";
+import { createCandidate } from "@/server/candidates/actions";
 import { hasCapability, requireWorkspace } from "@/server/auth/workspace-guard";
 import { loadCandidates } from "@/server/candidates/queries";
 import { loadWeddingSettings } from "@/server/workspace/queries";
 
 export const metadata: Metadata = { title: "Venues & vendors" };
+
+const EMPTY_CANDIDATE = {
+  name: "",
+  category: "",
+  sourceUrl: "",
+  sourceCheckedOn: "",
+  location: "",
+  pricingDisplay: "",
+  price: "",
+  priceBasis: "",
+  notes: "",
+  seatedCapacity: "",
+  ceremonyCapacity: "",
+};
 
 const link = "font-semibold text-action-emphasis underline underline-offset-4";
 const checkbox = "flex min-h-11 items-center gap-3 text-body-md";
@@ -76,12 +94,41 @@ export default async function DiscoverPage({
 
       {canManage && (
         <div className="flex flex-col gap-3 sm:flex-row">
-          <ButtonLink href={`${base}/discover/new?kind=venue`} variant="primary">
-            Add a venue
-          </ButtonLink>
-          <ButtonLink href={`${base}/discover/new?kind=vendor`} variant="outline">
-            Add a vendor
-          </ButtonLink>
+          <TrayButton
+            label="Add a venue"
+            title="Add a venue"
+            description="Only the name is required. Anything you leave blank stays unknown."
+            openOnParam="addVenue"
+          >
+            <CandidateForm
+              action={createCandidate}
+              kind="venue"
+              currency={currency}
+              defaults={EMPTY_CANDIDATE}
+              lookupWorkspaceId={access.wedding.id}
+              hidden={{ workspaceId: access.wedding.id, idempotencyKey: randomUUID() }}
+              submitLabel="Save"
+              pendingLabel="Saving…"
+            />
+          </TrayButton>
+          <TrayButton
+            label="Add a vendor"
+            variant="outline"
+            title="Add a vendor"
+            description="Only the name and what they do are required."
+            openOnParam="addVendor"
+          >
+            <CandidateForm
+              action={createCandidate}
+              kind="vendor"
+              currency={currency}
+              defaults={EMPTY_CANDIDATE}
+              lookupWorkspaceId={access.wedding.id}
+              hidden={{ workspaceId: access.wedding.id, idempotencyKey: randomUUID() }}
+              submitLabel="Save"
+              pendingLabel="Saving…"
+            />
+          </TrayButton>
         </div>
       )}
       <p>

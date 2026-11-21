@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { TrayButton } from "@/components/ui/tray";
 import { displayHost } from "@/domain/candidates/input";
 import { formatMinor } from "@/domain/money/money";
 import { normalizeProposal } from "@/domain/proposals/normalize";
@@ -106,6 +107,74 @@ export default async function QuotePage({
         {quote.notes && (
           <p className="whitespace-pre-wrap text-body-md text-ink-muted">{quote.notes}</p>
         )}
+        {canManage && (
+          <div className="flex flex-wrap gap-3 pt-2">
+            <TrayButton
+              label="Add a cost"
+              title="Add a cost"
+              description="Add each line from the quote. Anything you don't know yet can stay blank and will show as unknown."
+              openOnParam="addCost"
+            >
+              <LineForm
+                action={addProposalLine}
+                currency={currency}
+                defaults={{
+                  description: "",
+                  costMode: "fixed",
+                  amount: "",
+                  quantity: "",
+                  minQty: "",
+                  maxQty: "",
+                  ratePercent: "",
+                  percentBase: "no",
+                  requirement: "required",
+                  certainty: "quoted",
+                  includedIn: "",
+                  evidence: "",
+                }}
+                hidden={{ ...hiddenLine, proposalId: quote.id, idempotencyKey: randomUUID() }}
+                parents={parents}
+                submitLabel="Add this cost"
+                pendingLabel="Adding…"
+                rotateKey
+              />
+            </TrayButton>
+            <TrayButton
+              label="Edit quote"
+              variant="outline"
+              title="Edit quote"
+              description={quote.title}
+            >
+              <ProposalForm
+                action={updateProposal}
+                submitLabel="Save details"
+                pendingLabel="Saving…"
+                defaults={{
+                  title: quote.title,
+                  receivedOn: quote.receivedOn ?? "",
+                  validUntil: quote.validUntil ?? "",
+                  sourceUrl: quote.sourceUrl ?? "",
+                  notes: quote.notes ?? "",
+                }}
+                hidden={{ workspaceId: wid, proposalId: quote.id, version: String(quote.version) }}
+              />
+              <div className="flex flex-col gap-3 border-t border-border-hairline pt-4">
+                <ProposalStatusForm
+                  workspaceId={wid}
+                  proposalId={quote.id}
+                  version={quote.version}
+                  status={quote.status}
+                />
+                <ArchiveProposalForm
+                  workspaceId={wid}
+                  candidateId={candidateId}
+                  proposalId={quote.id}
+                  version={quote.version}
+                />
+              </div>
+            </TrayButton>
+          </div>
+        )}
       </header>
 
       <section aria-labelledby="summary-heading">
@@ -187,20 +256,23 @@ export default async function QuotePage({
                     <p className="text-body-sm text-ink-muted">Source: {l.evidence}</p>
                   )}
                   {canManage && (
-                    <details className="pt-1">
-                      <summary className="min-h-11 cursor-pointer py-2 text-label-lg font-semibold text-action-emphasis">
-                        Edit <span className="sr-only">{l.description}</span>
-                      </summary>
-                      <div className="mt-3 space-y-4">
-                        <LineForm
-                          action={updateProposalLine}
-                          currency={currency}
-                          defaults={lineDefaults(l)}
-                          hidden={{ ...hiddenLine, lineId: l.id }}
-                          parents={parents.filter((p) => p.id !== l.id)}
-                          submitLabel="Save changes"
-                          pendingLabel="Saving…"
-                        />
+                    <TrayButton
+                      triggerStyle="link"
+                      label="Edit"
+                      ariaLabel={`Edit ${l.description}`}
+                      title="Edit cost"
+                      description={l.description}
+                    >
+                      <LineForm
+                        action={updateProposalLine}
+                        currency={currency}
+                        defaults={lineDefaults(l)}
+                        hidden={{ ...hiddenLine, lineId: l.id }}
+                        parents={parents.filter((p) => p.id !== l.id)}
+                        submitLabel="Save changes"
+                        pendingLabel="Saving…"
+                      />
+                      <div className="border-t border-border-hairline pt-4">
                         <RemoveLineForm
                           workspaceId={wid}
                           lineId={l.id}
@@ -208,7 +280,7 @@ export default async function QuotePage({
                           name={l.description}
                         />
                       </div>
-                    </details>
+                    </TrayButton>
                   )}
                 </Card>
               );
@@ -219,70 +291,6 @@ export default async function QuotePage({
 
       {canManage && (
         <>
-          <section aria-labelledby="add-heading" className="space-y-3">
-            <h2 id="add-heading" className="font-serif text-headline-sm">
-              Add a cost
-            </h2>
-            <LineForm
-              action={addProposalLine}
-              currency={currency}
-              defaults={{
-                description: "",
-                costMode: "fixed",
-                amount: "",
-                quantity: "",
-                minQty: "",
-                maxQty: "",
-                ratePercent: "",
-                percentBase: "no",
-                requirement: "required",
-                certainty: "quoted",
-                includedIn: "",
-                evidence: "",
-              }}
-              hidden={{ ...hiddenLine, proposalId: quote.id, idempotencyKey: randomUUID() }}
-              parents={parents}
-              submitLabel="Add this cost"
-              pendingLabel="Adding…"
-              rotateKey
-            />
-          </section>
-
-          <section
-            aria-labelledby="details-heading"
-            className="space-y-3 border-t border-border-hairline pt-6"
-          >
-            <h2 id="details-heading" className="font-serif text-headline-sm">
-              Quote details
-            </h2>
-            <ProposalForm
-              action={updateProposal}
-              submitLabel="Save details"
-              pendingLabel="Saving…"
-              defaults={{
-                title: quote.title,
-                receivedOn: quote.receivedOn ?? "",
-                validUntil: quote.validUntil ?? "",
-                sourceUrl: quote.sourceUrl ?? "",
-                notes: quote.notes ?? "",
-              }}
-              hidden={{ workspaceId: wid, proposalId: quote.id, version: String(quote.version) }}
-            />
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <ProposalStatusForm
-                workspaceId={wid}
-                proposalId={quote.id}
-                version={quote.version}
-                status={quote.status}
-              />
-              <ArchiveProposalForm
-                workspaceId={wid}
-                candidateId={candidateId}
-                proposalId={quote.id}
-                version={quote.version}
-              />
-            </div>
-          </section>
           {quote.status === "open" &&
             hasCapability(access, "budget.manage") &&
             !["booked", "declined", "cancelled"].includes(candidate.stage) && (

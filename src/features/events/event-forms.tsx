@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { useTrayActionState } from "@/components/ui/tray";
 import { Button } from "@/components/ui/button";
 import { SelectField } from "@/components/ui/select-field";
 import { TextField } from "@/components/ui/text-field";
@@ -229,7 +230,7 @@ export function MealToggle({
   workspaceId: string;
   option: { id: string; name: string; active: boolean; version: number };
 }) {
-  const [state, formAction, pending] = useActionState(setMealOptionActive, idle);
+  const [state, formAction, pending] = useTrayActionState(setMealOptionActive, idle);
   return (
     <form action={formAction} className="flex flex-wrap items-center gap-3">
       <Hidden
@@ -375,9 +376,9 @@ export function InvitationActions({
   workspaceId: string;
   invitation: { id: string; version: number; label: string; shared: boolean };
 }) {
-  const [reissued, reissueAction, reissuing] = useActionState(reissueInvitation, idle);
-  const [revoked, revokeAction, revoking] = useActionState(revokeInvitation, idle);
-  const [delivery, deliveryAction, delivering] = useActionState(setInvitationDelivery, idle);
+  const [reissued, reissueAction, reissuing] = useTrayActionState(reissueInvitation, idle);
+  const [revoked, revokeAction, revoking] = useTrayActionState(revokeInvitation, idle);
+  const [delivery, deliveryAction, delivering] = useTrayActionState(setInvitationDelivery, idle);
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap gap-3">
@@ -436,7 +437,7 @@ export function OverrideForm({
   member: { id: string; name: string; status: string; mealOptionId: string | null };
   meals: { id: string; name: string }[];
 }) {
-  const [state, formAction, pending] = useActionState(overrideResponse, idle);
+  const [state, formAction, pending] = useTrayActionState(overrideResponse, idle);
   const errors = state.status === "error" ? state.fieldErrors : {};
   return (
     <form action={formAction} className="space-y-3" noValidate>

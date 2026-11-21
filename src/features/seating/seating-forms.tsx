@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useId } from "react";
+import { useId } from "react";
+import { useTrayActionState } from "@/components/ui/tray";
 import { Button } from "@/components/ui/button";
 import { TextField } from "@/components/ui/text-field";
 import { Feedback, Hidden } from "@/features/events/event-forms";
@@ -25,7 +26,7 @@ const valueOf = (s: EventActionState, f: string, fallback: string) =>
 export type TableChoice = { id: string; label: string; open: number };
 
 export function StartPlanForm({ workspaceId, eventId }: { workspaceId: string; eventId: string }) {
-  const [state, action, pending] = useActionState(startSeatingPlan, idle);
+  const [state, action, pending] = useTrayActionState(startSeatingPlan, idle);
   return (
     <form action={action} className="space-y-2">
       <Hidden values={{ workspaceId, eventId }} />
@@ -48,7 +49,7 @@ export function TentativeToggle({
   version: number;
   allow: boolean;
 }) {
-  const [state, action, pending] = useActionState(setTentativeSeating, idle);
+  const [state, action, pending] = useTrayActionState(setTentativeSeating, idle);
   return (
     <form action={action} className="space-y-2">
       <Hidden values={{ workspaceId, layoutId, version, allow: String(!allow) }} />
@@ -61,7 +62,7 @@ export function TentativeToggle({
 }
 
 export function AddTableForm({ workspaceId, layoutId }: { workspaceId: string; layoutId: string }) {
-  const [state, action, pending] = useActionState(addTable, idle);
+  const [state, action, pending] = useTrayActionState(addTable, idle);
   return (
     <form action={action} className="space-y-4" noValidate>
       <Hidden values={{ workspaceId, layoutId }} />
@@ -98,8 +99,8 @@ export function EditTableForm({
   workspaceId: string;
   table: { id: string; label: string; capacity: number; version: number };
 }) {
-  const [state, action, pending] = useActionState(updateTable, idle);
-  const [removeState, removeAction, removing] = useActionState(removeTable, idle);
+  const [state, action, pending] = useTrayActionState(updateTable, idle);
+  const [removeState, removeAction, removing] = useTrayActionState(removeTable, idle);
   return (
     <div className="space-y-4">
       <form action={action} className="space-y-4" noValidate>
@@ -156,7 +157,7 @@ export function SeatForm({
   tables: TableChoice[];
   currentTableId?: string;
 }) {
-  const [state, action, pending] = useActionState(seatGuest, idle);
+  const [state, action, pending] = useTrayActionState(seatGuest, idle);
   const selectId = useId();
   const choices = tables.filter((t) => t.id !== currentTableId);
   return (
@@ -203,7 +204,7 @@ export function UnseatForm({
   layoutId: string;
   guest: { id: string; name: string };
 }) {
-  const [state, action, pending] = useActionState(unseatGuest, idle);
+  const [state, action, pending] = useTrayActionState(unseatGuest, idle);
   return (
     <form action={action}>
       <Hidden values={{ workspaceId, layoutId, guestId: guest.id }} />
@@ -227,7 +228,7 @@ export function FinalizeForm({
   revision: number;
   label: string;
 }) {
-  const [state, action, pending] = useActionState(finalizeLayout, idle);
+  const [state, action, pending] = useTrayActionState(finalizeLayout, idle);
   return (
     <form action={action} className="space-y-2">
       <Hidden values={{ workspaceId, layoutId, revision }} />

@@ -1,9 +1,13 @@
 import type { Metadata } from "next";
+import { randomUUID } from "node:crypto";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { TrayButton } from "@/components/ui/tray";
+import { ProposalForm } from "@/features/quotes/proposal-form";
+import { createProposal } from "@/server/proposals/actions";
 import { stageLabel } from "@/domain/proposals/stages";
 import { QuoteList } from "@/features/quotes/quote-list";
 import { StageForm } from "@/features/quotes/quote-actions";
@@ -60,7 +64,7 @@ export default async function CandidatePage({
     <div className="max-w-xl space-y-6">
       <div className="space-y-2">
         <h1 className="font-serif text-headline-mobile break-words md:text-headline-lg">
-          {canManage ? `Edit ${c.name}` : c.name}
+          {c.name}
         </h1>
         <p className="flex flex-wrap items-center gap-2 text-body-md text-ink-muted">
           <Badge tone="neutral">{categoryLabel(c.category)}</Badge>
@@ -131,55 +135,78 @@ export default async function CandidatePage({
           />
         )}
         {canManage && (
-          <ButtonLink href={`${base}/discover/${c.id}/quotes/new`} variant="outline" size="sm">
-            Add a quote
-          </ButtonLink>
+          <TrayButton
+            label="Add a quote"
+            variant="outline"
+            size="sm"
+            title={`Add a quote from ${c.name}`}
+            openOnParam="addQuote"
+            description="Start with the basics, then add each cost on the next page. This only records what you were told. It doesn't book anything."
+          >
+            <ProposalForm
+              action={createProposal}
+              submitLabel="Save and add costs"
+              pendingLabel="Saving…"
+              defaults={{ title: "", receivedOn: "", validUntil: "", sourceUrl: "", notes: "" }}
+              hidden={{
+                workspaceId: access.wedding.id,
+                candidateId: c.id,
+                idempotencyKey: randomUUID(),
+              }}
+            />
+          </TrayButton>
         )}
       </section>
 
-      {canManage ? (
-        <>
-          <h2 className="font-serif text-headline-sm">Details</h2>
-          {c.priceCurrency !== null && c.priceCurrency !== settings.baseCurrency && (
-            <p className="text-body-md text-ink-muted">
-              This price was entered in {c.priceCurrency}, but your wedding now uses{" "}
-              {settings.baseCurrency}. Saving a new amount records it in {settings.baseCurrency}.
-            </p>
+      <section aria-labelledby="details-heading" className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 id="details-heading" className="font-serif text-headline-sm">
+            Details
+          </h2>
+          {canManage && (
+            <TrayButton label="Edit details" variant="outline" size="sm" title={`Edit ${c.name}`}>
+              {c.priceCurrency !== null && c.priceCurrency !== settings.baseCurrency && (
+                <p className="text-body-md text-ink-muted">
+                  This price was entered in {c.priceCurrency}, but your wedding now uses{" "}
+                  {settings.baseCurrency}. Saving a new amount records it in {settings.baseCurrency}
+                  .
+                </p>
+              )}
+              <CandidateForm
+                action={updateCandidate}
+                kind={c.kind}
+                currency={c.priceMinor !== null ? currency : settings.baseCurrency}
+                submitLabel="Save changes"
+                pendingLabel="Saving…"
+                defaults={{
+                  name: c.name,
+                  category: c.category === "venue" ? "" : c.category,
+                  sourceUrl: c.sourceUrl ?? "",
+                  sourceCheckedOn: c.sourceCheckedOn ?? "",
+                  location: c.location ?? "",
+                  pricingDisplay: c.pricingDisplay ?? "",
+                  price: minorToMajorInput(c.priceMinor, currency),
+                  priceBasis: c.priceBasis ?? "",
+                  notes: c.notes ?? "",
+                  seatedCapacity: c.seatedCapacity?.toString() ?? "",
+                  ceremonyCapacity: c.ceremonyCapacity?.toString() ?? "",
+                }}
+                hidden={{
+                  workspaceId: access.wedding.id,
+                  candidateId: c.id,
+                  version: String(c.version),
+                }}
+              />
+              <div className="border-t border-border-hairline pt-4">
+                <ArchiveCandidateForm
+                  workspaceId={access.wedding.id}
+                  candidateId={c.id}
+                  version={c.version}
+                />
+              </div>
+            </TrayButton>
           )}
-          <CandidateForm
-            action={updateCandidate}
-            kind={c.kind}
-            currency={c.priceMinor !== null ? currency : settings.baseCurrency}
-            submitLabel="Save changes"
-            pendingLabel="Saving…"
-            defaults={{
-              name: c.name,
-              category: c.category === "venue" ? "" : c.category,
-              sourceUrl: c.sourceUrl ?? "",
-              sourceCheckedOn: c.sourceCheckedOn ?? "",
-              location: c.location ?? "",
-              pricingDisplay: c.pricingDisplay ?? "",
-              price: minorToMajorInput(c.priceMinor, currency),
-              priceBasis: c.priceBasis ?? "",
-              notes: c.notes ?? "",
-              seatedCapacity: c.seatedCapacity?.toString() ?? "",
-              ceremonyCapacity: c.ceremonyCapacity?.toString() ?? "",
-            }}
-            hidden={{
-              workspaceId: access.wedding.id,
-              candidateId: c.id,
-              version: String(c.version),
-            }}
-          />
-          <div className="space-y-2 border-t border-border-hairline pt-6">
-            <ArchiveCandidateForm
-              workspaceId={access.wedding.id}
-              candidateId={c.id}
-              version={c.version}
-            />
-          </div>
-        </>
-      ) : (
+        </div>
         <dl className="space-y-4 text-body-md">
           {c.location && <Item label="Location">{c.location}</Item>}
           <Item label="Price">{price ?? "Not entered yet"}</Item>
@@ -216,9 +243,13 @@ export default async function CandidatePage({
               <span className="whitespace-pre-wrap">{c.notes}</span>
             </Item>
           )}
-          <p className="text-ink-muted">You can view this. Ask the workspace owner to change it.</p>
+          {!canManage && (
+            <p className="text-ink-muted">
+              You can view this. Ask the workspace owner to change it.
+            </p>
+          )}
         </dl>
-      )}
+      </section>
       <CommentsSection
         workspaceId={access.wedding.id}
         role={access.membership.role}

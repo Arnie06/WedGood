@@ -1,6 +1,5 @@
 "use client";
 
-import { useActionState } from "react";
 import { useTrayActionState } from "@/components/ui/tray";
 import { Button } from "@/components/ui/button";
 import {
@@ -34,7 +33,7 @@ export function GenerateChecklistForm({
   workspaceId: string;
   label: string;
 }) {
-  const [state, action, pending] = useActionState(generateChecklist, idle);
+  const [state, action, pending] = useTrayActionState(generateChecklist, idle);
   return (
     <form action={action} className="space-y-2">
       <input type="hidden" name="workspaceId" value={workspaceId} />
@@ -76,7 +75,7 @@ export function ApplyRescheduleForm({
   workspaceId: string;
   moves: readonly { id: string; version: number }[];
 }) {
-  const [state, action, pending] = useActionState(applyReschedule, idle);
+  const [state, action, pending] = useTrayActionState(applyReschedule, idle);
   return (
     <form action={action} className="space-y-2">
       <input type="hidden" name="workspaceId" value={workspaceId} />

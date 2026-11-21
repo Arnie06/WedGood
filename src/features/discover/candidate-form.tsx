@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useRef, useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
+import { useTrayActionState } from "@/components/ui/tray";
 import { Button } from "@/components/ui/button";
 import { SelectField } from "@/components/ui/select-field";
 import { TextAreaField } from "@/components/ui/text-area-field";
@@ -36,7 +37,7 @@ export function CandidateForm({
   /** When set, shows "Paste a link" so details can be prefilled from the page (ADR-029). */
   lookupWorkspaceId?: string;
 }) {
-  const [state, formAction, pending] = useActionState(action, {
+  const [state, formAction, pending] = useTrayActionState(action, {
     status: "idle",
   } as CandidateActionState);
   const echoed = state.status === "error" ? state.values : undefined;

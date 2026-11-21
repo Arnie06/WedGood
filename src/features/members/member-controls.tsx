@@ -1,7 +1,8 @@
 "use client";
 
 import { Check, Copy } from "lucide-react";
-import { useActionState, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
+import { useTrayActionState } from "@/components/ui/tray";
 import { Button } from "@/components/ui/button";
 import { TextField } from "@/components/ui/text-field";
 import { ROLE_LABELS, type MembershipRole } from "@/domain/permissions";
@@ -43,7 +44,7 @@ export function InviteForm({
   workspaceId: string;
   roles: readonly MembershipRole[];
 }) {
-  const [state, action, pending] = useActionState(inviteCollaborator, idle);
+  const [state, action, pending] = useTrayActionState(inviteCollaborator, idle);
   const [copied, setCopied] = useState(false);
   const invitable = roles.filter((r) => r !== "owner");
   return (
@@ -129,7 +130,7 @@ function InlineForm({
   children: (pending: boolean) => ReactNode;
   hidden: Record<string, string>;
 }) {
-  const [state, formAction, pending] = useActionState(action, idle);
+  const [state, formAction, pending] = useTrayActionState(action, idle);
   return (
     <form action={formAction} className="space-y-1">
       <Hidden values={hidden} />

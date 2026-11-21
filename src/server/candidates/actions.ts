@@ -118,7 +118,7 @@ export async function createCandidate(
   });
   if (error) return fail(friendlyCandidateError(error), {}, values);
   refresh(ids.data.workspaceId);
-  redirect(`/app/${ids.data.workspaceId}/discover`);
+  return { status: "ok", message: "Saved to your list." };
 }
 
 export async function updateCandidate(
@@ -151,7 +151,7 @@ export async function updateCandidate(
   });
   if (error) return fail(friendlyCandidateError(error), {}, values);
   refresh(ids.data.workspaceId);
-  redirect(`/app/${ids.data.workspaceId}/discover`);
+  return { status: "ok", message: "Changes saved." };
 }
 
 export async function setCandidateFavorite(

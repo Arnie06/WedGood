@@ -86,7 +86,7 @@ export function nextActions(f: HomeFacts): HomeAction[] {
       cta: "Save a venue",
       title: "Save a venue you love",
       reason: "Add a link or enter the details yourself. Nothing is checked for you.",
-      path: "discover/new",
+      path: "discover?addVenue=1",
     });
   if (f.guestCount === 0 && f.can.guests)
     setup.push({

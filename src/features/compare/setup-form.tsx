@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useTrayActionState } from "@/components/ui/tray";
 import { Button } from "@/components/ui/button";
 import { TextField } from "@/components/ui/text-field";
 import { MAX_OPTIONS, MIN_OPTIONS } from "@/domain/comparison/evaluate";
@@ -22,7 +22,7 @@ export function SetupForm({
   defaultGuests: number | null;
   choices: QuoteChoice[];
 }) {
-  const [state, action, pending] = useActionState(createComparison, idle);
+  const [state, action, pending] = useTrayActionState(createComparison, idle);
   const err = errorOf(state);
   const picked = new Set((err?.values.proposalIds as string[] | undefined) ?? []);
   return (

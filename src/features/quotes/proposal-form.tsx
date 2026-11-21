@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useTrayActionState } from "@/components/ui/tray";
 import { Button } from "@/components/ui/button";
 import { TextAreaField } from "@/components/ui/text-area-field";
 import { TextField } from "@/components/ui/text-field";
@@ -24,7 +24,7 @@ export function ProposalForm({
   submitLabel: string;
   pendingLabel: string;
 }) {
-  const [state, formAction, pending] = useActionState(action, {
+  const [state, formAction, pending] = useTrayActionState(action, {
     status: "idle",
   } as ProposalActionState);
   const echoed = state.status === "error" ? state.values : undefined;

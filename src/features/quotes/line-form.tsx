@@ -1,6 +1,8 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { useToast } from "@/components/ui/toast";
+import { useTrayClose } from "@/components/ui/tray";
 import { Button } from "@/components/ui/button";
 import { SelectField } from "@/components/ui/select-field";
 import { TextAreaField } from "@/components/ui/text-area-field";
@@ -51,6 +53,8 @@ export function LineForm({
   pendingLabel: string;
   rotateKey?: boolean;
 }) {
+  const closeTray = useTrayClose();
+  const { toast } = useToast();
   const [created, setCreated] = useState(0);
   const [mode, setMode] = useState<CostMode>(defaults.costMode as CostMode);
   const [state, formAction, pending] = useActionState(
@@ -59,6 +63,9 @@ export function LineForm({
       if (rotateKey && next.status === "ok") {
         setCreated((n) => n + 1);
         setMode(defaults.costMode as CostMode);
+      } else if (!rotateKey && next.status === "ok") {
+        closeTray();
+        toast({ message: next.message });
       }
       return next;
     },

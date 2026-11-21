@@ -1,7 +1,7 @@
 "use client";
 
 import { Star } from "lucide-react";
-import { useActionState } from "react";
+import { useTrayActionState } from "@/components/ui/tray";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
 import {
@@ -26,7 +26,7 @@ export function FavoriteButton({
   favorite: boolean;
   disabled: boolean;
 }) {
-  const [state, action, pending] = useActionState(setCandidateFavorite, idle);
+  const [state, action, pending] = useTrayActionState(setCandidateFavorite, idle);
   return (
     <form action={action} className="shrink-0">
       <input type="hidden" name="workspaceId" value={workspaceId} />
@@ -62,7 +62,7 @@ export function ArchiveCandidateForm({
   candidateId: string;
   version: number;
 }) {
-  const [state, action, pending] = useActionState(archiveCandidate, idle);
+  const [state, action, pending] = useTrayActionState(archiveCandidate, idle);
   return (
     <form action={action} className="space-y-2">
       <input type="hidden" name="workspaceId" value={workspaceId} />
