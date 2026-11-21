@@ -1,7 +1,13 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
-import { adminClient, anonClient, createWedding, localStack } from "../integration/helpers";
+import {
+  adminClient,
+  anonClient,
+  createWedding,
+  localStack,
+  withSuperuser,
+} from "../integration/helpers";
 
 // Drives the real app against the real local Supabase stack (see membership.spec.ts).
 let stackUp = true;
@@ -95,4 +101,86 @@ test("landing offers sign-up and sign-in and no longer says accounts are closed"
     "/sign-up",
   );
   await expect(page.getByRole("link", { name: "Sign in" })).toHaveAttribute("href", "/sign-in");
+});
+
+test("quick add reaches a new task, guest, venue or vendor from any page", async ({ page }) => {
+  const { email, wedding } = await ownerWithWorkspace("quick-add");
+  await signIn(page, email);
+  await page.goto(`/app/${wedding}/settings/event`);
+
+  const add = page.getByRole("banner").getByRole("button", { name: "Add" });
+  await add.click();
+  await expect(add).toHaveAttribute("aria-expanded", "true");
+  const labels = await page.getByRole("banner").getByRole("link").allInnerTexts();
+  expect(labels).toEqual(["Add a task", "Add a guest", "Save a venue", "Save a vendor"]);
+
+  // Opens the matching sheet, and tidies the URL so a reload doesn't reopen it.
+  await page.getByRole("link", { name: "Add a guest" }).click();
+  await expect(page.getByRole("dialog", { name: "Add a guest" })).toBeVisible();
+  await expect(page.getByLabel(/^Name/)).toBeFocused();
+  await expect(page).toHaveURL(new RegExp(`/guests$`));
+  await page.keyboard.press("Escape");
+
+  await page.getByRole("banner").getByRole("button", { name: "Add" }).click();
+  await page.getByRole("link", { name: "Add a task" }).click();
+  await expect(page.getByRole("dialog", { name: "Add a task" })).toBeVisible();
+  await page.keyboard.press("Escape");
+
+  await page.getByRole("banner").getByRole("button", { name: "Add" }).click();
+  await page.getByRole("link", { name: "Save a vendor" }).click();
+  await expect(page).toHaveURL(/\/discover\/new\?kind=vendor/);
+  await expect(page.getByRole("heading", { level: 1, name: /vendor/i })).toBeVisible();
+});
+
+test("quick add closes on Escape and outside click, returning focus; viewers don't get it", async ({
+  page,
+}) => {
+  const { email, wedding } = await ownerWithWorkspace("quick-add-kb");
+  await signIn(page, email);
+  await page.goto(`/app/${wedding}`);
+  const add = page.getByRole("banner").getByRole("button", { name: "Add" });
+  await add.click();
+  await page.keyboard.press("Escape");
+  await expect(add).toHaveAttribute("aria-expanded", "false");
+  await expect(add).toBeFocused();
+  await add.click();
+  await page.getByRole("heading", { level: 1 }).click();
+  await expect(add).toHaveAttribute("aria-expanded", "false");
+
+  // A viewer has none of these capabilities, so there is nothing to offer.
+  const viewerEmail = `quick-viewer-${randomUUID()}@example.test`;
+  const { data, error } = await adminClient().auth.admin.createUser({
+    email: viewerEmail,
+    password,
+    email_confirm: true,
+  });
+  if (error || !data.user) throw error ?? new Error("createUser failed");
+  await withSuperuser((db) =>
+    db.query("insert into public.memberships (wedding_id, user_id, role) values ($1,$2,'viewer')", [
+      wedding,
+      data.user.id,
+    ]),
+  );
+  await page.context().clearCookies();
+  await signIn(page, viewerEmail);
+  await page.goto(`/app/${wedding}`);
+  await expect(page.getByRole("banner").getByRole("button", { name: "Add" })).toHaveCount(0);
+});
+
+test("the open quick-add menu passes axe at 320 and 1280", async ({ page }) => {
+  const { email, wedding } = await ownerWithWorkspace("quick-add-a11y");
+  await signIn(page, email);
+  for (const width of [320, 1280]) {
+    await page.setViewportSize({ width, height: 800 });
+    await page.goto(`/app/${wedding}`);
+    await page.getByRole("banner").getByRole("button", { name: "Add" }).click();
+    const results = await new AxeBuilder({ page })
+      .withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"])
+      .analyze();
+    expect(results.violations).toEqual([]);
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(overflow).toBeLessThanOrEqual(0);
+  }
 });

@@ -1,7 +1,8 @@
 "use client";
 
 import { X } from "lucide-react";
-import { createContext, useContext, useId, useRef, type ReactNode } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { createContext, useContext, useEffect, useId, useRef, type ReactNode } from "react";
 import { Button, type ButtonVariant } from "@/components/ui/button";
 
 const SheetContext = createContext<{ close: () => void } | null>(null);
@@ -23,6 +24,7 @@ export function SheetButton({
   description,
   variant = "primary",
   className,
+  openOnParam,
   children,
 }: {
   label: string;
@@ -30,20 +32,37 @@ export function SheetButton({
   description?: string;
   variant?: ButtonVariant;
   className?: string;
+  /** Opens on arrival when the URL has `?<name>=1` (used by the quick-add menu), then tidies the URL. */
+  openOnParam?: string;
   children: ReactNode;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  const router = useRouter();
+  const pathname = usePathname();
+  const params = useSearchParams();
+  /** Opens modally, then puts focus in the first field (React's autoFocus runs while closed). */
+  const openDialog = () => {
+    const dialog = ref.current;
+    if (!dialog || dialog.open) return;
+    dialog.showModal();
+    dialog.querySelector<HTMLElement>("input:not([type=hidden]), textarea, select")?.focus();
+  };
+  const wanted = openOnParam ? params.get(openOnParam) === "1" : false;
+  useEffect(() => {
+    if (!wanted || !openOnParam) return;
+    openDialog();
+    const next = new URLSearchParams(params.toString());
+    next.delete(openOnParam);
+    const query = next.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wanted]);
   const titleId = useId();
   const close = () => ref.current?.close();
 
   return (
     <>
-      <Button
-        type="button"
-        variant={variant}
-        className={className}
-        onClick={() => ref.current?.showModal()}
-      >
+      <Button type="button" variant={variant} className={className} onClick={openDialog}>
         {label}
       </Button>
       <dialog

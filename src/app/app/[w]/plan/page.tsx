@@ -109,6 +109,7 @@ export default async function PlanPage({ params }: { params: Promise<{ w: string
           <SheetButton
             label="Add a task"
             title="Add a task"
+            openOnParam="add"
             description="Leave the date blank if you're not sure yet."
           >
             <TaskForm

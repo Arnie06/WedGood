@@ -114,6 +114,7 @@ export default async function GuestsPage({
         <SheetButton
           label="Add a guest"
           title="Add a guest"
+          openOnParam="add"
           description="Just a name is enough. This stays open so you can keep adding."
         >
           <GuestForm

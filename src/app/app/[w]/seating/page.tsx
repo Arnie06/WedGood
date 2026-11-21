@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Card, CardTitle } from "@/components/ui/card";
+import { formatDateOnly, parseDateOnly } from "@/domain/dates/date-only";
 import { EVENT_KIND_LABELS } from "@/domain/events/event";
 import { EventForm } from "@/features/events/event-forms";
 import { hasCapability, requireWorkspace } from "@/server/auth/workspace-guard";
@@ -77,8 +78,18 @@ export default async function SeatingIndexPage({ params }: { params: Promise<{ w
               <Card className="space-y-2">
                 <CardTitle>{event.name}</CardTitle>
                 <p className="text-body-md text-ink-muted">
-                  {EVENT_KIND_LABELS[event.kind]}
-                  {event.localDate ? ` · ${event.localDate}` : ""} · {attending} attending
+                  {[
+                    // Don't repeat the kind when the event is simply named after it.
+                    EVENT_KIND_LABELS[event.kind].toLowerCase() === event.name.toLowerCase()
+                      ? null
+                      : EVENT_KIND_LABELS[event.kind],
+                    event.localDate
+                      ? formatDateOnly(parseDateOnly(event.localDate))
+                      : "Date not set",
+                    `${attending} attending`,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
                 </p>
                 <Link
                   href={`${base}/seating/${event.id}`}

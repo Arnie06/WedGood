@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button";
 import { ROLE_LABELS } from "@/domain/permissions";
 import { signOut } from "@/server/auth/actions";
 import { daysBetween, parseDateOnly, todayInZone } from "@/domain/dates/date-only";
-import { requireWorkspace } from "@/server/auth/workspace-guard";
+import { QuickAdd, type QuickAddItem } from "@/components/shell/quick-add";
+import { hasCapability, requireWorkspace } from "@/server/auth/workspace-guard";
 
 export const metadata: Metadata = { robots: { index: false, follow: false } };
 
@@ -31,11 +32,27 @@ export default async function WorkspaceLayout({
       : days === 0
         ? "Today"
         : `${days} ${days === 1 ? "day" : "days"} to go`;
+  const base = `/app/${access.wedding.id}`;
+  const quickAdd: QuickAddItem[] = [
+    ...(hasCapability(access, "plan.edit")
+      ? [{ label: "Add a task", href: `${base}/plan?add=1` }]
+      : []),
+    ...(hasCapability(access, "guests.manage")
+      ? [{ label: "Add a guest", href: `${base}/guests?add=1` }]
+      : []),
+    ...(hasCapability(access, "vendors.manage")
+      ? [
+          { label: "Save a venue", href: `${base}/discover/new` },
+          { label: "Save a vendor", href: `${base}/discover/new?kind=vendor` },
+        ]
+      : []),
+  ];
   return (
     <WorkspaceShell
       basePath={`/app/${access.wedding.id}`}
       workspaceName={access.wedding.name}
       workspaceSubtitle={subtitle}
+      headerAction={<QuickAdd items={quickAdd} />}
       badge={<Badge tone="neutral">{ROLE_LABELS[access.membership.role]}</Badge>}
       sidebarFooter={
         <form action={signOut} className="space-y-2">

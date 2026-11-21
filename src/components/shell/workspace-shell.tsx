@@ -12,6 +12,7 @@ export function WorkspaceShell({
   workspaceName,
   workspaceSubtitle,
   badge,
+  headerAction,
   notice,
   sidebarFooter,
   children,
@@ -20,6 +21,7 @@ export function WorkspaceShell({
   workspaceName: string;
   workspaceSubtitle?: string | undefined;
   badge?: ReactNode;
+  headerAction?: ReactNode;
   notice?: ReactNode;
   sidebarFooter?: ReactNode;
   children: ReactNode;
@@ -46,7 +48,10 @@ export function WorkspaceShell({
                 )}
               </div>
             </div>
-            {badge}
+            <div className="flex shrink-0 items-center gap-2">
+              {headerAction}
+              {badge}
+            </div>
           </div>
         </header>
 

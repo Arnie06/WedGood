@@ -60,7 +60,8 @@ async function main() {
       password: DEMO_PASSWORD,
       email_confirm: true,
     });
-    if (error) throw error;
+    // The listing above is one page; with many test users the demo users can fall outside it.
+    if (error && !/already been registered/i.test(error.message)) throw error;
   }
 
   const owner = createClient(stack.apiUrl, stack.publishableKey, opts);
@@ -120,6 +121,216 @@ async function main() {
       p_done: true,
     });
     if (r.error) throw r.error;
+  }
+
+  // ---- Richer fictional data so populated screens can be reviewed (UX-06).
+  // Everything here is labelled fictional, uses idempotency keys, and never resets anything.
+  const check = (label: string, r: { error: { message: string } | null }) => {
+    if (r.error) throw new Error(`${label}: ${r.error.message}`);
+  };
+
+  // Guests: 12 fictional households, grouped and tagged.
+  const FAMILIES: ReadonlyArray<readonly [string, readonly string[], string]> = [
+    ["Sample", ["Avery", "Jordan", "Riley (child)"], "Family"],
+    ["Placeholder", ["Casey", "Morgan"], "Family"],
+    ["Demo", ["Taylor", "Quinn", "Sam (child)", "Lee (child)"], "Family"],
+    ["Fiction", ["Robin", "Drew"], "Friends"],
+    ["Testwell", ["Alexis", "Jamie"], "Friends"],
+    ["Mockford", ["Cameron"], "Work"],
+    ["Samplestone", ["Reese", "Parker", "Blake"], "Friends"],
+    ["Exampleton", ["Skyler", "Hayden"], "Family"],
+    ["Notreal", ["Dakota", "Emery", "Finley (child)"], "Family"],
+    ["Fakerton", ["Rowan", "Sage"], "Work"],
+    ["Imaginary", ["Kai", "Remy"], "Friends"],
+    ["Pretend", ["Logan", "Ari", "Noor", "Eden"], "Friends"],
+  ];
+  const guestRows = FAMILIES.flatMap(([surname, members, tag]) =>
+    members.map((m) => {
+      const child = m.includes("(child)");
+      const first = m.replace(" (child)", "");
+      return {
+        name: `${first} ${surname}`,
+        household: `The ${surname} household (fictional)`,
+        age_group: child ? "child" : "adult",
+        tags: [tag],
+      };
+    }),
+  );
+  check(
+    "guests",
+    await owner.rpc("commit_guest_import", {
+      p_wedding: weddingId,
+      p_rows: guestRows,
+      p_idempotency_key: "seed-local-guests-v1",
+    }),
+  );
+
+  // Events with meal choices, and a seating layout with tables for the reception.
+  const eventIds: Record<string, string> = {};
+  for (const [name, kind] of [
+    ["Ceremony", "ceremony"],
+    ["Reception", "reception"],
+  ] as const) {
+    const r = await owner.rpc("create_event", {
+      p_wedding: weddingId,
+      p_event: { name, kind, localDate: seedDate() },
+      p_idempotency_key: `seed-local-event-${kind}`,
+    });
+    check(`event ${name}`, r);
+    eventIds[kind] = String(r.data);
+  }
+  const reception = eventIds.reception!;
+  const { data: meals } = await owner.from("meal_options").select("name").eq("event_id", reception);
+  const haveMeals = new Set((meals ?? []).map((m) => m.name));
+  for (const meal of ["Chicken", "Salmon", "Vegetarian plate"]) {
+    if (haveMeals.has(meal)) continue;
+    check(
+      `meal ${meal}`,
+      await owner.rpc("add_meal_option", {
+        p_wedding: weddingId,
+        p_event_id: reception,
+        p_name: meal,
+      }),
+    );
+  }
+  const layout = await owner.rpc("ensure_seating_layout", {
+    p_wedding: weddingId,
+    p_event_id: reception,
+  });
+  check("layout", layout);
+  const { data: tables } = await owner
+    .from("seating_tables")
+    .select("label")
+    .eq("layout_id", String(layout.data));
+  const haveTables = new Set((tables ?? []).map((t) => t.label));
+  for (const label of ["Table 1", "Table 2", "Table 3"]) {
+    if (haveTables.has(label)) continue;
+    check(
+      `table ${label}`,
+      await owner.rpc("add_seating_table", {
+        p_wedding: weddingId,
+        p_layout: String(layout.data),
+        p_label: label,
+        p_capacity: 8,
+      }),
+    );
+  }
+
+  // Venues and vendors, one with an unknown price on purpose (unknown is never zero).
+  const candidates = [
+    {
+      key: "garden",
+      kind: "venue",
+      category: "venue",
+      name: "Example Garden Estate (fictional)",
+      location: "Example City (fictional)",
+      seated: 150,
+      ceremony: 160,
+      price: 1_200_000,
+      basis: "total",
+    },
+    {
+      key: "barn",
+      kind: "venue",
+      category: "venue",
+      name: "Sample Barn (fictional)",
+      location: "Example County (fictional)",
+      seated: 120,
+      ceremony: 120,
+    },
+    {
+      key: "photo",
+      kind: "vendor",
+      category: "photographer",
+      name: "Placeholder Photography (fictional)",
+      location: "Example City (fictional)",
+      price: 350_000,
+      basis: "total",
+    },
+  ] as const;
+  for (const c of candidates) {
+    check(
+      `candidate ${c.key}`,
+      await owner.rpc("create_candidate", {
+        p_wedding: weddingId,
+        p_kind: c.kind,
+        p_category: c.category,
+        p_name: c.name,
+        p_location: c.location,
+        p_notes: "Fictional demo entry.",
+        p_idempotency_key: `seed-local-candidate-${c.key}`,
+        ...("seated" in c && { p_seated_capacity: c.seated, p_ceremony_capacity: c.ceremony }),
+        ...("price" in c && { p_price_minor: c.price, p_price_basis: c.basis }),
+      }),
+    );
+  }
+
+  // Budget: suggested categories plus a few costs, one without an amount yet.
+  // Same names as SUGGESTED_CATEGORIES in src/domain/budget/input.ts (that module uses the "@/"
+  // alias, which plain Node cannot resolve, so the seed keeps its own copy).
+  const SUGGESTED_CATEGORIES = [
+    "Venue",
+    "Catering and bar",
+    "Photography and video",
+    "Attire and beauty",
+    "Flowers and decor",
+    "Music and entertainment",
+    "Stationery",
+    "Transport and lodging",
+    "Rings and gifts",
+    "Other",
+  ];
+  check(
+    "categories",
+    await owner.rpc("add_suggested_budget_categories", {
+      p_wedding: weddingId,
+      p_names: SUGGESTED_CATEGORIES,
+    }),
+  );
+  const { data: cats } = await owner
+    .from("budget_categories")
+    .select("id, name")
+    .eq("wedding_id", weddingId);
+  const cat = (name: string) => cats?.find((c) => c.name === name)?.id;
+  const items = [
+    ["Venue", "venue-rental", "Venue rental (fictional)", "fixed", 1_200_000, null, null],
+    ["Catering and bar", "dinner", "Dinner service (fictional)", "per_guest", 9_500, null, 100],
+    [
+      "Photography and video",
+      "photographer",
+      "Photographer (fictional)",
+      "fixed",
+      350_000,
+      null,
+      null,
+    ],
+    [
+      "Flowers and decor",
+      "ceremony-flowers",
+      "Ceremony flowers (fictional)",
+      "fixed",
+      180_000,
+      null,
+      null,
+    ],
+    ["Music and entertainment", "dj", "DJ (price not known yet)", "fixed", null, null, null],
+  ] as const;
+  for (const [category, key, name, mode, amount, qty, minQty] of items) {
+    const categoryId = cat(category);
+    if (!categoryId) continue;
+    check(
+      `item ${key}`,
+      await owner.rpc("create_budget_item", {
+        p_wedding: weddingId,
+        p_category: categoryId,
+        p_name: name,
+        p_cost_mode: mode,
+        p_idempotency_key: `seed-local-item-${key}`,
+        ...(amount !== null && { p_amount_minor: amount }),
+        ...(qty !== null && { p_quantity: qty }),
+        ...(minQty !== null && { p_min_qty: minQty }),
+      }),
+    );
   }
 
   console.log(`Seeded local demo data. Workspace: /app/${String(weddingId)}`);
