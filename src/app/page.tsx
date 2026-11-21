@@ -68,11 +68,14 @@ export default function LandingPage() {
       <header className="glass sticky top-0 z-20 border-b border-border-hairline">
         <div className="mx-auto flex min-h-16 max-w-6xl items-center justify-between gap-3 px-margin-mobile md:px-8">
           <Hallmark />
-          <div className="hidden sm:block">
-            <ButtonLink href="/preview" variant="outline" size="sm">
-              View the preview
+          <nav aria-label="Account" className="flex items-center gap-2">
+            <ButtonLink href="/sign-in" variant="quiet" size="sm">
+              Sign in
             </ButtonLink>
-          </div>
+            <ButtonLink href="/sign-up" size="sm">
+              Create account
+            </ButtonLink>
+          </nav>
         </div>
       </header>
 
@@ -90,17 +93,15 @@ export default function LandingPage() {
               the last table you seat.
             </p>
             <div className="flex flex-col gap-3 pt-2 min-[26rem]:flex-row min-[26rem]:items-center">
-              <ButtonLink href="/preview">
-                Explore the preview
+              <ButtonLink href="/sign-up">
+                Start planning
                 <ArrowRight aria-hidden="true" className="size-4" />
               </ButtonLink>
-              <ButtonLink href="#what-it-does" variant="quiet">
-                See what it brings together
+              <ButtonLink href="/preview" variant="quiet">
+                Explore the preview
               </ButtonLink>
             </div>
-            <p className="text-body-sm text-ink-muted">
-              Accounts aren&apos;t open yet. The preview uses fictional sample data.
-            </p>
+            <p className="text-body-sm text-ink-muted">The preview uses fictional sample data.</p>
           </div>
           <ArchIllustration className="mx-auto w-full max-w-64 lg:max-w-none" />
         </section>
@@ -151,8 +152,8 @@ export default function LandingPage() {
               </li>
             ))}
           </ul>
-          <ButtonLink href="/preview" variant="secondary">
-            Explore the preview
+          <ButtonLink href="/sign-up" variant="secondary">
+            Start planning
           </ButtonLink>
         </section>
       </main>
@@ -160,7 +161,7 @@ export default function LandingPage() {
       <footer className="border-t border-border-hairline">
         <div className="mx-auto max-w-6xl space-y-1 px-margin-mobile py-8 text-body-sm text-ink-muted md:px-8">
           <p>Wedding Workspace is a working name for a product in development.</p>
-          <p>No accounts, payments or messages are active yet.</p>
+          <p>Nothing is sent to anyone, and no payments are made, unless you choose to.</p>
         </div>
       </footer>
     </>

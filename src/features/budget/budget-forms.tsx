@@ -84,7 +84,7 @@ export function CategoryForm({
         required
         maxLength={80}
         autoComplete="off"
-        placeholder="Flowers"
+        placeholder="e.g. Flowers"
         defaultValue={v("name")}
         error={errors.name}
       />
@@ -94,7 +94,7 @@ export function CategoryForm({
         name="allocation"
         inputMode="decimal"
         autoComplete="off"
-        placeholder="4000"
+        placeholder="e.g. 4000"
         defaultValue={v("allocation")}
         error={errors.allocation}
       />
@@ -194,7 +194,7 @@ export function ItemForm({
         required
         maxLength={160}
         autoComplete="off"
-        placeholder="Dinner and drinks"
+        placeholder="e.g. Dinner and drinks"
         defaultValue={v("name")}
         error={errors.name}
       />
@@ -237,7 +237,7 @@ export function ItemForm({
         name="amount"
         inputMode="decimal"
         autoComplete="off"
-        placeholder={mode === "per_guest" ? "95" : "2500"}
+        placeholder={mode === "per_guest" ? "e.g. 95" : "e.g. 2500"}
         defaultValue={v("amount")}
         error={errors.amount}
       />
@@ -348,7 +348,7 @@ export function ReserveForm({
         name="reserve"
         inputMode="decimal"
         autoComplete="off"
-        placeholder="10"
+        placeholder="e.g. 10"
         defaultValue={echoed ?? percent}
         error={state.status === "error" ? state.fieldErrors.reserve : undefined}
       />

@@ -75,7 +75,10 @@ test.describe("mobile bottom navigation", () => {
 
 test("landing primary action uses charcoal text on blush", async ({ page }) => {
   await page.goto("/");
-  const cta = page.getByRole("main").getByRole("link", { name: "Explore the preview" }).first();
+  const cta = page
+    .getByRole("main")
+    .getByRole("link", { name: /^Start planning/ })
+    .first();
   const colors = await cta.evaluate((el) => {
     const style = getComputedStyle(el);
     return { color: style.color, background: style.backgroundColor };

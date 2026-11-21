@@ -128,7 +128,7 @@ export function NewBoardForm({ workspaceId }: { workspaceId: string }) {
         required
         maxLength={120}
         autoComplete="off"
-        placeholder="Florals and table styling"
+        placeholder="e.g. Florals and table styling"
         defaultValue={echoed?.title ?? ""}
         error={errors.title}
       />

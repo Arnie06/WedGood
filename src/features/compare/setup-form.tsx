@@ -34,7 +34,7 @@ export function SetupForm({
         name="title"
         required
         maxLength={160}
-        placeholder="Ceremony venues"
+        placeholder="e.g. Ceremony venues"
         defaultValue={(err?.values.title as string | undefined) ?? ""}
         error={err?.fieldErrors.title}
       />

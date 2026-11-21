@@ -40,7 +40,7 @@ export function TextAreaField({
         aria-invalid={error ? true : undefined}
         aria-describedby={describedBy}
         className={cn(
-          "block min-h-24 w-full rounded-control border bg-surface-sunken px-4 py-3 text-body-md text-ink placeholder:text-ink-muted",
+          "block min-h-24 w-full rounded-control border bg-surface-sunken px-4 py-3 text-body-md text-ink placeholder:text-ink-muted placeholder:italic",
           "focus-visible:border-focus",
           error ? "border-danger" : "border-border-control",
         )}

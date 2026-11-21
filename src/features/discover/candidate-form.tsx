@@ -51,7 +51,7 @@ export function CandidateForm({
         required
         maxLength={160}
         autoComplete="off"
-        placeholder={kind === "venue" ? "Garden House" : "Lantern Photography"}
+        placeholder={kind === "venue" ? "e.g. Garden House" : "e.g. Lantern Photography"}
         defaultValue={v("name")}
         error={errors.name}
       />
@@ -114,7 +114,7 @@ export function CandidateForm({
             name="price"
             inputMode="decimal"
             autoComplete="off"
-            placeholder="8500"
+            placeholder="e.g. 8500"
             defaultValue={v("price")}
             error={errors.price}
           />

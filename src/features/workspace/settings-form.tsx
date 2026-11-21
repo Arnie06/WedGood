@@ -71,7 +71,7 @@ export function SettingsForm({
           required
           maxLength={160}
           autoComplete="off"
-          placeholder="Alex & Morgan"
+          placeholder="e.g. Alex & Morgan"
           defaultValue={v("name")}
           error={errors.name}
         />

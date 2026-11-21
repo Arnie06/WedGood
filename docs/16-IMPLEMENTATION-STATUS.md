@@ -55,6 +55,17 @@ This ledger is for Claude Code, Codex and human maintainers. Keep it factual; do
 
 ## Session log
 
+### 2026-11-20 · Claude Code · UX-01 (UX pass, from the hands-on analysis) · branch `main`
+
+- **Scope:** Fix broken or misleading surfaces found by using the app. Plan for UX-01 to UX-07: More hub, landing/auth copy, placeholders, then single-workspace redirect and Home cockpit, feedback/validation, faster entry flows (incl. link prefill), empty states, richer demo data, polish.
+- **Changes:** new `/app/[w]/more` hub (capability-filtered links; the bottom-nav "More" previously 404'd); landing page now offers Start planning / Create account / Sign in and drops "Accounts aren't open yet"; example placeholders prefixed "e.g." and italic so they don't read as entered values.
+- **Tests:** new `tests/e2e/navigation.spec.ts` (every bottom-nav item and every More link; axe and no overflow at 320/1280 on More; landing links); landing CTA assertion in `keyboard.spec.ts` updated.
+- **Commands, exit 0:** `format:check`, `lint`, `typecheck`, `test:unit` 507; e2e (chromium) navigation + keyboard 9/9 plus checklist, budget, discover, quotes, ledger 30/30. Full e2e and integration suites not re-run.
+- **Environment note:** a leftover `next start` (PID 94720) holds port 3200 and serves an old build, so Playwright's `reuseExistingServer` would use it. I ran e2e from a temporary config on port 3201 (deleted afterwards). Stop that process before running `pnpm test:e2e` normally.
+- **Decisions recorded:** Home next-best-action is stage-aware (setup steps early, overdue/due-soon later, max three, snoozable); link prefill by fetching is approved in principle and needs an ADR plus SSRF-safe adapter before UX-04 (supersedes "we never open the link" copy).
+- **Not verified:** other viewports (390/768/1440) for More, WebKit/Firefox, screen reader.
+- **Next:** UX-02 (single-workspace redirect, Home cockpit, header).
+
 ### 2026-11-20 · Claude Code · R1 release-gate check · branch `main` (uncommitted)
 
 - **Fresh database:** `db:fresh` (reset + reseed) applied all 22 migrations from scratch with no errors; regenerated types are identical to the committed ones; `test:integration` 420/420 on the fresh DB. Demo login reseeded (workspace id changes after every reset).

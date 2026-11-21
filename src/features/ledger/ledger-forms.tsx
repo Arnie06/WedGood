@@ -84,7 +84,7 @@ export function BookingForm({
         name={`instAmount${n}`}
         inputMode="decimal"
         autoComplete="off"
-        placeholder={n === 0 ? "2500" : undefined}
+        placeholder={n === 0 ? "e.g. 2500" : undefined}
         defaultValue={v(`instAmount${n}`)}
         error={errors[`instAmount${n}`]}
       />
@@ -93,7 +93,7 @@ export function BookingForm({
         name={`instLabel${n}`}
         autoComplete="off"
         maxLength={80}
-        placeholder={n === 0 ? "Deposit" : undefined}
+        placeholder={n === 0 ? "e.g. Deposit" : undefined}
         defaultValue={v(`instLabel${n}`)}
         error={errors[`instLabel${n}`]}
       />
@@ -112,7 +112,7 @@ export function BookingForm({
           required
           maxLength={160}
           autoComplete="off"
-          placeholder="Venue contract"
+          placeholder="e.g. Venue contract"
           defaultValue={v("title")}
           error={errors.title}
         />
@@ -123,7 +123,7 @@ export function BookingForm({
           required
           inputMode="decimal"
           autoComplete="off"
-          placeholder="12000"
+          placeholder="e.g. 12000"
           defaultValue={v("amount")}
           error={errors.amount}
         />
@@ -291,7 +291,7 @@ export function PaymentForm({
         required
         inputMode="decimal"
         autoComplete="off"
-        placeholder="2500"
+        placeholder="e.g. 2500"
         defaultValue={v("amount")}
         error={errors.amount}
       />

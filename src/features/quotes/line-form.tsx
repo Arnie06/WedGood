@@ -84,7 +84,7 @@ export function LineForm({
         required
         maxLength={200}
         autoComplete="off"
-        placeholder="Dinner service"
+        placeholder="e.g. Dinner service"
         defaultValue={v("description")}
         error={errors.description}
       />
@@ -115,7 +115,7 @@ export function LineForm({
           name="amount"
           inputMode="decimal"
           autoComplete="off"
-          placeholder={mode === "per_guest" ? "95" : "2500"}
+          placeholder={mode === "per_guest" ? "e.g. 95" : "e.g. 2500"}
           defaultValue={v("amount")}
           error={errors.amount}
         />
@@ -160,7 +160,7 @@ export function LineForm({
           name="ratePercent"
           inputMode="decimal"
           autoComplete="off"
-          placeholder="22"
+          placeholder="e.g. 22"
           defaultValue={v("ratePercent")}
           error={errors.ratePercent}
         />

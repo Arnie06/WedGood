@@ -101,7 +101,7 @@ export function AgendaItemForm({
         required
         maxLength={160}
         autoComplete="off"
-        placeholder="Ceremony begins"
+        placeholder="e.g. Ceremony begins"
         defaultValue={v("title")}
         error={errors.title}
       />

@@ -41,7 +41,7 @@ export function ProposalForm({
         required
         maxLength={160}
         autoComplete="off"
-        placeholder="Saturday package, 120 guests"
+        placeholder="e.g. Saturday package, 120 guests"
         defaultValue={v("title")}
         error={errors.title}
       />

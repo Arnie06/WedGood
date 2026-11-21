@@ -63,7 +63,7 @@ export function TaskForm({
         required
         maxLength={160}
         autoComplete="off"
-        placeholder="Call the florist"
+        placeholder="e.g. Call the florist"
         defaultValue={v("title")}
         error={errors.title}
       />
