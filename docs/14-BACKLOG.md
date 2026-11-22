@@ -20,6 +20,11 @@ Order matters. Each ticket is a bounded vertical slice including migrations wher
 | R1-09 | Guests/households/import (R1-01) | CSV mapping/preview, row error/dedupe, commit idempotent, guest privacy, mobile filter; CSV injection protections |
 | R1-10 | Events/invitations/RSVP (R1-09) | Accountless capability flow, quota and event scope, replay and expired/revoked denial, meal options, live counts |
 | R1-11 | Seating assignment + meal reports (R1-10) | Basic tables and accessible assignment, accepted/tentative, transactional capacity, concurrent T10, stale finalization |
+| SEAT-1 | Seating details (R1-11) | Captains, table shape and notes, per-table RSVP/plus-one/dietary summary, guest and table trays, seat a household together; private notes never in exports |
+| SEAT-2 | Floor-plan canvas (SEAT-1) | Positioned tables and venue elements, drag with touch/keyboard alternative, zoom, list-view fallback, schematic only |
+| SEAT-3 | Numbered seats (SEAT-2) | Seat chips, atomic swap, seat numbers in tray and snapshot |
+| SEAT-4 | Escort cards and table-list PDF (SEAT-1) | Names, tables, meals only; A4 and Letter; no private notes |
+| SEAT-5 | Suggested seating (SEAT-1) | Deterministic proposal, households together, capacity, infeasible reported; apply refused if plan changed |
 | R1-12 | Wedding agenda/day-of (R1-02,04,10) | Event timezone, ordered timeline, responsible party/vendor, no blanket overlap ban; coordinator view |
 | R1-13 | Design board (R1-08) | Uploaded authorized assets or links, palette, editable board; no unsafe URL fetch; mobile gallery |
 | R1-14 | Guest website (R1-10,13) | Template, draft/public preview, explicit publish/unpublish, sanitized projection, event-specific invite route, registry links |

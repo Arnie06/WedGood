@@ -16,12 +16,34 @@ export type PlanMember = {
   status: "pending" | "accepted" | "declined";
   mealOptionId: string | null;
 };
-export type PlanTable = { id: string; label: string; capacity: number };
+export type TableShape = "round" | "rectangle";
+export type PlanTable = {
+  id: string;
+  label: string;
+  capacity: number;
+  shape?: TableShape;
+  notes?: string | null;
+};
 export type PlanAssignment = {
   guestId: string;
   tableId: string;
   tentative: boolean;
   seatNumber: number | null;
+  isCaptain?: boolean;
+};
+/** What the couple wants to see about a guest while seating. Dietary and access text is private. */
+export type GuestInfo = {
+  guestId: string;
+  householdName: string | null;
+  invitationId: string | null;
+  invitationLabel: string | null;
+  isPlusOne: boolean;
+  /** For a plus-one: the names of the invited guests on the same invitation. */
+  hostNames: string[];
+  tags: string[];
+  ageGroup: "adult" | "child" | null;
+  dietary: string | null;
+  accessibility: string | null;
 };
 export type PlanMeal = { id: string; name: string };
 
@@ -32,16 +54,45 @@ export type MealLine = {
   tentative: number;
 };
 
+export type TableSeat = {
+  guest: PlanGuest;
+  /** True while the guest hasn't answered (only possible when tentative seating is on). */
+  tentative: boolean;
+  seatNumber: number | null;
+  captain: boolean;
+  info: GuestInfo | null;
+};
+
+export type TableStats = {
+  /** Guests at the table who have said yes. */
+  accepted: number;
+  /** Guests at the table still waiting to answer. */
+  waiting: number;
+  plusOnes: number;
+  children: number;
+  dietary: number;
+  accessibility: number;
+};
+
 export type TablePlan = {
   id: string;
   label: string;
   capacity: number;
+  shape: TableShape;
+  notes: string | null;
+  captainId: string | null;
   confirmed: PlanGuest[];
   tentative: PlanGuest[];
+  /** Everyone at the table with their details, in seat-number then name order. */
+  seats: TableSeat[];
+  stats: TableStats;
   used: number;
   open: number;
   meals: MealLine[];
 };
+
+/** Unseated guests who belong together (same invitation, so a household or a guest and plus-one). */
+export type QueueGroup = { key: string; label: string; guests: PlanGuest[] };
 
 export type SeatingPlan = {
   tables: TablePlan[];
@@ -49,6 +100,8 @@ export type SeatingPlan = {
   queue: PlanGuest[];
   /** Waiting guests with no seat; only meaningful when tentative seating is on. */
   waitingQueue: PlanGuest[];
+  /** Unseated guests who can be seated now, grouped by invitation; only groups of two or more. */
+  queueGroups: QueueGroup[];
   totals: {
     accepted: number;
     confirmedSeated: number;
@@ -57,6 +110,9 @@ export type SeatingPlan = {
     capacity: number;
     openSeats: number;
     acceptedWithoutMeal: number;
+    /** Attending guests with a dietary note / an access note. */
+    dietary: number;
+    accessibility: number;
   };
   /** Accepted guests (seated or not) by meal choice, in meal-list order. */
   meals: MealLine[];
@@ -74,8 +130,10 @@ export function buildSeatingPlan(input: {
   assignments: readonly PlanAssignment[];
   meals: readonly PlanMeal[];
   allowTentative: boolean;
+  info?: readonly GuestInfo[];
 }): SeatingPlan {
   const issues: string[] = [];
+  const infoByGuest = new Map((input.info ?? []).map((i) => [i.guestId, i]));
   const guestById = new Map(input.guests.map((g) => [g.id, g]));
   const memberByGuest = new Map<string, PlanMember>();
   for (const m of input.members) {
@@ -116,11 +174,16 @@ export function buildSeatingPlan(input: {
 
   const eventMeals = emptyLines();
   let acceptedWithoutMeal = 0;
+  let dietaryTotal = 0;
+  let accessibilityTotal = 0;
   const accepted: PlanGuest[] = [];
   for (const m of input.members) {
     const guest = guestById.get(m.guestId);
     if (!guest || m.status !== "accepted") continue;
     accepted.push(guest);
+    const detail = infoByGuest.get(m.guestId);
+    if (detail?.dietary) dietaryTotal += 1;
+    if (detail?.accessibility) accessibilityTotal += 1;
     const key = mealOf(m.guestId);
     if (key === null) acceptedWithoutMeal += 1;
     // Event-level meal totals count every accepted guest once, seated or not.
@@ -132,6 +195,16 @@ export function buildSeatingPlan(input: {
     const lines = emptyLines();
     const confirmed: PlanGuest[] = [];
     const tentative: PlanGuest[] = [];
+    const seats: TableSeat[] = [];
+    const stats: TableStats = {
+      accepted: 0,
+      waiting: 0,
+      plusOnes: 0,
+      children: 0,
+      dietary: 0,
+      accessibility: 0,
+    };
+    let captainId: string | null = null;
     for (const a of rows) {
       const guest = guestById.get(a.guestId);
       const status = memberByGuest.get(a.guestId)?.status;
@@ -140,24 +213,48 @@ export function buildSeatingPlan(input: {
         continue;
       }
       const line = lines.get(mealOf(a.guestId))!;
+      const detail = infoByGuest.get(a.guestId) ?? null;
       if (a.tentative) {
         tentative.push(guest);
         line.tentative += 1;
+        stats.waiting += 1;
       } else {
         confirmed.push(guest);
         line.confirmed += 1;
+        stats.accepted += 1;
       }
+      if (detail?.isPlusOne) stats.plusOnes += 1;
+      if (detail?.ageGroup === "child") stats.children += 1;
+      if (detail?.dietary) stats.dietary += 1;
+      if (detail?.accessibility) stats.accessibility += 1;
+      if (a.isCaptain) {
+        if (captainId !== null) issues.push(`${t.label} has more than one captain.`);
+        else captainId = guest.id;
+      }
+      seats.push({
+        guest,
+        tentative: a.tentative,
+        seatNumber: a.seatNumber,
+        captain: a.isCaptain === true,
+        info: detail,
+      });
     }
     confirmed.sort(byName);
     tentative.sort(byName);
+    seats.sort((a, b) => (a.seatNumber ?? 999) - (b.seatNumber ?? 999) || byName(a.guest, b.guest));
     const used = confirmed.length + tentative.length;
     if (used > t.capacity) issues.push(`${t.label} has more guests than seats.`);
     return {
       id: t.id,
       label: t.label,
       capacity: t.capacity,
+      shape: t.shape ?? "round",
+      notes: t.notes ?? null,
+      captainId,
       confirmed,
       tentative,
+      seats,
+      stats,
       used,
       open: Math.max(0, t.capacity - used),
       meals: finishLines(lines),
@@ -173,6 +270,24 @@ export function buildSeatingPlan(input: {
         .sort(byName)
     : [];
 
+  const seatable = [...queue, ...waitingQueue];
+  const groupMap = new Map<string, QueueGroup>();
+  for (const g of seatable) {
+    const detail = infoByGuest.get(g.id);
+    if (!detail?.invitationId) continue;
+    const group = groupMap.get(detail.invitationId) ?? {
+      key: detail.invitationId,
+      label: detail.invitationLabel ?? "Group",
+      guests: [],
+    };
+    group.guests.push(g);
+    groupMap.set(detail.invitationId, group);
+  }
+  const queueGroups = [...groupMap.values()]
+    .filter((group) => group.guests.length >= 2)
+    .map((group) => ({ ...group, guests: group.guests.sort(byName) }))
+    .sort((a, b) => a.label.localeCompare(b.label, "en") || a.key.localeCompare(b.key));
+
   const confirmedSeated = tables.reduce((n, t) => n + t.confirmed.length, 0);
   const tentativeSeated = tables.reduce((n, t) => n + t.tentative.length, 0);
   const capacity = tables.reduce((n, t) => n + t.capacity, 0);
@@ -181,6 +296,7 @@ export function buildSeatingPlan(input: {
     tables,
     queue,
     waitingQueue,
+    queueGroups,
     totals: {
       accepted: accepted.length,
       confirmedSeated,
@@ -189,6 +305,8 @@ export function buildSeatingPlan(input: {
       capacity,
       openSeats: tables.reduce((n, t) => n + t.open, 0),
       acceptedWithoutMeal,
+      dietary: dietaryTotal,
+      accessibility: accessibilityTotal,
     },
     meals: finishLines(eventMeals).map((l) => ({ ...l, tentative: 0 })),
     issues,

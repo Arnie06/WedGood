@@ -7,6 +7,7 @@
  * public, local-only values and must never be used anywhere else.
  */
 import { execFileSync } from "node:child_process";
+import { createHash, randomBytes } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { CHECKLIST_TEMPLATE } from "../src/domain/tasks/templates.ts";
 
@@ -214,6 +215,293 @@ async function main() {
         p_capacity: 8,
       }),
     );
+  }
+
+  // Seating demo (SEAT-1): invitations, answers, a plus-one, private notes, seats and captains.
+  // Runs once (when the reception has no invitations yet); every name is fictional.
+  const layoutId = String(layout.data);
+  if (!haveTables.has("Head table")) {
+    check(
+      "table head",
+      await owner.rpc("add_seating_table", {
+        p_wedding: weddingId,
+        p_layout: layoutId,
+        p_label: "Head table",
+        p_capacity: 10,
+        p_shape: "rectangle",
+      }),
+    );
+  }
+  // Floor plan (SEAT-2): a few room items and placed tables for the demo. Runs once, when the
+  // layout has no room items; tables are then moved off the automatic layout.
+  const { data: roomItems } = await owner
+    .from("seating_elements")
+    .select("id")
+    .eq("layout_id", layoutId)
+    .limit(1);
+  if (!roomItems || roomItems.length === 0) {
+    for (const item of [
+      { kind: "stage", label: "Stage", x: 48, y: 2, w: 24, h: 10 },
+      { kind: "dance_floor", label: "Dance floor", x: 49, y: 30, w: 22, h: 22 },
+      { kind: "bar", label: "Bar", x: 100, y: 66, w: 16, h: 6 },
+    ]) {
+      check(
+        `element ${item.label}`,
+        await owner.rpc("add_seating_element", {
+          p_wedding: weddingId,
+          p_layout: layoutId,
+          p_kind: item.kind,
+          p_label: item.label,
+          p_x: item.x,
+          p_y: item.y,
+          p_w: item.w,
+          p_h: item.h,
+        }),
+      );
+    }
+    const { data: placedTables } = await owner
+      .from("seating_tables")
+      .select("id, label")
+      .eq("layout_id", layoutId);
+    const spots: Record<string, [number, number]> = {
+      "Head table": [60, 20],
+      "Table 1": [20, 24],
+      "Table 2": [20, 52],
+      "Table 3": [96, 30],
+    };
+    for (const t of placedTables ?? []) {
+      const spot = spots[t.label];
+      if (!spot) continue;
+      check(
+        `place ${t.label}`,
+        await owner.rpc("move_seating_table", {
+          p_wedding: weddingId,
+          p_table: t.id,
+          p_x: spot[0],
+          p_y: spot[1],
+        }),
+      );
+    }
+  }
+  const { data: existingInvites } = await owner
+    .from("invitations")
+    .select("id")
+    .eq("event_id", reception)
+    .limit(1);
+  if (!existingInvites || existingInvites.length === 0) {
+    const { data: allGuests, error: guestsError } = await owner
+      .from("guests")
+      .select("id, full_name, household_id, version, age_group, tags")
+      .eq("wedding_id", weddingId)
+      .is("archived_at", null)
+      .order("full_name");
+    if (guestsError) throw guestsError;
+    const byHousehold = new Map<string, string[]>();
+    for (const g of allGuests ?? []) {
+      const key = g.household_id ?? g.id;
+      byHousehold.set(key, [...(byHousehold.get(key) ?? []), g.id]);
+    }
+    const sha = (raw: string) => createHash("sha256").update(raw).digest("hex");
+    const expires = new Date(Date.now() + 90 * 86_400_000).toISOString();
+    const plusOneHousehold = (allGuests ?? []).find((g) =>
+      g.full_name.endsWith("Mockford"),
+    )?.household_id;
+    const groups = [...byHousehold.entries()].map(([householdId, guestIds]) => ({
+      householdId,
+      guestIds,
+    }));
+    const plain = groups.filter((g) => g.householdId !== plusOneHousehold);
+    const withPlusOne = groups.filter((g) => g.householdId === plusOneHousehold);
+    check(
+      "invitations",
+      await owner.rpc("create_invitations", {
+        p_wedding: weddingId,
+        p_event_id: reception,
+        p_groups: plain,
+        p_plus_one_quota: 0,
+        p_expires_at: expires,
+        p_token_hashes: plain.map(() => sha(randomBytes(32).toString("base64url"))),
+        p_idempotency_key: "seed-local-reception-invitations-v1",
+      }),
+    );
+    const plusToken = randomBytes(32).toString("base64url");
+    if (withPlusOne.length > 0) {
+      check(
+        "plus-one invitation",
+        await owner.rpc("create_invitations", {
+          p_wedding: weddingId,
+          p_event_id: reception,
+          p_groups: withPlusOne,
+          p_plus_one_quota: 1,
+          p_expires_at: expires,
+          p_token_hashes: [sha(plusToken)],
+          p_idempotency_key: "seed-local-reception-invitations-plus-v1",
+        }),
+      );
+    }
+
+    // Answers: most accept (with a meal), some wait, a few decline.
+    const { data: meals2 } = await owner
+      .from("meal_options")
+      .select("id")
+      .eq("event_id", reception)
+      .order("created_at");
+    const { data: members } = await owner
+      .from("invitation_members")
+      .select("id, guest_id")
+      .eq("event_id", reception)
+      .eq("active", true);
+    const memberOf = new Map((members ?? []).map((m) => [m.guest_id, m.id]));
+    const status = new Map<string, "accepted" | "pending" | "declined">();
+    for (const [i, g] of (allGuests ?? []).entries()) {
+      const memberId = memberOf.get(g.id);
+      if (!memberId) continue;
+      const answer = i % 7 === 3 ? "declined" : i % 5 === 4 ? "pending" : "accepted";
+      status.set(g.id, answer);
+      if (answer === "pending") continue;
+      const meal = meals2?.[i % Math.max(meals2.length, 1)]?.id;
+      check(
+        `answer ${i}`,
+        await owner.rpc("override_rsvp_response", {
+          p_wedding: weddingId,
+          p_member_id: memberId,
+          p_status: answer,
+          p_reason: "Seeded demo answer (fictional)",
+          ...(answer === "accepted" && meal && { p_meal_option_id: meal }),
+        }),
+      );
+    }
+
+    // A plus-one, added the way a guest would: through their own invitation link.
+    if (withPlusOne.length > 0) {
+      const view = await admin.rpc("rsvp_view", { p_token_hash: sha(plusToken), p_client: "seed" });
+      const version = (view.data as { version?: number } | null)?.version;
+      const cameron = (allGuests ?? []).find((g) => g.full_name.endsWith("Mockford"));
+      const cameronMember = cameron ? memberOf.get(cameron.id) : undefined;
+      if (typeof version === "number" && cameronMember && meals2?.[0]) {
+        check(
+          "plus-one",
+          await admin.rpc("rsvp_submit", {
+            p_token_hash: sha(plusToken),
+            p_client: "seed",
+            p_expected_version: version,
+            p_responses: [
+              { memberId: cameronMember, status: "accepted", mealOptionId: meals2[0].id },
+            ],
+            p_plus_one: { name: "Pat Plusone (fictional)", mealOptionId: meals2[1]?.id ?? null },
+          }),
+        );
+      }
+    }
+
+    // Private notes on a few guests.
+    const notes: Record<string, { dietary?: string; accessibility?: string }> = {
+      "Avery Sample": { dietary: "Vegetarian" },
+      "Casey Placeholder": { dietary: "Tree nut allergy (fictional)" },
+      "Taylor Demo": { dietary: "Gluten-free" },
+      "Robin Fiction": { dietary: "Vegan" },
+      "Jamie Testwell": { accessibility: "Uses a wheelchair; needs a step-free route" },
+      "Reese Samplestone": { dietary: "Shellfish allergy (fictional)" },
+    };
+    for (const g of allGuests ?? []) {
+      const note = notes[g.full_name];
+      if (!note) continue;
+      check(
+        `notes ${g.full_name}`,
+        await owner.rpc("update_guest", {
+          p_wedding: weddingId,
+          p_guest_id: g.id,
+          p_expected_version: g.version,
+          p_guest: {
+            name: g.full_name,
+            age_group: g.age_group,
+            tags: g.tags,
+            ...note,
+          },
+          ...(g.household_id && { p_household: g.household_id }),
+        }),
+      );
+    }
+
+    // Seat accepted households together, in table order; hold seats for waiting guests too.
+    const { data: layoutRow } = await owner
+      .from("seating_layouts")
+      .select("version")
+      .eq("id", layoutId)
+      .single();
+    if (layoutRow) {
+      check(
+        "tentative on",
+        await owner.rpc("set_seating_tentative", {
+          p_wedding: weddingId,
+          p_layout: layoutId,
+          p_expected_version: layoutRow.version,
+          p_allow: true,
+        }),
+      );
+    }
+    const { data: tableRows } = await owner
+      .from("seating_tables")
+      .select("id, label, capacity")
+      .eq("layout_id", layoutId)
+      .order("label");
+    const open = new Map((tableRows ?? []).map((t) => [t.id, t.capacity]));
+    const tableIds = (tableRows ?? []).map((t) => t.id);
+    const seatedAt = new Map<string, string[]>();
+    const { data: guestsNow } = await owner
+      .from("invitation_members")
+      .select("guest_id, invitation_id, is_plus_one")
+      .eq("event_id", reception)
+      .eq("active", true)
+      .in("rsvp_status", ["accepted", "pending"]);
+    const byInvitation = new Map<string, string[]>();
+    for (const m of guestsNow ?? []) {
+      byInvitation.set(m.invitation_id, [...(byInvitation.get(m.invitation_id) ?? []), m.guest_id]);
+    }
+    let cursor = 0;
+    for (const ids of [...byInvitation.values()].slice(0, 9)) {
+      while (cursor < tableIds.length && (open.get(tableIds[cursor]!) ?? 0) < ids.length)
+        cursor += 1;
+      const tableId = tableIds[cursor];
+      if (!tableId) break;
+      check(
+        "seat household",
+        await owner.rpc("assign_household_seats", {
+          p_wedding: weddingId,
+          p_layout: layoutId,
+          p_table: tableId,
+          p_guests: ids,
+        }),
+      );
+      open.set(tableId, (open.get(tableId) ?? 0) - ids.length);
+      seatedAt.set(tableId, [...(seatedAt.get(tableId) ?? []), ...ids]);
+    }
+    for (const [tableId, ids] of seatedAt) {
+      if (ids[0])
+        check(
+          "captain",
+          await owner.rpc("set_table_captain", {
+            p_wedding: weddingId,
+            p_table: tableId,
+            p_guest: ids[0],
+          }),
+        );
+    }
+  }
+
+  // Numbered seats (SEAT-3): give every seated guest at the demo reception a seat number. Safe to
+  // repeat; a table with nobody unnumbered is left alone.
+  {
+    const { data: seatedTables } = await owner
+      .from("seating_tables")
+      .select("id")
+      .eq("layout_id", layoutId);
+    for (const t of seatedTables ?? []) {
+      check(
+        "number seats",
+        await owner.rpc("number_table_seats", { p_wedding: weddingId, p_table: t.id }),
+      );
+    }
   }
 
   // Venues and vendors, one with an unknown price on purpose (unknown is never zero).

@@ -777,14 +777,14 @@ isOneToOne: false
                   ]
                 },"seat_assignments": {
                   Row: {
-                    "assigned_at": string,"guest_id": string,"id": string,"layout_id": string,"seat_number": number | null,"table_id": string,"tentative": boolean,"wedding_id": string
+                    "assigned_at": string,"guest_id": string,"id": string,"is_captain": boolean,"layout_id": string,"seat_number": number | null,"table_id": string,"tentative": boolean,"wedding_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "assigned_at"?: string,"guest_id": string,"id"?: string,"layout_id": string,"seat_number"?: number | null,"table_id": string,"tentative"?: boolean,"wedding_id": string
+                    "assigned_at"?: string,"guest_id": string,"id"?: string,"is_captain"?: boolean,"layout_id": string,"seat_number"?: number | null,"table_id": string,"tentative"?: boolean,"wedding_id": string
                   }
                   Update: {
-                    "assigned_at"?: string,"guest_id"?: string,"id"?: string,"layout_id"?: string,"seat_number"?: number | null,"table_id"?: string,"tentative"?: boolean,"wedding_id"?: string
+                    "assigned_at"?: string,"guest_id"?: string,"id"?: string,"is_captain"?: boolean,"layout_id"?: string,"seat_number"?: number | null,"table_id"?: string,"tentative"?: boolean,"wedding_id"?: string
                   }
                   Relationships: [
                     {
@@ -799,6 +799,26 @@ isOneToOne: false
 isOneToOne: false
       referencedRelation: "seating_tables"
       referencedColumns: ["wedding_id","layout_id","id"]
+    }
+                  ]
+                },"seating_elements": {
+                  Row: {
+                    "created_at": string,"h": number,"id": string,"kind": string,"label": string,"layout_id": string,"updated_at": string,"version": number,"w": number,"wedding_id": string,"x": number,"y": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"h": number,"id"?: string,"kind": string,"label": string,"layout_id": string,"updated_at"?: string,"version"?: number,"w": number,"wedding_id": string,"x": number,"y": number
+                  }
+                  Update: {
+                    "created_at"?: string,"h"?: number,"id"?: string,"kind"?: string,"label"?: string,"layout_id"?: string,"updated_at"?: string,"version"?: number,"w"?: number,"wedding_id"?: string,"x"?: number,"y"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "seating_elements_wedding_id_layout_id_fkey"
+      columns: ["wedding_id","layout_id"]
+isOneToOne: false
+      referencedRelation: "seating_layouts"
+      referencedColumns: ["wedding_id","id"]
     }
                   ]
                 },"seating_layouts": {
@@ -823,14 +843,14 @@ isOneToOne: false
                   ]
                 },"seating_tables": {
                   Row: {
-                    "capacity": number,"created_at": string,"id": string,"label": string,"layout_id": string,"updated_at": string,"version": number,"wedding_id": string
+                    "capacity": number,"created_at": string,"id": string,"label": string,"layout_id": string,"notes": string | null,"pos_x": number | null,"pos_y": number | null,"shape": string,"updated_at": string,"version": number,"wedding_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "capacity": number,"created_at"?: string,"id"?: string,"label": string,"layout_id": string,"updated_at"?: string,"version"?: number,"wedding_id": string
+                    "capacity": number,"created_at"?: string,"id"?: string,"label": string,"layout_id": string,"notes"?: string | null,"pos_x"?: number | null,"pos_y"?: number | null,"shape"?: string,"updated_at"?: string,"version"?: number,"wedding_id": string
                   }
                   Update: {
-                    "capacity"?: number,"created_at"?: string,"id"?: string,"label"?: string,"layout_id"?: string,"updated_at"?: string,"version"?: number,"wedding_id"?: string
+                    "capacity"?: number,"created_at"?: string,"id"?: string,"label"?: string,"layout_id"?: string,"notes"?: string | null,"pos_x"?: number | null,"pos_y"?: number | null,"shape"?: string,"updated_at"?: string,"version"?: number,"wedding_id"?: string
                   }
                   Relationships: [
                     {
@@ -959,14 +979,20 @@ isOneToOne: true
 "add_proposal_line":
 { Args: { "p_amount_minor"?: number,"p_certainty"?: string,"p_cost_mode": string,"p_description": string,"p_evidence"?: string,"p_expected_version": number,"p_idempotency_key"?: string,"p_included_in_line_id"?: string,"p_max_qty"?: number,"p_min_qty"?: number,"p_percent_base"?: boolean,"p_proposal": string,"p_quantity"?: number,"p_rate_bp"?: number,"p_required"?: boolean,"p_wedding": string }; Returns: string
                            },
+"add_seating_element":
+{ Args: { "p_h": number,"p_kind": string,"p_label": string,"p_layout": string,"p_w": number,"p_wedding": string,"p_x": number,"p_y": number }; Returns: string
+                           },
 "add_seating_table":
-{ Args: { "p_capacity": number,"p_label": string,"p_layout": string,"p_wedding": string }; Returns: string
+{ Args: { "p_capacity": number,"p_label": string,"p_layout": string,"p_shape"?: string,"p_wedding": string }; Returns: string
                            },
 "add_suggested_budget_categories":
 { Args: { "p_names": Json,"p_wedding": string }; Returns: number
                            },
 "amend_commitment":
 { Args: { "p_allocations": Json,"p_amount_minor": number,"p_commitment": string,"p_confirmed": boolean,"p_expected_version": number,"p_idempotency_key"?: string,"p_installments": Json,"p_signed_on"?: string,"p_title": string,"p_wedding": string }; Returns: string
+                           },
+"apply_seating_suggestion":
+{ Args: { "p_expected_revision": number,"p_layout": string,"p_placements": Json,"p_wedding": string }; Returns: number
                            },
 "archive_budget_category":
 { Args: { "p_category": string,"p_expected_version": number,"p_wedding": string }; Returns: number
@@ -994,6 +1020,9 @@ isOneToOne: true
                            },
 "assign_guest_seat":
 { Args: { "p_guest": string,"p_layout": string,"p_seat"?: number,"p_table": string,"p_wedding": string }; Returns: undefined
+                           },
+"assign_household_seats":
+{ Args: { "p_guests": (string)[],"p_layout": string,"p_table": string,"p_wedding": string }; Returns: number
                            },
 "book_commitment":
 { Args: { "p_allocations": Json,"p_amount_minor": number,"p_candidate": string,"p_confirmed": boolean,"p_expected_candidate_version": number,"p_idempotency_key"?: string,"p_installments": Json,"p_proposal"?: string,"p_signed_on"?: string,"p_title": string,"p_wedding": string }; Returns: string
@@ -1105,6 +1134,15 @@ isOneToOne: true
 "move_design_item":
 { Args: { "p_direction": string,"p_item": string,"p_wedding": string }; Returns: undefined
                            },
+"move_seating_element":
+{ Args: { "p_element": string,"p_wedding": string,"p_x": number,"p_y": number }; Returns: undefined
+                           },
+"move_seating_table":
+{ Args: { "p_table": string,"p_wedding": string,"p_x": number,"p_y": number }; Returns: undefined
+                           },
+"number_table_seats":
+{ Args: { "p_table": string,"p_wedding": string }; Returns: number
+                           },
 "override_rsvp_response":
 { Args: { "p_meal_option_id"?: string,"p_member_id": string,"p_reason": string,"p_status": string,"p_wedding": string }; Returns: undefined
                            },
@@ -1145,6 +1183,9 @@ isOneToOne: true
                            },
 "remove_proposal_line":
 { Args: { "p_expected_version": number,"p_line": string,"p_wedding": string }; Returns: number
+                           },
+"remove_seating_element":
+{ Args: { "p_element": string,"p_expected_version": number,"p_wedding": string }; Returns: undefined
                            },
 "remove_seating_table":
 { Args: { "p_expected_version": number,"p_table": string,"p_wedding": string }; Returns: number
@@ -1200,8 +1241,14 @@ isOneToOne: true
 "set_seating_tentative":
 { Args: { "p_allow": boolean,"p_expected_version": number,"p_layout": string,"p_wedding": string }; Returns: undefined
                            },
+"set_table_captain":
+{ Args: { "p_guest"?: string,"p_table": string,"p_wedding": string }; Returns: undefined
+                           },
 "set_task_status":
 { Args: { "p_done": boolean,"p_expected_version": number,"p_task": string,"p_wedding": string }; Returns: number
+                           },
+"swap_guest_seats":
+{ Args: { "p_guest_a": string,"p_guest_b": string,"p_layout": string,"p_wedding": string }; Returns: undefined
                            },
 "unassign_guest_seat":
 { Args: { "p_guest": string,"p_layout": string,"p_wedding": string }; Returns: undefined
@@ -1251,8 +1298,11 @@ isOneToOne: true
 "update_proposal_line":
 { Args: { "p_amount_minor"?: number,"p_certainty"?: string,"p_cost_mode": string,"p_description": string,"p_evidence"?: string,"p_expected_version": number,"p_included_in_line_id"?: string,"p_line": string,"p_max_qty"?: number,"p_min_qty"?: number,"p_percent_base"?: boolean,"p_quantity"?: number,"p_rate_bp"?: number,"p_required"?: boolean,"p_wedding": string }; Returns: number
                            },
+"update_seating_element":
+{ Args: { "p_element": string,"p_expected_version": number,"p_h": number,"p_label": string,"p_w": number,"p_wedding": string,"p_x": number,"p_y": number }; Returns: undefined
+                           },
 "update_seating_table":
-{ Args: { "p_capacity": number,"p_expected_version": number,"p_label": string,"p_table": string,"p_wedding": string }; Returns: undefined
+{ Args: { "p_capacity": number,"p_expected_version": number,"p_label": string,"p_notes"?: string,"p_shape"?: string,"p_table": string,"p_wedding": string }; Returns: undefined
                            },
 "update_task":
 { Args: { "p_assignee"?: string,"p_due_date"?: string,"p_expected_version": number,"p_notes"?: string,"p_task": string,"p_title": string,"p_wedding": string }; Returns: number

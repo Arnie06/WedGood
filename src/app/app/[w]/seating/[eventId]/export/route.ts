@@ -18,7 +18,7 @@ export async function GET(
     return new Response("Not found", { status: 404 });
   }
   const view = new URL(request.url).searchParams.get("view") === "meals" ? "meals" : "seating";
-  const data = await loadSeating(access.wedding.id, eventId);
+  const data = await loadSeating(access.wedding.id, eventId, { details: false });
   if (!data) return new Response("Not found", { status: 404 });
   const plan = buildSeatingPlan({
     guests: data.guests,

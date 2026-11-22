@@ -65,6 +65,7 @@ const TRANSITION_MS = 220;
  */
 export function TrayButton({
   label,
+  trigger,
   title,
   description,
   variant = "primary",
@@ -76,7 +77,9 @@ export function TrayButton({
   successMessage,
   children,
 }: {
-  label: ReactNode;
+  label?: ReactNode;
+  /** Replaces the built-in trigger, for things that are not a plain button (a table on a floor plan). */
+  trigger?: ((open: () => void) => ReactNode) | undefined;
   title: string;
   description?: string | undefined;
   variant?: ButtonVariant | undefined;
@@ -155,7 +158,10 @@ export function TrayButton({
 
   return (
     <>
-      {triggerStyle !== "button" ? (
+      {trigger ? (
+        // eslint-disable-next-line react-hooks/refs -- `open` is only ever called from an event handler
+        trigger(open)
+      ) : triggerStyle !== "button" ? (
         <button
           type="button"
           onClick={open}
