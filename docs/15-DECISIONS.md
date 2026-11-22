@@ -320,3 +320,19 @@ Owner decision, 2026-11-21: seating should let a couple design the room, see who
 - **Why the revision is the guard.** Every seating change, RSVP answer or meal change, archive and revoke bumps the layout revision, so "the plan changed since you looked" is one integer comparison, not a diff. It is conservative: any seating change refuses the apply and the couple reviews a fresh proposal.
 - **Migration.** `20261211090000_seating_suggestion.sql` (one function, no table or column change).
 
+
+## ADR-031: Connected relationships (REL-01 to REL-12)
+
+Date / status: 2026-11-21, accepted by the owner (decisions D1 to D7 below).
+Context: The dependency audit (`audit-output/COMPARISON_REPORT.md`) found that one RSVP change already flows atomically into seating, meals and snapshots, but not into the budget, quotes or comparisons. Each of those uses a typed guest number. Events also have no link to a venue, space or vendor, and there is no caterer count (guarantee) or invoice record. Plan: `audit-output/IMPLEMENTATION_PLAN.md`.
+Decision and owner approval:
+- **D1 Count source per budget item.** Each per-guest or quantity item chooses what it counts: an event's planning number, an event's yes count, the wedding guest target, or a typed number. New per-guest items default to the event planning number. Migrated existing items keep the wedding guest target, so no forecast changes on upgrade. This supersedes ADR-018's "Per-guest items use the wedding's guest target" for new items only. Committed items still count once, as the commitment.
+- **D2 Guest totals stay with owner and partner by default.** Event headcounts (yes, waiting, no, plus-ones not named, seated, meal totals) are readable by owner and partner, as guest rows are today. An owner-only setting, "Let collaborators see guest totals", lets editors and viewers see **totals only**, never names, private details or per-guest rows. When it is off, other members still see budget amounts, but the count and arithmetic behind a reply-based item are hidden ("Based on replies"). Known limit: a member who sees an item's price per guest and its amount can work out the count; the setting's help text says so.
+- **D3 Planning number.** Default is yes + waiting until the event's RSVP deadline (or while there is no deadline), then yes only. Editable per event. Unnamed plus-ones are shown separately and are only added when an event opts in.
+- **D4 Vendor-to-event links point at the vendor** (candidate), not the contract row, so they survive amendments (`amend_commitment` creates a new commitment row).
+- **D5 A locked caterer count changes only by an explicit revision** with a reason. The old count is kept as superseded, and nothing is sent to the caterer.
+- **D6 Needs-attention items** are computed on read for conditions (count drift, capacity, missing meals). They are stored only for one-off events, such as a seated guest declining after the plan was finalized, and are deduplicated while open.
+- **D7 Planner/editor write access is in scope.** Scoped grants per area (guests, guest private details, seating, budget, vendors, plan) are enforced in the database helpers. A planner organization spanning many weddings stays R4-02.
+Consequences and tradeoffs: one derived headcount (`event_demand`) becomes the only reader of reply counts; budget, quotes, the Event page and packages consume it. Budget visibility (all members) and headcount visibility (owner and partner by default) differ, so the server must compute reply-based forecasts without handing raw counts to members who cannot see them. New writes touching guests or seating keep the per-wedding lock order (ADR-023).
+Files/tests affected: per ticket REL-01 to REL-12 in `docs/14-BACKLOG.md`.
+Follow-up and reversal plan: if reply-based budgeting confuses people, items can be switched back to the guest target per item; nothing is migrated destructively. Revisit D2's inference limit if a viewer-safe budget view is needed.

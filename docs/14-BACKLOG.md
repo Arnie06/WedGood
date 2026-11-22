@@ -31,6 +31,18 @@ Order matters. Each ticket is a bounded vertical slice including migrations wher
 | R1-15 | Sharing and comments (R0-04,R1-05) | Scoped collaborator view and comments; permissions enforced on data not only UI; audit changes |
 | R1-16 | PDF/CSV package builder (R1-05–14) | Preset/custom sections, revision+preview digest, scoped renderer, fixed snapshot, safe download, stale flag, multi-page QA |
 | R1-17 | Invitations/delivery fallback and ICS (R1-10,12) | Copy link without provider; transactional send only configured/approved; ledger status truthful; calendar export |
+| REL-01 | Event demand (R1-10, R1-11; ADR-031) | One derived headcount per event (yes, waiting, no, plus-ones not named, seated, meal totals, planning number per D3) used by every page; owner/partner by default, owner-only "Let collaborators see guest totals" setting exposes totals only; counts equal seating totals; cross-wedding refused |
+| REL-02 | Event page and events list (REL-01) | `/plan/events/[eventId]` hub summarizing who, where, meals, seating, vendors, agenda with links to editors; event switcher; event edit tray moves here; no disabled cards for unbuilt parts; 320–1280 and keyboard |
+| REL-03 | Budget items count from replies (REL-01) | Per-item count source (event planning number, event yes, guest target, typed); existing items backfilled to guest target with identical forecast; source label and arithmetic per row, hidden from members without totals access; booked items unchanged with drift note |
+| REL-04 | Live count in quotes and comparisons (REL-01) | Compare setup defaults to an event's planning number with override; saved comparisons never change; "reprice" creates a copy |
+| REL-05 | Reply and seating history (REL-01) | Append-only reply changes (none on no-op retry); finalized seating versions kept; history views for owner/partner |
+| REL-06 | Venue spaces and event location (REL-02) | Spaces under a venue; one location per event; venue then space picker, stale choice shown; capacity fit against planning number; impact preview on change |
+| REL-07 | Vendors assigned to events (REL-02; ADR-031 D4) | Vendor-event links that survive amendments; booking "works at" chips; agenda vendor picker groups this event's vendors first; day-of lists per event |
+| REL-08 | Caterer count (REL-01, REL-07) | Explicit lock with preview, revision with reason keeps history, drift note on event/seating/budget, reminder task, caterer package includes it; guest cancel after lock leaves it unchanged |
+| REL-09 | Invoices (R1-07) | Contract, invoiced, paid, still to pay; payment links to an invoice of the same booking; invoices move with amendments; forecast changes leave them unchanged |
+| REL-10 | Needs attention (REL-01, 06, 08) | Computed conditions plus stored one-off items, deduplicated; Home and Event page lists; dismiss/handled; role-aware |
+| REL-11 | Planner/editor scoped grants (R0-04; ADR-031 D7) | Owner grants per area; database helpers enforce grants; role-by-area integration matrix; last-owner rules unchanged |
+| REL-12 | Per-event time zone (optional, REL-02) | Event zone defaults to the wedding's; agenda and Event page use it |
 | R1-18 | PWA/responsive/accessibility polish (R1-01–17) | Manifest, layout reflow, keyboard/axe, screenshot checks, no private service-worker cache, all core mobile workflows |
 | R1-19 | Release qualification (all R1) | Golden path and negative access tests, restore, security review, documentation/feature flags, explicit release decision |
 | R2-01 | AI adapter and controlled approvals | Structured typed actions, source revision, rejection, AI-off regression |

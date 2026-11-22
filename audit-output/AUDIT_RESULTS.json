@@ -1,0 +1,1368 @@
+{
+  "audit_meta": {
+    "template_used": false,
+    "template_note": "audit_results_template.json was not available; this structure is the auditor's own and should be re-mapped to the template.",
+    "repository": "WedGood (Wedding Workspace)",
+    "branch": "main",
+    "audited_commit": "f6e29a1 + uncommitted working tree (seating UI work by another writer, not audited)",
+    "date": "2026-11-21",
+    "benchmark_version": "Wedding Dependency Platform v1.0 (executive PDF only)",
+    "requirement_set": "provisional, auditor-derived from PDF (not the kit's 94 REQ-*)",
+    "scoring": "Full=100, Partial=50, UI-only=15, Missing=0, Unknown=0 (reported separately), N/A excluded; weights P0=3,P1=2,P2=1 within category"
+  },
+  "overall": {
+    "score_100": 72.0,
+    "unknown_requirements": 0,
+    "requirements_scored": 88
+  },
+  "categories": [
+    {
+      "id": "COL",
+      "name": "Collaboration & ownership",
+      "weight_pct": 10,
+      "domain_percent": 68.4,
+      "weighted_points": 6.84,
+      "requirements": 9,
+      "not_applicable": 0,
+      "unknown_weight_pct": 0.0
+    },
+    {
+      "id": "EVT",
+      "name": "Events & venues",
+      "weight_pct": 8,
+      "domain_percent": 41.2,
+      "weighted_points": 3.29,
+      "requirements": 7,
+      "not_applicable": 0,
+      "unknown_weight_pct": 0.0
+    },
+    {
+      "id": "INV",
+      "name": "Invitations & RSVPs",
+      "weight_pct": 16,
+      "domain_percent": 82.8,
+      "weighted_points": 13.25,
+      "requirements": 13,
+      "not_applicable": 0,
+      "unknown_weight_pct": 0.0
+    },
+    {
+      "id": "DEP",
+      "name": "Dependency engine",
+      "weight_pct": 20,
+      "domain_percent": 60.0,
+      "weighted_points": 12.0,
+      "requirements": 17,
+      "not_applicable": 0,
+      "unknown_weight_pct": 0.0
+    },
+    {
+      "id": "MST",
+      "name": "Meals & seating",
+      "weight_pct": 10,
+      "domain_percent": 95.2,
+      "weighted_points": 9.52,
+      "requirements": 9,
+      "not_applicable": 0,
+      "unknown_weight_pct": 0.0
+    },
+    {
+      "id": "FIN",
+      "name": "Vendors & finances",
+      "weight_pct": 12,
+      "domain_percent": 72.2,
+      "weighted_points": 8.67,
+      "requirements": 11,
+      "not_applicable": 0,
+      "unknown_weight_pct": 0.0
+    },
+    {
+      "id": "OPS",
+      "name": "Travel & operations",
+      "weight_pct": 5,
+      "domain_percent": 50.0,
+      "weighted_points": 2.5,
+      "requirements": 5,
+      "not_applicable": 0,
+      "unknown_weight_pct": 0.0
+    },
+    {
+      "id": "PCK",
+      "name": "Dropdown UX",
+      "weight_pct": 7,
+      "domain_percent": 63.3,
+      "weighted_points": 4.43,
+      "requirements": 7,
+      "not_applicable": 0,
+      "unknown_weight_pct": 0.0
+    },
+    {
+      "id": "SEC",
+      "name": "Security & reliability",
+      "weight_pct": 12,
+      "domain_percent": 96.0,
+      "weighted_points": 11.52,
+      "requirements": 11,
+      "not_applicable": 1,
+      "unknown_weight_pct": 0.0
+    }
+  ],
+  "requirements": [
+    {
+      "id": "COL-01",
+      "category": "COL",
+      "priority": "P0",
+      "title": "Wedding is the canonical project; people gain access via grants, never by duplicating the wedding",
+      "status": "Verified implemented",
+      "status_code": "F",
+      "evidence": [
+        "supabase/migrations/20261120044804_core_tenancy.sql:53-90 (weddings",
+        "memberships unique(wedding_id,user_id))"
+      ],
+      "confidence": "high",
+      "notes": "One wedding row, membership rows per user."
+    },
+    {
+      "id": "COL-02",
+      "category": "COL",
+      "priority": "P0",
+      "title": "Wedding-scoped permissions enforced by backend (RLS + RPC), not only UI filters",
+      "status": "Verified implemented",
+      "status_code": "F",
+      "evidence": [
+        "supabase/migrations/20261120044804_core_tenancy.sql:135-160 (is_member/has_role)",
+        "tests/integration/tenancy.test.ts"
+      ],
+      "confidence": "high",
+      "notes": "Tests exist; integration suite not re-run in this audit."
+    },
+    {
+      "id": "COL-03",
+      "category": "COL",
+      "priority": "P1",
+      "title": "Planner/firm Workspace entity that can span many weddings",
+      "status": "Missing (verified)",
+      "status_code": "M",
+      "evidence": [
+        "No workspace/organization table in supabase/migrations/ (26 migrations)",
+        "docs/01-PRODUCT.md:45 lists 'professional workspaces' as later"
+      ],
+      "confidence": "high",
+      "notes": "In this app 'workspace' = one wedding (route /app/[w])."
+    },
+    {
+      "id": "COL-04",
+      "category": "COL",
+      "priority": "P1",
+      "title": "Role model with last-owner protection and concurrent-removal safety",
+      "status": "Verified implemented",
+      "status_code": "F",
+      "evidence": ["docs/15-DECISIONS.md:63", "tests/integration/membership.test.ts:437"],
+      "confidence": "high",
+      "notes": ""
+    },
+    {
+      "id": "COL-05",
+      "category": "COL",
+      "priority": "P0",
+      "title": "Planner/editor role can perform planner work (scoped write grants)",
+      "status": "Partially implemented",
+      "status_code": "P",
+      "evidence": [
+        "src/domain/permissions/index.ts:50 (EDITOR_DEFAULT = view only)",
+        "docs/15-DECISIONS.md:79 ('no grant mechanism yet')"
+      ],
+      "confidence": "high",
+      "notes": "Role is persisted and invitable but functionally equals viewer; partner is the only non-owner writer."
+    },
+    {
+      "id": "COL-06",
+      "category": "COL",
+      "priority": "P1",
+      "title": "Scoped access per module/event/vendor (e.g. caterer sees only meals)",
+      "status": "Missing (verified)",
+      "status_code": "M",
+      "evidence": [
+        "src/domain/permissions/index.ts:21-34 (flat capabilities)",
+        "docs/10-SECURITY.md:7 lists 'Scoped vendor' column, no implementation"
+      ],
+      "confidence": "high",
+      "notes": "Packages (immutable redacted PDFs) are the only recipient-scoped output."
+    },
+    {
+      "id": "COL-07",
+      "category": "COL",
+      "priority": "P1",
+      "title": "Collaborator invitation and token redemption",
+      "status": "Verified implemented",
+      "status_code": "F",
+      "evidence": ["tests/integration/membership.test.ts:123,151"],
+      "confidence": "medium",
+      "notes": ""
+    },
+    {
+      "id": "COL-08",
+      "category": "COL",
+      "priority": "P2",
+      "title": "Owner-visible change history",
+      "status": "Partially implemented",
+      "status_code": "P",
+      "evidence": [
+        "supabase/migrations/20261120044804_core_tenancy.sql:91-120 (append-only audit_events)",
+        "docs/15-DECISIONS.md:229 (activity view is a follow-up)"
+      ],
+      "confidence": "medium",
+      "notes": "Audited by field name/counts only; no UI."
+    },
+    {
+      "id": "COL-09",
+      "category": "COL",
+      "priority": "P2",
+      "title": "Comments/decisions collaboration",
+      "status": "Verified implemented",
+      "status_code": "F",
+      "evidence": [
+        "supabase/migrations/20261205090000_comments.sql",
+        "tests/integration/comments.test.ts:192"
+      ],
+      "confidence": "medium",
+      "notes": ""
+    },
+    {
+      "id": "EVT-01",
+      "category": "EVT",
+      "priority": "P0",
+      "title": "Wedding -> many Events with kind, date, capacity",
+      "status": "Verified implemented",
+      "status_code": "F",
+      "evidence": ["supabase/migrations/20261130090000_events_rsvp.sql:18-31"],
+      "confidence": "high",
+      "notes": "Max 12 events per wedding (line 300)."
+    },
+    {
+      "id": "EVT-02",
+      "category": "EVT",
+      "priority": "P1",
+      "title": "Timed segments within an event",
+      "status": "Verified implemented",
+      "status_code": "F",
+      "evidence": [
+        "supabase/migrations/20261202090000_timeline.sql:14-41 (timeline_items FK to events)"
+      ],
+      "confidence": "high",
+      "notes": ""
+    },
+    {
+      "id": "EVT-03",
+      "category": "EVT",
+      "priority": "P0",
+      "title": "Reusable Venue -> Spaces",
+      "status": "Missing (verified)",
+      "status_code": "M",
+      "evidence": [
+        "supabase/migrations/20261123090000_candidates.sql:62-72 (venues = two capacity ints on a candidate)",
+        "no spaces table anywhere"
+      ],
+      "confidence": "high",
+      "notes": ""
+    },
+    {
+      "id": "EVT-04",
+      "category": "EVT",
+      "priority": "P0",
+      "title": "Event Location link (event -> venue/space)",
+      "status": "Missing (verified)",
+      "status_code": "M",
+      "evidence": [
+        "No event_id/venue_id relation: candidates, venues, commitments, proposals have none",
+        "events table has no location columns (supabase/migrations/20261130090000_events_rsvp.sql:18-31)"
+      ],
+      "confidence": "high",
+      "notes": "Timeline item has free-text location only (timeline.sql:25)."
+    },
+    {
+      "id": "EVT-05",
+      "category": "EVT",
+      "priority": "P1",
+      "title": "Space capacity checked against event attendance / seating",
+      "status": "Partially implemented",
+      "status_code": "P",
+      "evidence": [
+        "src/domain/comparison/evaluate.ts (venue seated_capacity vs comparison guestCount)",
+        "events.capacity supabase/migrations/20261130090000_events_rsvp.sql:26 unused for seating limits"
+      ],
+      "confidence": "medium",
+      "notes": "Capacity is a hard constraint only inside quote comparison."
+    },
+    {
+      "id": "EVT-06",
+      "category": "EVT",
+      "priority": "P1",
+      "title": "IANA time zones and date-only semantics; per-event zone",
+      "status": "Partially implemented",
+      "status_code": "P",
+      "evidence": [
+        "supabase/migrations/20261120044804_core_tenancy.sql:57 (wedding timezone)",
+        "timeline.sql:24 (per-item timezone, DST validation in src/domain/timeline)",
+        "events.local_date is date-only"
+      ],
+      "confidence": "medium",
+      "notes": "No per-event time zone."
+    },
+    {
+      "id": "EVT-07",
+      "category": "EVT",
+      "priority": "P1",
+      "title": "Venue change cascades to floor plan/vendors/transport",
+      "status": "Missing (verified)",
+      "status_code": "M",
+      "evidence": ["No venue-event link, so nothing to cascade (see DEPENDENCY_TRACE.md flow B)"],
+      "confidence": "high",
+      "notes": ""
+    },
+    {
+      "id": "INV-01",
+      "category": "INV",
+      "priority": "P0",
+      "title": "Per-event RSVP with independent outcomes per guest",
+      "status": "Verified implemented",
+      "status_code": "F",
+      "evidence": [
+        "supabase/migrations/20261130090000_events_rsvp.sql:81-110 (invitation_members, active-unique per event+guest line 106)",
+        "tests/integration/rsvp.test.ts:269 (T09)"
+      ],
+      "confidence": "high",
+      "notes": ""
+    },
+    {
+      "id": "INV-02",
+      "category": "INV",
+      "priority": "P0",
+      "title": "Invitation party (household/group) distinct from named person",
+      "status": "Verified implemented",
+      "status_code": "F",
+      "evidence": [
+        "supabase/migrations/20261130090000_events_rsvp.sql:53-75, create_invitations :411-517"
+      ],
+      "confidence": "high",
+      "notes": ""
+    },
+    {
+      "id": "INV-03",
+      "category": "INV",
+      "priority": "P0",
+      "title": "Plus-one claim exactly once incl. concurrent submits; quota enforced",
+      "status": "Verified implemented",
+      "status_code": "F",
+      "evidence": [
+        "supabase/migrations/20261130090000_events_rsvp.sql:695 (advisory lock), :739-776",
+        "tests/integration/rsvp.test.ts:314,343"
+      ],
+      "confidence": "high",
+      "notes": "Name-based dedupe (lower(full_name)); a renamed retry would consume a second slot."
+    },
+    {
+      "id": "INV-04",
+      "category": "INV",
+      "priority": "P0",
+      "title": "Unnamed allowance is potential attendance, not confirmed; surfaced as its own metric",
+      "status": "Partially implemented",
+      "status_code": "P",
+      "evidence": [
+        "supabase/migrations/20261130090000_events_rsvp.sql:61-62 (quota/used)",
+        "src/features/events/rsvp-form.tsx:66 (shown to guest)",
+        "no 'potential' in src/domain/guests/rsvp.ts:13-20"
+      ],
+      "confidence": "high",
+      "notes": "Correctly not counted as accepted, but no potential headcount anywhere."
+    },
+    {
+      "id": "INV-05",
+      "category": "INV",
+      "priority": "P0",
+      "title": "RSVP deadline enforced server-side; audited owner override",
+      "status": "Verified implemented",
+      "status_code": "F",
+      "evidence": [
+        "supabase/migrations/20261130090000_events_rsvp.sql:701, :605-636",
+        "tests/integration/rsvp.test.ts:368"
+      ],
+      "confidence": "high",
+      "notes": ""
+    },
+    {
+      "id": "INV-06",
+      "category": "INV",
+      "priority": "P0",
+      "title": "Retry-safe RSVP: idempotent submit + optimistic concurrency",
+      "status": "Verified implemented",
+      "status_code": "F",
+      "evidence": [
+        "supabase/migrations/20261130090000_events_rsvp.sql:233-235 (no-op returns false), :704",
+        "tests/integration/rsvp.test.ts:303"
+      ],
+      "confidence": "high",
+      "notes": ""
+    },
+    {
+      "id": "INV-07",
+      "category": "INV",
+      "priority": "P1",
+      "title": "Event-specific responses keep history",
+      "status": "Partially implemented",
+      "status_code": "P",
+      "evidence": [
+        "supabase/migrations/20261130090000_events_rsvp.sql:90-94 (current state only), :781-784 (audit counts only)"
+      ],
+      "confidence": "high",
+      "notes": "No per-response history rows; audit has counts not before/after."
+    },
+    {
+      "id": "INV-08",
+      "category": "INV",
+      "priority": "P0",
+      "title": "Public token safety: hashed, narrow projection, revoke/expire, throttle, indistinguishable failures",
+      "status": "Verified implemented",
+      "status_code": "F",
+      "evidence": [
+        "supabase/migrations/20261130090000_events_rsvp.sql:60,:248-277,:641-658",
+        "tests/integration/rsvp.test.ts:441-509"
+      ],
+      "confidence": "high",
+      "notes": "Risk: throttle key trusts x-forwarded-for (src/server/rsvp/public.ts:51-55)."
+    },
+    {
+      "id": "INV-09",
+      "category": "INV",
+      "priority": "P1",
+      "title": "Guest-count taxonomy: invited/named/confirmed/pending/potential/seated/fed/checked-in",
+      "status": "Partially implemented",
+      "status_code": "P",
+      "evidence": [
+        "src/domain/guests/rsvp.ts:13-20 (invited/accepted/pending/declined), src/domain/seating/plan.ts:299-310 (seated)",
+        "no potential/fed/checked-in"
+      ],
+      "confidence": "high",
+      "notes": ""
+    },
+    {
+      "id": "INV-10",
+      "category": "INV",
+      "priority": "P1",
+      "title": "Check-in tracked separately from RSVP",
+      "status": "Missing (verified)",
+      "status_code": "M",
+      "evidence": ["grep check_in|checkin|checked_in over src/ and migrations: no matches"],
+      "confidence": "high",
+      "notes": ""
+    },
+    {
+      "id": "INV-11",
+      "category": "INV",
+      "priority": "P1",
+      "title": "Guest/household CRUD and atomic idempotent CSV import",
+      "status": "Verified implemented",
+      "status_code": "F",
+      "evidence": [
+        "supabase/migrations/20261129090000_guests.sql:57-110",
+        "tests/integration/guests.test.ts:287"
+      ],
+      "confidence": "high",
+      "notes": ""
+    },
+    {
+      "id": "INV-12",
+      "category": "INV",
+      "priority": "P1",
+      "title": "Guest website: explicit allowlisted publish, immutable published snapshot",
+      "status": "Verified implemented",
+      "status_code": "F",
+      "evidence": ["supabase/migrations/20261204090000_guest_website.sql:1-20"],
+      "confidence": "medium",
+      "notes": ""
+    },
+    {
+      "id": "INV-13",
+      "category": "INV",
+      "priority": "P2",
+      "title": "Truthful invitation delivery status (nothing sent silently)",
+      "status": "Verified implemented",
+      "status_code": "F",
+      "evidence": [
+        "supabase/migrations/20261207090000_invitation_delivery.sql:1-3",
+        "src/server/mail (unconfigured adapter)"
+      ],
+      "confidence": "medium",
+      "notes": "Manual 'shared by me' only; by design."
+    },
+    {
+      "id": "DEP-01",
+      "category": "DEP",
+      "priority": "P0",
+      "title": "RSVP change -> seating release/confirm in the same transaction",
+      "status": "Verified implemented",
+      "status_code": "F",
+      "evidence": [
+        "supabase/migrations/20261201090000_seating.sql:137-175 (hook at :172), :102-131",
+        "tests/integration/seating.test.ts:476"
+      ],
+      "confidence": "high",
+      "notes": ""
+    },
+    {
+      "id": "DEP-02",
+      "category": "DEP",
+      "priority": "P0",
+      "title": "Seating occupancy/unseated derived from shared state (no manual copies)",
+      "status": "Verified implemented",
+      "status_code": "F",
+      "evidence": [
+        "src/domain/seating/plan.ts:285-310",
+        "src/server/seating/queries.ts:70-98 (reads members+assignments each render)"
+      ],
+      "confidence": "high",
+      "notes": ""
+    },
+    {
+      "id": "DEP-03",
+      "category": "DEP",
+      "priority": "P0",
+      "title": "RSVP change -> live meal-option demand",
+      "status": "Verified implemented",
+      "status_code": "F",
+      "evidence": [
+        "src/domain/guests/rsvp.ts:21-45 (accepted only)",
+        "package sections src/domain/packages/sections.ts:440-460"
+      ],
+      "confidence": "high",
+      "notes": ""
+    },
+    {
+      "id": "DEP-04",
+      "category": "DEP",
+      "priority": "P0",
+      "title": "RSVP change -> budget per-person forecast",
+      "status": "Missing (verified)",
+      "status_code": "M",
+      "evidence": [
+        "src/app/app/[w]/plan/budget/page.tsx:41 (guests = settings.targetGuestCount)",
+        "src/domain/budget/summary.ts:66-74",
+        "supabase/migrations/20261120044804_core_tenancy.sql:60"
+      ],
+      "confidence": "high",
+      "notes": "Per-guest costing exists but is fed by a manually typed number, not RSVP state."
+    },
+    {
+      "id": "DEP-05",
+      "category": "DEP",
+      "priority": "P0",
+      "title": "One canonical derived headcount feeding every consumer",
+      "status": "Missing (verified)",
+      "status_code": "M",
+      "evidence": [
+        "Three independent manual numbers: weddings.target_guest_count (core_tenancy.sql:60), events.target_attendance (events_rsvp.sql:25), comparisons guestCount (src/app/app/[w]/discover/compare/new/page.tsx:32,60)"
+      ],
+      "confidence": "high",
+      "notes": ""
+    },
+    {
+      "id": "DEP-06",
+      "category": "DEP",
+      "priority": "P0",
+      "title": "Forecast vs signed commitments vs paid are separate states; booked cost counted once",
+      "status": "Verified implemented",
+      "status_code": "F",
+      "evidence": [
+        "src/domain/budget/summary.ts:10-12,:226-229",
+        "supabase/migrations/20261127090000_ledger.sql:54-56 (one active allocation per item)",
+        "tests/integration/ledger.test.ts:133"
+      ],
+      "confidence": "high",
+      "notes": ""
+    },
+    {
+      "id": "DEP-07",
+      "category": "DEP",
+      "priority": "P0",
+      "title": "Locked catering guarantee persists when a guest cancels",
+      "status": "Missing (verified)",
+      "status_code": "M",
+      "evidence": ["grep 'guarantee' over src/ and migrations: no matches"],
+      "confidence": "high",
+      "notes": "No guarantee entity, so no lock to preserve."
+    },
+    {
+      "id": "DEP-08",
+      "category": "DEP",
+      "priority": "P1",
+      "title": "Finalized seating persists; stale indicator when guests/seats change",
+      "status": "Verified implemented",
+      "status_code": "F",
+      "evidence": [
+        "supabase/migrations/20261201090000_seating.sql:93-97,:515-564",
+        "src/server/seating/queries.ts:21-30"
+      ],
+      "confidence": "high",
+      "notes": "Frozen counts + revision comparison."
+    },
+    {
+      "id": "DEP-09",
+      "category": "DEP",
+      "priority": "P1",
+      "title": "Rentals/stationery reforecast with warning if ordered/printed",
+      "status": "Missing (verified)",
+      "status_code": "M",
+      "evidence": [
+        "Only budget categories/vendor categories (src/domain/candidates/categories.ts)",
+        "no quantity drivers linked to RSVP"
+      ],
+      "confidence": "high",
+      "notes": ""
+    },
+    {
+      "id": "DEP-10",
+      "category": "DEP",
+      "priority": "P1",
+      "title": "Transport/hotel demand updates from RSVP",
+      "status": "Missing (verified)",
+      "status_code": "M",
+      "evidence": [
+        "No transport or lodging model (grep room_block|lodging|shuttle in migrations: none)"
+      ],
+      "confidence": "high",
+      "notes": ""
+    },
+    {
+      "id": "DEP-11",
+      "category": "DEP",
+      "priority": "P1",
+      "title": "Critical change creates review issue/notification and is logged",
+      "status": "Partially implemented",
+      "status_code": "P",
+      "evidence": [
+        "supabase/migrations/20261201090000_seating.sql:125-130 (audit 'seating.guest_released')",
+        "no notification/issue table"
+      ],
+      "confidence": "medium",
+      "notes": "Log + stale badges, no review queue."
+    },
+    {
+      "id": "DEP-12",
+      "category": "DEP",
+      "priority": "P1",
+      "title": "Approval-required ops never automatic (guarantee, orders, contract, messages, payment)",
+      "status": "Partially implemented",
+      "status_code": "P",
+      "evidence": [
+        "supabase/migrations/20261127090000_ledger.sql:362 (explicit amend RPC)",
+        "src/server/mail (no provider)",
+        "AGENTS.md rules"
+      ],
+      "confidence": "medium",
+      "notes": "Nothing automatic exists to gate; no approval workflow either."
+    },
+    {
+      "id": "DEP-13",
+      "category": "DEP",
+      "priority": "P1",
+      "title": "Cross-module change atomic, versioned, idempotent",
+      "status": "Verified implemented",
+      "status_code": "F",
+      "evidence": [
+        "supabase/migrations/20261130090000_events_rsvp.sql:693-785 (one txn: RSVP + seating + audit + revision)"
+      ],
+      "confidence": "high",
+      "notes": "For the chain that exists."
+    },
+    {
+      "id": "DEP-14",
+      "category": "DEP",
+      "priority": "P1",
+      "title": "Task reschedule by reviewed preview, signed dates untouched",
+      "status": "Verified implemented",
+      "status_code": "F",
+      "evidence": [
+        "src/domain/tasks/schedule.ts:40 previewReschedule",
+        "src/domain/tasks/tasks.test.ts:60"
+      ],
+      "confidence": "medium",
+      "notes": ""
+    },
+    {
+      "id": "DEP-15",
+      "category": "DEP",
+      "priority": "P1",
+      "title": "Immutable snapshots/packages with stale detection",
+      "status": "Verified implemented",
+      "status_code": "F",
+      "evidence": [
+        "supabase/migrations/20261206090000_packages.sql:70-76",
+        "src/server/packages/queries.ts:118-158"
+      ],
+      "confidence": "high",
+      "notes": ""
+    },
+    {
+      "id": "DEP-16",
+      "category": "DEP",
+      "priority": "P1",
+      "title": "Decisions go stale when inputs change",
+      "status": "Verified implemented",
+      "status_code": "F",
+      "evidence": [
+        "src/domain/comparison/staleness.ts:29",
+        "tests/integration/comparisons.test.ts:447"
+      ],
+      "confidence": "high",
+      "notes": ""
+    },
+    {
+      "id": "DEP-17",
+      "category": "DEP",
+      "priority": "P2",
+      "title": "Async side-effect infrastructure (outbox/jobs) for cross-module effects",
+      "status": "Missing (verified)",
+      "status_code": "M",
+      "evidence": [
+        "No queue/job/outbox in src/ or migrations",
+        "all effects are synchronous in RPCs"
+      ],
+      "confidence": "medium",
+      "notes": "Acceptable at current scale; becomes necessary for notifications/messages."
+    },
+    {
+      "id": "MST-01",
+      "category": "MST",
+      "priority": "P0",
+      "title": "Event-specific meal options and selections; decline clears eligibility",
+      "status": "Verified implemented",
+      "status_code": "F",
+      "evidence": [
+        "supabase/migrations/20261130090000_events_rsvp.sql:36-51,:226",
+        "tests/integration/rsvp.test.ts:412"
+      ],
+      "confidence": "high",
+      "notes": ""
+    },
+    {
+      "id": "MST-02",
+      "category": "MST",
+      "priority": "P0",
+      "title": "Dietary/accessibility kept in a separate private store",
+      "status": "Verified implemented",
+      "status_code": "F",
+      "evidence": ["supabase/migrations/20261129090000_guests.sql:109-125"],
+      "confidence": "high",
+      "notes": "Free text, not structured."
+    },
+    {
+      "id": "MST-03",
+      "category": "MST",
+      "priority": "P0",
+      "title": "One seat per guest per layout; numbered seat unique per table at DB level",
+      "status": "Verified implemented",
+      "status_code": "F",
+      "evidence": ["supabase/migrations/20261201090000_seating.sql:68-74"],
+      "confidence": "high",
+      "notes": ""
+    },
+    {
+      "id": "MST-04",
+      "category": "MST",
+      "priority": "P0",
+      "title": "Capacity safe under concurrent assignment",
+      "status": "Verified implemented",
+      "status_code": "F",
+      "evidence": [
+        "supabase/migrations/20261201090000_seating.sql:447-476 (RPC under advisory lock",
+        "clients have no write grants :80-83)",
+        "tests/integration/seating.test.ts:453,467 (T10)"
+      ],
+      "confidence": "high",
+      "notes": "Capacity is RPC-enforced, not a table constraint."
+    },
+    {
+      "id": "MST-05",
+      "category": "MST",
+      "priority": "P1",
+      "title": "Tentative vs confirmed guests separated",
+      "status": "Verified implemented",
+      "status_code": "F",
+      "evidence": ["supabase/migrations/20261201090000_seating.sql:63-66,:114-123"],
+      "confidence": "high",
+      "notes": ""
+    },
+    {
+      "id": "MST-06",
+      "category": "MST",
+      "priority": "P1",
+      "title": "Deterministic meal totals frozen in finalized snapshot",
+      "status": "Verified implemented",
+      "status_code": "F",
+      "evidence": ["supabase/migrations/20261201090000_seating.sql:532-554"],
+      "confidence": "high",
+      "notes": ""
+    },
+    {
+      "id": "MST-07",
+      "category": "MST",
+      "priority": "P1",
+      "title": "Seating restricted to eligible event guests",
+      "status": "Verified implemented",
+      "status_code": "F",
+      "evidence": [
+        "supabase/migrations/20261201090000_seating.sql:455-467",
+        "tests/integration/seating.test.ts:359"
+      ],
+      "confidence": "high",
+      "notes": ""
+    },
+    {
+      "id": "MST-08",
+      "category": "MST",
+      "priority": "P1",
+      "title": "Meal Service/menu model (courses, service times) separate from options",
+      "status": "Partially implemented",
+      "status_code": "P",
+      "evidence": [
+        "supabase/migrations/20261130090000_events_rsvp.sql:36-51 (named options per event only)"
+      ],
+      "confidence": "high",
+      "notes": "No menu, course, or service entity."
+    },
+    {
+      "id": "MST-09",
+      "category": "MST",
+      "priority": "P2",
+      "title": "Seating tools: floor plan, numbered seats, suggestions, printed cards",
+      "status": "Verified implemented",
+      "status_code": "F",
+      "evidence": [
+        "supabase/migrations/20261209090000_seating_floor_plan.sql",
+        "20261210090000_seating_seats.sql",
+        "20261211090000_seating_suggestion.sql"
+      ],
+      "confidence": "medium",
+      "notes": "Active uncommitted work in progress in working tree; audited committed state only."
+    },
+    {
+      "id": "FIN-01",
+      "category": "FIN",
+      "priority": "P0",
+      "title": "Directory Vendor -> Wedding Booking -> Event Assignments",
+      "status": "Partially implemented",
+      "status_code": "P",
+      "evidence": [
+        "supabase/migrations/20261123090000_candidates.sql:14-60",
+        "20261127090000_ledger.sql:18-40 (one active commitment per candidate)",
+        "no event assignment table"
+      ],
+      "confidence": "high",
+      "notes": "Booking exists; event assignment does not."
+    },
+    {
+      "id": "FIN-02",
+      "category": "FIN",
+      "priority": "P0",
+      "title": "Same vendor across events without duplicated booking/expense",
+      "status": "Partially implemented",
+      "status_code": "P",
+      "evidence": [
+        "supabase/migrations/20261127090000_ledger.sql:37-38 (unique active commitment per candidate)"
+      ],
+      "confidence": "high",
+      "notes": "Duplication prevented, but cannot express which events it serves."
+    },
+    {
+      "id": "FIN-03",
+      "category": "FIN",
+      "priority": "P0",
+      "title": "Quote selection is not booking; booking atomic",
+      "status": "Verified implemented",
+      "status_code": "F",
+      "evidence": [
+        "tests/integration/ledger.test.ts:127,133",
+        "supabase/migrations/20261127090000_ledger.sql:278"
+      ],
+      "confidence": "high",
+      "notes": ""
+    },
+    {
+      "id": "FIN-04",
+      "category": "FIN",
+      "priority": "P0",
+      "title": "Integer minor units; unknown is never zero",
+      "status": "Verified implemented",
+      "status_code": "F",
+      "evidence": ["supabase/migrations/20261126090000_budget.sql:1-9,:41"],
+      "confidence": "high",
+      "notes": ""
+    },
+    {
+      "id": "FIN-05",
+      "category": "FIN",
+      "priority": "P0",
+      "title": "Payments append-only facts; void not delete; refund cap",
+      "status": "Verified implemented",
+      "status_code": "F",
+      "evidence": [
+        "supabase/migrations/20261127090000_ledger.sql:73-90",
+        "tests/integration/ledger.test.ts:319,744"
+      ],
+      "confidence": "high",
+      "notes": ""
+    },
+    {
+      "id": "FIN-06",
+      "category": "FIN",
+      "priority": "P0",
+      "title": "Contract and Invoice as separate records from payments",
+      "status": "Partially implemented",
+      "status_code": "P",
+      "evidence": [
+        "supabase/migrations/20261127090000_ledger.sql:18-72 (commitment ~ contract, installments ~ schedule)",
+        "invoice only as a document 'kind' (src/domain/documents/validate.ts)"
+      ],
+      "confidence": "medium",
+      "notes": "No invoice amount/status/due record."
+    },
+    {
+      "id": "FIN-07",
+      "category": "FIN",
+      "priority": "P1",
+      "title": "Contract amendment preserves signed history",
+      "status": "Verified implemented",
+      "status_code": "F",
+      "evidence": [
+        "supabase/migrations/20261127090000_ledger.sql:362",
+        "tests/integration/ledger.test.ts:494"
+      ],
+      "confidence": "high",
+      "notes": ""
+    },
+    {
+      "id": "FIN-08",
+      "category": "FIN",
+      "priority": "P1",
+      "title": "Named pricing drivers (guest count, hours, units) shared by line items",
+      "status": "Partially implemented",
+      "status_code": "P",
+      "evidence": [
+        "supabase/migrations/20261126090000_budget.sql:36,43-44 (cost_mode + literal quantity)"
+      ],
+      "confidence": "high",
+      "notes": "No driver entity; quantity typed per item."
+    },
+    {
+      "id": "FIN-09",
+      "category": "FIN",
+      "priority": "P1",
+      "title": "Scenarios (alternate budget/pricing at common assumptions)",
+      "status": "Partially implemented",
+      "status_code": "P",
+      "evidence": [
+        "src/domain/comparison/evaluate.ts",
+        "supabase/migrations/20261125090000_comparisons_decisions.sql:102-140"
+      ],
+      "confidence": "medium",
+      "notes": "Quote comparison scenarios only; no whole-budget scenario."
+    },
+    {
+      "id": "FIN-10",
+      "category": "FIN",
+      "priority": "P1",
+      "title": "Refunds/contributions modelled",
+      "status": "Partially implemented",
+      "status_code": "P",
+      "evidence": ["supabase/migrations/20261127090000_ledger.sql:76 (refund kind)"],
+      "confidence": "medium",
+      "notes": "Refunds yes; contributions/contingency not separately modelled."
+    },
+    {
+      "id": "FIN-11",
+      "category": "FIN",
+      "priority": "P2",
+      "title": "Currency cannot be silently reinterpreted",
+      "status": "Verified implemented",
+      "status_code": "F",
+      "evidence": [
+        "supabase/migrations/20261126090000_budget.sql:119-134",
+        "20261127090000_ledger.sql:118-135"
+      ],
+      "confidence": "high",
+      "notes": ""
+    },
+    {
+      "id": "OPS-01",
+      "category": "OPS",
+      "priority": "P1",
+      "title": "Transport demand/bookings",
+      "status": "Missing (verified)",
+      "status_code": "M",
+      "evidence": [
+        "No model (grep transport|shuttle: only a vendor category in candidates.sql:20-23)"
+      ],
+      "confidence": "high",
+      "notes": ""
+    },
+    {
+      "id": "OPS-02",
+      "category": "OPS",
+      "priority": "P1",
+      "title": "Lodging/room-block demand",
+      "status": "Missing (verified)",
+      "status_code": "M",
+      "evidence": ["No model (grep lodging|room_block: none)"],
+      "confidence": "high",
+      "notes": ""
+    },
+    {
+      "id": "OPS-03",
+      "category": "OPS",
+      "priority": "P1",
+      "title": "Run-of-show with responsible people/vendors",
+      "status": "Verified implemented",
+      "status_code": "F",
+      "evidence": ["supabase/migrations/20261202090000_timeline.sql:14-41"],
+      "confidence": "high",
+      "notes": ""
+    },
+    {
+      "id": "OPS-04",
+      "category": "OPS",
+      "priority": "P2",
+      "title": "Recipient-specific redacted exports with immutable snapshots",
+      "status": "Verified implemented",
+      "status_code": "F",
+      "evidence": ["supabase/migrations/20261206090000_packages.sql:1-14,:70-76"],
+      "confidence": "high",
+      "notes": ""
+    },
+    {
+      "id": "OPS-05",
+      "category": "OPS",
+      "priority": "P2",
+      "title": "Day-of handoff views",
+      "status": "Verified implemented",
+      "status_code": "F",
+      "evidence": [
+        "src/app/app/[w]/plan/day-of/[eventId]/page.tsx",
+        "tests/e2e/day-of.spec.ts (not re-run)"
+      ],
+      "confidence": "low",
+      "notes": "Page exists; not read in depth."
+    },
+    {
+      "id": "PCK-01",
+      "category": "PCK",
+      "priority": "P0",
+      "title": "Pickers persist stable record IDs validated by composite FKs",
+      "status": "Verified implemented",
+      "status_code": "F",
+      "evidence": [
+        "supabase/migrations/20261202090000_timeline.sql:36-37",
+        "20261130090000_events_rsvp.sql:99-103",
+        "tests/integration/design.test.ts:645"
+      ],
+      "confidence": "high",
+      "notes": ""
+    },
+    {
+      "id": "PCK-02",
+      "category": "PCK",
+      "priority": "P0",
+      "title": "Event -> eligible guests only (server-validated)",
+      "status": "Verified implemented",
+      "status_code": "F",
+      "evidence": ["supabase/migrations/20261201090000_seating.sql:455-467"],
+      "confidence": "high",
+      "notes": ""
+    },
+    {
+      "id": "PCK-03",
+      "category": "PCK",
+      "priority": "P1",
+      "title": "Venue -> valid Spaces",
+      "status": "Missing (verified)",
+      "status_code": "M",
+      "evidence": ["No space entity (EVT-03)"],
+      "confidence": "high",
+      "notes": ""
+    },
+    {
+      "id": "PCK-04",
+      "category": "PCK",
+      "priority": "P1",
+      "title": "Booking -> events from same wedding",
+      "status": "Missing (verified)",
+      "status_code": "M",
+      "evidence": ["No booking-event relation (EVT-04, FIN-01)"],
+      "confidence": "high",
+      "notes": ""
+    },
+    {
+      "id": "PCK-05",
+      "category": "PCK",
+      "priority": "P1",
+      "title": "Seating plan -> unoccupied seats",
+      "status": "Verified implemented",
+      "status_code": "F",
+      "evidence": [
+        "supabase/migrations/20261201090000_seating.sql:73",
+        "src/features/seating/seat-chips.tsx"
+      ],
+      "confidence": "medium",
+      "notes": "UI picker not exercised in this audit."
+    },
+    {
+      "id": "PCK-06",
+      "category": "PCK",
+      "priority": "P1",
+      "title": "Invalid legacy selections stay visible and are revalidated",
+      "status": "Partially implemented",
+      "status_code": "P",
+      "evidence": [
+        "supabase/migrations/20261130090000_events_rsvp.sql:377 (deactivated meal keeps existing choices)"
+      ],
+      "confidence": "low",
+      "notes": "Only verified for meal options; other pickers unknown."
+    },
+    {
+      "id": "PCK-07",
+      "category": "PCK",
+      "priority": "P2",
+      "title": "Option sets are data, not hard-coded",
+      "status": "Partially implemented",
+      "status_code": "P",
+      "evidence": [
+        "supabase/migrations/20261123090000_candidates.sql:20-23",
+        "20261130090000_events_rsvp.sql:22-23 (CHECK-constrained enums)"
+      ],
+      "confidence": "medium",
+      "notes": "Vendor categories/event kinds fixed in DDL."
+    },
+    {
+      "id": "SEC-01",
+      "category": "SEC",
+      "priority": "P0",
+      "title": "RLS on every tenant table; clients have no direct writes",
+      "status": "Verified implemented",
+      "status_code": "F",
+      "evidence": [
+        "43 of 43 `create table public.*` statements have a matching `enable row level security` (grep, this audit) and revoke client writes",
+        "tests/integration/guests.test.ts:415, seating.test.ts:226"
+      ],
+      "confidence": "high",
+      "notes": ""
+    },
+    {
+      "id": "SEC-02",
+      "category": "SEC",
+      "priority": "P0",
+      "title": "Cross-wedding ID injection blocked by composite FKs/RPC checks",
+      "status": "Verified implemented",
+      "status_code": "F",
+      "evidence": [
+        "supabase/migrations/20261130090000_events_rsvp.sql:73-74,:99-103",
+        "tests/integration/tenancy.test.ts, ledger.test.ts:772"
+      ],
+      "confidence": "high",
+      "notes": ""
+    },
+    {
+      "id": "SEC-03",
+      "category": "SEC",
+      "priority": "P0",
+      "title": "Sensitive guest data protected; audit and exports redacted",
+      "status": "Verified implemented",
+      "status_code": "F",
+      "evidence": [
+        "supabase/migrations/20261129090000_guests.sql:1-15",
+        "src/server/seating/queries.ts:44-49"
+      ],
+      "confidence": "high",
+      "notes": ""
+    },
+    {
+      "id": "SEC-04",
+      "category": "SEC",
+      "priority": "P0",
+      "title": "Public RSVP/site reachable only via service-role RPCs, narrow projection",
+      "status": "Verified implemented",
+      "status_code": "F",
+      "evidence": [
+        "supabase/migrations/20261130090000_events_rsvp.sql:810-811",
+        "tests/integration/rsvp.test.ts:216"
+      ],
+      "confidence": "high",
+      "notes": ""
+    },
+    {
+      "id": "SEC-05",
+      "category": "SEC",
+      "priority": "P0",
+      "title": "Idempotency + concurrency control (locks, versions)",
+      "status": "Verified implemented",
+      "status_code": "F",
+      "evidence": [
+        "tests/integration/*: 5-concurrent-submit replay tests across budget/ledger/guests/comments"
+      ],
+      "confidence": "high",
+      "notes": ""
+    },
+    {
+      "id": "SEC-06",
+      "category": "SEC",
+      "priority": "P1",
+      "title": "Append-only audit",
+      "status": "Verified implemented",
+      "status_code": "F",
+      "evidence": ["supabase/migrations/20261120044804_core_tenancy.sql:109-120"],
+      "confidence": "high",
+      "notes": ""
+    },
+    {
+      "id": "SEC-07",
+      "category": "SEC",
+      "priority": "P1",
+      "title": "Private storage with authorized reads",
+      "status": "Verified implemented",
+      "status_code": "F",
+      "evidence": [
+        "supabase/migrations/20261128090000_documents.sql:80-",
+        "tests/integration/documents.test.ts:177"
+      ],
+      "confidence": "medium",
+      "notes": ""
+    },
+    {
+      "id": "SEC-08",
+      "category": "SEC",
+      "priority": "P1",
+      "title": "RSVP webhook idempotency",
+      "status": "Not applicable",
+      "status_code": "N",
+      "evidence": [
+        "No webhook endpoints exist (grep webhook: none)",
+        "RSVP is a server action + RPC"
+      ],
+      "confidence": "high",
+      "notes": "Justified N/A until an inbound provider is added."
+    },
+    {
+      "id": "SEC-09",
+      "category": "SEC",
+      "priority": "P1",
+      "title": "Throttle not defeatable by header spoofing",
+      "status": "Partially implemented",
+      "status_code": "P",
+      "evidence": ["src/server/rsvp/public.ts:51-55 (x-forwarded-for first hop)"],
+      "confidence": "medium",
+      "notes": "Risk, not confirmed exploit: depends on edge proxy overwriting the header."
+    },
+    {
+      "id": "SEC-10",
+      "category": "SEC",
+      "priority": "P1",
+      "title": "Reproducible forward-only migrations",
+      "status": "Verified implemented",
+      "status_code": "F",
+      "evidence": ["supabase/migrations (26 files, timestamp ordered)", "docs/13-DEVOPS.md"],
+      "confidence": "medium",
+      "notes": ""
+    },
+    {
+      "id": "SEC-11",
+      "category": "SEC",
+      "priority": "P1",
+      "title": "Automated tests cover critical invariants",
+      "status": "Verified implemented",
+      "status_code": "F",
+      "evidence": [
+        "pnpm-equivalent `vitest run`: 48 files / 634 tests passed (this audit)",
+        "integration (tests/integration, 20 files) and e2e (tests/e2e, 27 specs) exist but were NOT re-run"
+      ],
+      "confidence": "medium",
+      "notes": ""
+    }
+  ],
+  "tests_performed": [
+    {
+      "id": "unit",
+      "command": "node_modules/.bin/vitest run",
+      "result": "PASS",
+      "observed": "48 test files, 634 tests passed, 4.28s",
+      "scope": "pure domain/unit; no DB"
+    },
+    {
+      "id": "integration",
+      "command": "vitest run --config vitest.integration.config.ts",
+      "result": "NOT_RUN",
+      "reason": "Writes throwaway users/rows into the developer's local Supabase; audit is read-only and the user keeps a persistent demo DB. Test files were read instead."
+    },
+    {
+      "id": "e2e",
+      "command": "playwright test",
+      "result": "NOT_RUN",
+      "reason": "Requires running app + DB writes; out of read-only scope."
+    },
+    {
+      "id": "pnpm",
+      "result": "NOT_RUN",
+      "reason": "pnpm not on PATH in this shell; vitest binary used directly."
+    }
+  ],
+  "first_tests_pdf_s8": [
+    {
+      "test": "Per-event RSVP, different outcomes; party vs named",
+      "classification": "PASS (code+test read, not run)",
+      "evidence": "tests/integration/rsvp.test.ts:269; mig/20261130090000_events_rsvp.sql:106"
+    },
+    {
+      "test": "Plus-one claim exactly once incl. concurrent",
+      "classification": "PASS (code+test read, not run)",
+      "evidence": "tests/integration/rsvp.test.ts:314,343; events_rsvp.sql:695,:739-776"
+    },
+    {
+      "test": "RSVP change flows into seating, catering, budget, capacity",
+      "classification": "PARTIAL",
+      "evidence": "seating+meals automatic (seating.sql:137-175); budget NOT (plan/budget/page.tsx:41); capacity not linked to venue"
+    },
+    {
+      "test": "Published seating and locked catering guarantee persist when guest cancels",
+      "classification": "PARTIAL",
+      "evidence": "seating snapshot persists and goes stale (seating.sql:515-564); no catering guarantee entity"
+    },
+    {
+      "test": "Forecast changes but contract/invoice/paid do not",
+      "classification": "PARTIAL",
+      "evidence": "contract and paid separate (summary.ts:10-12, ledger.sql:54-90); no invoice record; forecast not driven by RSVP"
+    },
+    {
+      "test": "Tenant access, cross-wedding ID validation, RSVP webhook idempotency",
+      "classification": "PASS / N/A",
+      "evidence": "composite FKs + tenancy tests; no webhooks exist"
+    }
+  ],
+  "unknowns": [
+    {
+      "topic": "Kit REQ/DEP/AT identifiers",
+      "reason": "files not supplied"
+    },
+    {
+      "topic": "Integration/e2e pass state at HEAD",
+      "reason": "not re-run; docs/16-IMPLEMENTATION-STATUS.md claims pass"
+    },
+    {
+      "topic": "x-forwarded-for trust at deploy edge",
+      "reason": "no deployment config in repo"
+    }
+  ],
+  "highest_leverage_changes": [
+    "Derive headcount from invitation_members and feed budget/quotes/comparisons",
+    "Introduce event<->venue/space and booking<->event links",
+    "Add catering guarantee + invoice records with locks",
+    "Add a derived 'event demand' read model/RPC as the single source for headcount/meals/vendors",
+    "Give editor/planner a real scoped write grant and planner workspace"
+  ]
+}
