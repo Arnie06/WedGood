@@ -75,6 +75,9 @@ export function TrayButton({
   className,
   openOnParam,
   successMessage,
+  isOpen,
+  onClosed,
+  initialFocus,
   children,
 }: {
   label?: ReactNode;
@@ -93,6 +96,15 @@ export function TrayButton({
   openOnParam?: string | undefined;
   /** Toast shown after a save closes the tray, when the action gave no message of its own. */
   successMessage?: string | undefined;
+  /**
+   * Lets something other than the trigger open the tray (the Edit button on a floor-plan card): the tray
+   * opens when this turns true. The owner clears it in `onClosed`.
+   */
+  isOpen?: boolean | undefined;
+  /** Called once the tray has closed, however it was closed, so the opener can restore focus. */
+  onClosed?: (() => void) | undefined;
+  /** CSS selector for the control that gets focus on open, instead of the first field. */
+  initialFocus?: string | undefined;
   children: ReactNode;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
@@ -136,13 +148,28 @@ export function TrayButton({
     if (!mounted || !dialog || dialog.open) return;
     dialog.showModal();
     const frame = window.requestAnimationFrame(() => setVisible(true));
-    dialog
-      .querySelector<HTMLElement>("input:not([type=hidden]), textarea, select")
-      ?.focus({ preventScroll: true });
+    const target =
+      (initialFocus ? dialog.querySelector<HTMLElement>(initialFocus) : null) ??
+      dialog.querySelector<HTMLElement>("input:not([type=hidden]), textarea, select");
+    target?.focus({ preventScroll: true });
     return () => window.cancelAnimationFrame(frame);
+    // Only when the tray opens; a later change of `initialFocus` must not move focus.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mounted]);
 
   useEffect(() => () => window.clearTimeout(closeTimer.current), []);
+
+  // Opened from outside: open once when `isOpen` turns true.
+  useEffect(() => {
+    if (!isOpen) return;
+    const timer = window.setTimeout(open, 0);
+    return () => window.clearTimeout(timer);
+  }, [isOpen, open]);
+
+  const onClosedRef = useRef(onClosed);
+  useEffect(() => {
+    onClosedRef.current = onClosed;
+  });
 
   const wanted = openOnParam ? params.get(openOnParam) === "1" : false;
   useEffect(() => {
@@ -199,6 +226,7 @@ export function TrayButton({
         onClose={() => {
           setVisible(false);
           setMounted(false);
+          onClosedRef.current?.();
         }}
         onClick={(event) => {
           if (event.target === event.currentTarget) close();

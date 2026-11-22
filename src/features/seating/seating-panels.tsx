@@ -186,6 +186,7 @@ export function TablePanel({
   views,
   candidates,
   position,
+  guestHrefBase,
 }: {
   workspaceId: string;
   layoutId: string;
@@ -195,6 +196,8 @@ export function TablePanel({
   candidates: { id: string; name: string }[];
   /** Where the table sits on the floor plan (centre, grid units). */
   position: { x: number; y: number };
+  /** Where a guest's own page lives, without the trailing id. */
+  guestHrefBase: string;
 }) {
   const s = table.stats;
   const notes = table.seats.flatMap((seat) => {
@@ -274,6 +277,7 @@ export function TablePanel({
         }))}
         unnumbered={seating.unnumbered.map((s) => ({ id: s.guest.id, name: s.guest.name }))}
         candidates={table.open === 0 ? [] : candidates}
+        guestHrefBase={guestHrefBase}
       />
 
       {notes.length > 0 && (

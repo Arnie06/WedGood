@@ -58,19 +58,25 @@ export function initials(name: string): string {
 }
 
 export type ChipState = "empty" | "seated" | "waiting";
-export type Chip = { initials: string | null; state: ChipState };
+
+export type CanvasSeat = {
+  /** 1-based seat number, which is also the chip's position round the table. */
+  seat: number;
+  occupant: TableSeat | null;
+  /** False when the guest has no saved seat number and is only drawn in the lowest free seat. */
+  numbered: boolean;
+};
 
 /**
- * What to draw round the table: one chip per seat. Numbered guests take their own seat; guests with
- * no number fill the lowest empty seats so the filled count always matches who is at the table.
+ * Who is drawn in each seat of the floor plan. Numbered guests take their own seat; guests with no
+ * number fill the lowest empty seats so the filled count always matches who is at the table.
  */
-export function canvasChips(table: Pick<TablePlan, "capacity" | "seats">): Chip[] {
+export function canvasSeats(table: Pick<TablePlan, "capacity" | "seats">): CanvasSeat[] {
   const { slots, unnumbered } = tableSeats(table);
   const queue = [...unnumbered];
   return slots.map((slot) => {
-    const who = slot.occupant ?? queue.shift() ?? null;
-    if (!who) return { initials: null, state: "empty" };
-    return { initials: initials(who.guest.name), state: who.tentative ? "waiting" : "seated" };
+    if (slot.occupant) return { seat: slot.seat, occupant: slot.occupant, numbered: true };
+    return { seat: slot.seat, occupant: queue.shift() ?? null, numbered: false };
   });
 }
 

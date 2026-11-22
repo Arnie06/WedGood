@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import Link from "next/link";
+import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { SelectField } from "@/components/ui/select-field";
 import { useTrayActionState } from "@/components/ui/tray";
@@ -8,6 +9,7 @@ import { cn } from "@/lib/cn";
 import { initials } from "@/domain/seating/seats";
 import { Feedback, Hidden } from "@/features/events/event-forms";
 import type { EventActionState } from "@/server/events/actions";
+import { SeatFocusContext } from "./seat-focus";
 import { numberTableSeats, seatGuest, swapSeats } from "@/server/seating/actions";
 
 const idle: EventActionState = { status: "idle" };
@@ -51,6 +53,8 @@ type Props = {
   unnumbered: { id: string; name: string }[];
   /** Not seated anywhere yet (and seatable now). */
   candidates: { id: string; name: string }[];
+  /** Where a guest's own page lives, without the trailing id. */
+  guestHrefBase: string;
 };
 
 const chipName = (s: SeatChipSlot) =>
@@ -72,15 +76,31 @@ export function SeatChips({
   slots,
   unnumbered,
   candidates,
+  guestHrefBase,
 }: Props) {
-  const [selected, setSelected] = useState<number | null>(null);
+  // Opened from a seat's card on the floor plan: start with that seat selected and bring it into view.
+  const requested = useContext(SeatFocusContext);
+  const [selected, setSelected] = useState<number | null>(
+    requested !== null && slots.some((s) => s.seat === requested) ? requested : null,
+  );
+  const sectionRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (requested === null) return;
+    // The tray calls showModal() after its children mount, and a hidden dialog cannot scroll, so wait a frame.
+    const frame = window.requestAnimationFrame(() =>
+      sectionRef.current?.scrollIntoView({ block: "start" }),
+    );
+    return () => window.cancelAnimationFrame(frame);
+    // Only on arrival; the tray is modal, so the request cannot change while it is open.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [notice, setNotice] = useState<EventActionState>(idle);
   const slot = slots.find((s) => s.seat === selected) ?? null;
   const emptySeats = slots.filter((s) => s.guest === null);
   const neighbours = slots.flatMap((s) => (s.guest ? [{ seat: s.seat, ...s.guest }] : []));
 
   return (
-    <section aria-label="Seat numbers" className="space-y-3">
+    <section ref={sectionRef} aria-label="Seat numbers" className="scroll-mt-4 space-y-3">
       <h3 className="text-label-lg font-semibold">Seat numbers</h3>
       {slots.length === 0 ? (
         <p className="text-body-md text-ink-muted">This table has no seats.</p>
@@ -122,6 +142,7 @@ export function SeatChips({
       {slot ? (
         <div
           role="group"
+          data-seat-panel
           aria-label={`Seat ${slot.seat}`}
           className="space-y-3 rounded-card border border-border-hairline bg-surface-sunken p-3"
         >
@@ -133,6 +154,7 @@ export function SeatChips({
               tableId={tableId}
               seat={slot.seat}
               guest={slot.guest}
+              guestHref={`${guestHrefBase}/${slot.guest.id}`}
               neighbours={neighbours.filter((n) => n.id !== slot.guest?.id)}
               emptySeats={emptySeats.map((e) => e.seat)}
               report={setNotice}
@@ -179,6 +201,7 @@ function OccupiedSeat({
   tableId,
   seat,
   guest,
+  guestHref,
   neighbours,
   emptySeats,
   report,
@@ -189,6 +212,7 @@ function OccupiedSeat({
   tableId: string;
   seat: number;
   guest: { id: string; name: string };
+  guestHref: string;
   neighbours: { id: string; name: string; seat: number }[];
   emptySeats: number[];
   report: Report;
@@ -204,7 +228,14 @@ function OccupiedSeat({
   return (
     <>
       <p className="text-body-md">
-        <span className="font-semibold">Seat {seat}:</span> {guest.name}
+        <span className="font-semibold">Seat {seat}:</span>{" "}
+        <Link
+          href={guestHref}
+          className="inline-block py-2.5 -my-2.5 text-action-emphasis underline underline-offset-4"
+        >
+          {guest.name}
+          <span className="sr-only">, open guest details</span>
+        </Link>
       </p>
 
       <form action={swapAction} className="space-y-2" noValidate>

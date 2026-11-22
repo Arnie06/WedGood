@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { tableSize } from "./floor";
 import type { TableSeat } from "./plan";
-import { canvasChips, chipLayout, initials, tableSeats } from "./seats";
+import { canvasSeats, chipLayout, initials, tableSeats } from "./seats";
 
 const seat = (id: string, name: string, n: number | null, tentative = false): TableSeat => ({
   guest: { id, name },
@@ -47,9 +47,9 @@ describe("tableSeats", () => {
   });
 });
 
-describe("canvasChips", () => {
-  it("draws one chip per seat and fills empty seats with unnumbered guests so the count matches", () => {
-    const chips = canvasChips({
+describe("canvasSeats", () => {
+  it("draws one seat per capacity and fills empty seats with unnumbered guests so the count matches", () => {
+    const seats = canvasSeats({
       capacity: 4,
       seats: [
         seat("a", "Al Zed", 2),
@@ -57,9 +57,15 @@ describe("canvasChips", () => {
         seat("c", "Cy Dunn", null, true),
       ],
     });
-    expect(chips).toHaveLength(4);
-    expect(chips.map((c) => c.state)).toEqual(["seated", "seated", "waiting", "empty"]);
-    expect(chips.map((c) => c.initials)).toEqual(["BC", "AZ", "CD", null]);
+    expect(seats.map((s) => s.seat)).toEqual([1, 2, 3, 4]);
+    expect(seats.map((s) => s.occupant?.guest.name ?? null)).toEqual([
+      "Bea Cole",
+      "Al Zed",
+      "Cy Dunn",
+      null,
+    ]);
+    // Only the guest with a saved number is "numbered"; the others are drawn in the lowest free seats.
+    expect(seats.map((s) => s.numbered)).toEqual([false, true, false, false]);
   });
 });
 

@@ -14,9 +14,13 @@ import {
   type PointerEvent,
   type ReactNode,
 } from "react";
+import Link from "next/link";
+import { createPortal } from "react-dom";
+import { AnchoredCard } from "@/components/ui/anchored-card";
 import { TrayButton } from "@/components/ui/tray";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/cn";
+import { seatLabel, type SeatCard, type TableCard } from "@/domain/seating/cards";
 import {
   FLOOR_HEIGHT,
   FLOOR_WIDTH,
@@ -26,8 +30,10 @@ import {
   type Size,
 } from "@/domain/seating/floor";
 import type { TableShape } from "@/domain/seating/plan";
-import { chipLayout, type Chip } from "@/domain/seating/seats";
+import { chipLayout } from "@/domain/seating/seats";
 import { moveFloorItem } from "@/server/seating/actions";
+import { SeatCardBody, TableCardBody } from "./floor-cards";
+import { SeatFocusContext } from "./seat-focus";
 
 export type FloorTableNode = {
   id: string;
@@ -41,8 +47,6 @@ export type FloorTableNode = {
   used: number;
   waiting: number;
   captain: string | null;
-  /** One chip per seat: initials and whether the seat is filled, waiting or empty. */
-  chips: Chip[];
 };
 
 type Kind = "table" | "element";
@@ -57,11 +61,23 @@ const MIN_PLAN_PX = 720;
 const pct = (n: number, of: number) => `${(n / of) * 100}%`;
 const key = (kind: Kind, id: string) => `${kind}:${id}`;
 
+type Target = { kind: "table"; tableId: string } | { kind: "seat"; tableId: string; seat: number };
+type OpenCard = { target: Target; anchor: HTMLElement };
+type OpenTray = { tableId: string; seat: number | null };
+type Tip = { anchor: HTMLElement; text: string };
+
+const sameTarget = (a: Target, b: Target) =>
+  a.kind === b.kind &&
+  a.tableId === b.tableId &&
+  (a.kind === "table" || (b.kind === "seat" && a.seat === b.seat));
+
 /**
  * The room as a sketch: drag a table or room item, or focus it and use the arrow keys (Shift for
- * bigger steps). Activating one opens its tray. Positions are a schematic grid, not a scale drawing.
- * Panels are built on the server and handed in. The seat chips round each table are decoration (initials
- * only, hidden from assistive tech); the table's tray and its text description carry the same facts.
+ * bigger steps). Tapping a table or one of the seat chips round it opens a small card beside it with the
+ * facts that matter; the card's Edit button opens the full tray (for a seat, on that seat). Hovering a
+ * seat with a mouse names who is in it. Positions are a schematic grid, not a scale drawing. Panels are
+ * built on the server and handed in. Seat chips are small on a crowded plan, so zoom in for comfortable
+ * targets; the table card and tray reach every seat without them.
  */
 export function FloorPlan({
   workspaceId,
@@ -69,12 +85,23 @@ export function FloorPlan({
   elements,
   tablePanels,
   elementPanels,
+  tableCards,
+  seatCards,
+  waitingForSeat,
+  guestHrefBase,
 }: {
   workspaceId: string;
   tables: FloorTableNode[];
   elements: (FloorElement & { version: number })[];
   tablePanels: Record<string, ReactNode>;
   elementPanels: Record<string, ReactNode>;
+  tableCards: Record<string, TableCard>;
+  /** One card per seat, in seat order, for each table. */
+  seatCards: Record<string, SeatCard[]>;
+  /** Guests who could be seated now but have no seat yet. */
+  waitingForSeat: number;
+  /** Where a guest's own page lives, without the trailing id (for example `/app/<id>/guests`). */
+  guestHrefBase: string;
 }) {
   const { toast } = useToast();
   // False while the server HTML is being hydrated, true after: lets tests (and nothing else) know
@@ -92,6 +119,34 @@ export function FloorPlan({
   const flushTimer = useRef<number | undefined>(undefined);
   const dragged = useRef(false);
   const [announcement, setAnnouncement] = useState("");
+  const [card, setCard] = useState<OpenCard | null>(null);
+  const [tray, setTray] = useState<OpenTray | null>(null);
+  const [tip, setTip] = useState<Tip | null>(null);
+
+  /** Tap the same thing again to put its card away. */
+  const toggleCard = (target: Target, anchor: HTMLElement) => {
+    setTip(null);
+    setCard((current) =>
+      current && sameTarget(current.target, target) ? null : { target, anchor },
+    );
+  };
+  const closeCard = ({ refocus }: { refocus: boolean }) => {
+    if (refocus) card?.anchor.focus({ preventScroll: true });
+    setCard(null);
+  };
+  const editFromCard = (next: OpenTray) => {
+    setCard(null);
+    setTray(next);
+  };
+  /** After the tray closes, focus goes back to what opened the card (the card itself is gone). */
+  const trayClosed = (tableId: string, seat: number | null) => {
+    setTray(null);
+    const selector =
+      seat === null
+        ? `[data-floor-item="table"][data-table-id="${tableId}"]`
+        : `[data-floor-seat="${seat}"][data-table-id="${tableId}"]`;
+    boxRef.current?.querySelector<HTMLElement>(selector)?.focus({ preventScroll: true });
+  };
 
   const server: Record<string, Pos> = {};
   for (const t of tables) server[key("table", t.id)] = { x: t.x, y: t.y };
@@ -158,6 +213,10 @@ export function FloorPlan({
     const move = (e: globalThis.PointerEvent) => {
       if (!dragged.current && Math.hypot(e.clientX - originX, e.clientY - originY) < DRAG_PX)
         return;
+      if (!dragged.current) {
+        setCard(null);
+        setTip(null);
+      }
       dragged.current = true;
       setLiveNow(place(e));
     };
@@ -215,6 +274,58 @@ export function FloorPlan({
     flushTimer.current = window.setTimeout(flush, 600);
   }
 
+  const activeCard = (() => {
+    if (!card) return null;
+    const { target } = card;
+    if (target.kind === "table") {
+      const data = tableCards[target.tableId];
+      if (!data) return null;
+      return (
+        <AnchoredCard
+          key={`table-${target.tableId}`}
+          anchor={card.anchor}
+          title={data.label}
+          description={`${data.shape === "round" ? "Round" : "Rectangular"} table`}
+          onClose={closeCard}
+        >
+          <TableCardBody
+            card={data}
+            onEdit={() => editFromCard({ tableId: target.tableId, seat: null })}
+          />
+        </AnchoredCard>
+      );
+    }
+    const data = seatCards[target.tableId]?.find((x) => x.seat === target.seat);
+    if (!data) return null;
+    return (
+      <AnchoredCard
+        key={`seat-${target.tableId}-${target.seat}`}
+        anchor={card.anchor}
+        title={
+          data.guest ? (
+            <Link
+              href={`${guestHrefBase}/${data.guest.id}`}
+              className="-my-2.5 inline-block py-2.5 text-action-emphasis underline decoration-1 underline-offset-4 hover:decoration-2"
+            >
+              {data.guest.name}
+              <span className="sr-only">, open guest details</span>
+            </Link>
+          ) : (
+            `Seat ${data.seat}`
+          )
+        }
+        description={`${data.tableLabel}, ${data.guest ? `seat ${data.seat}` : "empty seat"}`}
+        onClose={closeCard}
+      >
+        <SeatCardBody
+          card={data}
+          waitingForSeat={waitingForSeat}
+          onEdit={() => editFromCard({ tableId: target.tableId, seat: target.seat })}
+        />
+      </AnchoredCard>
+    );
+  })();
+
   const style = (rect: { x: number; y: number; w: number; h: number }): CSSProperties => ({
     left: pct(rect.x, FLOOR_WIDTH),
     top: pct(rect.y, FLOOR_HEIGHT),
@@ -227,8 +338,8 @@ export function FloorPlan({
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-body-sm text-ink-muted">
-          Drag a table or item to move it. With a keyboard, focus one and use the arrow keys (Shift
-          for bigger steps). Open one to see who is there.
+          Tap a table or a seat to see who is there. Drag a table or item to move it; with a
+          keyboard, focus one and use the arrow keys (Shift for bigger steps).
         </p>
         <div className="flex items-center gap-1" role="group" aria-label="Zoom">
           <button
@@ -312,38 +423,61 @@ export function FloorPlan({
           {tables.map((t) => {
             const p = posOf("table", t.id);
             const { diameter, spots } = chipLayout(t.shape, t.capacity, t.size);
-            return (
-              <div key={`chips-${t.id}`} aria-hidden="true" className="pointer-events-none">
-                {spots.map((spot, i) => {
-                  const chip = t.chips[i];
-                  if (!chip) return null;
-                  return (
-                    <span
-                      key={i}
-                      data-chip={chip.state}
-                      className={cn(
-                        "absolute z-[5] flex items-center justify-center rounded-full border font-semibold leading-none",
-                        chip.state === "seated" &&
-                          "border-action-secondary bg-action-secondary text-on-action-secondary",
-                        chip.state === "waiting" &&
-                          "border-dashed border-action-secondary bg-status-pending-bg text-status-pending-fg",
-                        chip.state === "empty" &&
-                          "border-dashed border-border-control bg-surface text-ink-muted",
-                      )}
-                      style={{
-                        left: pct(p.x + spot.dx - diameter / 2, FLOOR_WIDTH),
-                        top: pct(p.y + spot.dy - diameter / 2, FLOOR_HEIGHT),
-                        width: pct(diameter, FLOOR_WIDTH),
-                        height: pct(diameter, FLOOR_HEIGHT),
-                        fontSize: `${((diameter * 0.42) / FLOOR_WIDTH) * 100}cqw`,
-                      }}
-                    >
-                      {zoom >= 1.5 ? (chip.initials ?? "+") : null}
-                    </span>
-                  );
-                })}
-              </div>
-            );
+            const seats = seatCards[t.id] ?? [];
+            return spots.map((spot, i) => {
+              const seat = seats[i];
+              if (!seat) return null;
+              const target: Target = { kind: "seat", tableId: t.id, seat: seat.seat };
+              const isOpen = card ? sameTarget(card.target, target) : false;
+              const name = seat.guest ? seat.guest.name : `Seat ${seat.seat}, empty`;
+              return (
+                <button
+                  key={`${t.id}-${seat.seat}`}
+                  type="button"
+                  // Seats are reached by keyboard through the table's card and tray, so they stay out of the
+                  // tab order (a plan can have dozens); a mouse, touch or screen reader can still activate them.
+                  tabIndex={-1}
+                  data-chip={seat.state}
+                  data-floor-seat={seat.seat}
+                  data-table-id={t.id}
+                  aria-label={seatLabel(seat)}
+                  aria-haspopup="dialog"
+                  aria-expanded={isOpen}
+                  onClick={(ev) => toggleCard(target, ev.currentTarget)}
+                  onPointerEnter={(ev) => {
+                    if (ev.pointerType === "mouse" && !isOpen)
+                      setTip({ anchor: ev.currentTarget, text: name });
+                  }}
+                  onPointerLeave={() => setTip(null)}
+                  onFocus={(ev) => {
+                    if (ev.currentTarget.matches(":focus-visible"))
+                      setTip({ anchor: ev.currentTarget, text: name });
+                  }}
+                  onBlur={() => setTip(null)}
+                  className={cn(
+                    "absolute z-[11] flex cursor-pointer items-center justify-center rounded-full border font-semibold leading-none transition-transform duration-100 hover:scale-125",
+                    seat.state === "seated" &&
+                      "border-action-secondary bg-action-secondary text-on-action-secondary",
+                    seat.state === "waiting" &&
+                      "border-dashed border-action-secondary bg-status-pending-bg text-status-pending-fg",
+                    seat.state === "empty" &&
+                      "border-dashed border-border-control bg-surface text-ink-muted",
+                    isOpen && "outline-2 outline-offset-2 outline-focus",
+                  )}
+                  style={{
+                    left: pct(p.x + spot.dx - diameter / 2, FLOOR_WIDTH),
+                    top: pct(p.y + spot.dy - diameter / 2, FLOOR_HEIGHT),
+                    width: pct(diameter, FLOOR_WIDTH),
+                    height: pct(diameter, FLOOR_HEIGHT),
+                    fontSize: `${((diameter * 0.42) / FLOOR_WIDTH) * 100}cqw`,
+                  }}
+                >
+                  <span aria-hidden="true">
+                    {zoom >= 1.5 ? (seat.guest?.initials ?? "+") : null}
+                  </span>
+                </button>
+              );
+            });
           })}
 
           {tables.map((t) => {
@@ -355,17 +489,27 @@ export function FloorPlan({
                 key={t.id}
                 title={t.label}
                 description={`${t.shape === "round" ? "Round" : "Rectangular"} table`}
-                trigger={(openTray) => (
+                isOpen={tray?.tableId === t.id}
+                onClosed={() => trayClosed(t.id, tray?.seat ?? null)}
+                {...(tray?.tableId === t.id && tray.seat !== null
+                  ? { initialFocus: "[data-seat-panel] select:not(:disabled)" }
+                  : {})}
+                trigger={() => (
                   <button
                     type="button"
                     data-floor-item="table"
+                    data-table-id={t.id}
                     data-table-label={t.label}
+                    aria-haspopup="dialog"
+                    aria-expanded={
+                      card ? sameTarget(card.target, { kind: "table", tableId: t.id }) : false
+                    }
                     onPointerDown={(ev) => onPointerDown(ev, "table", t.id, t.size)}
                     onKeyDown={(ev) => onKeyDown(ev, "table", t.id, t.size, t.label)}
                     onBlur={flush}
-                    onClick={() => {
+                    onClick={(ev) => {
                       if (dragged.current) dragged.current = false;
-                      else openTray();
+                      else toggleCard({ kind: "table", tableId: t.id }, ev.currentTarget);
                     }}
                     style={style({
                       x: p.x - t.size.w / 2,
@@ -394,16 +538,21 @@ export function FloorPlan({
                       full ? ", full" : `, ${open} open`
                     }${t.waiting > 0 ? `, ${t.waiting} waiting to answer` : ""}${
                       t.captain ? `, captain ${t.captain}` : ""
-                    }. Opens details. Arrow keys move it.`}</span>
+                    }. Opens a summary card. Arrow keys move it.`}</span>
                   </button>
                 )}
               >
-                {tablePanels[t.id]}
+                <SeatFocusContext.Provider value={tray?.tableId === t.id ? tray.seat : null}>
+                  {tablePanels[t.id]}
+                </SeatFocusContext.Provider>
               </TrayButton>
             );
           })}
         </div>
       </div>
+
+      {activeCard}
+      {tip && <SeatTip tip={tip} />}
 
       <p role="status" className="sr-only">
         {announcement}
@@ -413,5 +562,31 @@ export function FloorPlan({
         clearance check.
       </p>
     </div>
+  );
+}
+
+/**
+ * The name label that appears over a seat under a mouse pointer. Purely visual: the seat button already
+ * carries the same words as its accessible name. Fixed to the viewport so the plan's scroll box cannot
+ * clip it, and flipped below the seat when there is no room above.
+ */
+function SeatTip({ tip }: { tip: Tip }) {
+  const r = tip.anchor.getBoundingClientRect();
+  const vw = document.documentElement.clientWidth;
+  const above = r.top > 44;
+  return createPortal(
+    <span
+      aria-hidden="true"
+      data-testid="seat-tip"
+      className="pointer-events-none fixed z-50 max-w-40 rounded-control bg-ink px-2.5 py-1 text-center text-label-md leading-snug font-semibold text-surface shadow-ambient-md"
+      style={{
+        left: Math.min(Math.max(r.left + r.width / 2, 88), vw - 88),
+        top: above ? r.top - 6 : r.bottom + 6,
+        transform: above ? "translate(-50%, -100%)" : "translate(-50%, 0)",
+      }}
+    >
+      {tip.text}
+    </span>,
+    document.body,
   );
 }

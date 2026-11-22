@@ -10,7 +10,7 @@ import { ProgressBar } from "@/components/ui/progress-bar";
 import { TrayButton } from "@/components/ui/tray";
 import { overlapNotes, placeTables, type FloorTable } from "@/domain/seating/floor";
 import { buildSeatingPlan, snapshotState } from "@/domain/seating/plan";
-import { canvasChips } from "@/domain/seating/seats";
+import { seatCards, tableCard } from "@/domain/seating/cards";
 import { suggestSeating } from "@/domain/seating/suggest";
 import { buildGuestViews } from "@/domain/seating/views";
 import {
@@ -173,6 +173,7 @@ export default async function SeatingPage({
         views={views}
         candidates={toSeat.map((g) => ({ id: g.id, name: g.name }))}
         position={{ x: spot?.x ?? 0, y: spot?.y ?? 0 }}
+        guestHrefBase={`${base}/guests`}
       />
     );
   };
@@ -191,7 +192,6 @@ export default async function SeatingPage({
             used: table.used,
             waiting: table.stats.waiting,
             captain: table.seats.find((x) => x.captain)?.guest.name ?? null,
-            chips: canvasChips(table),
           },
         ]
       : [];
@@ -267,6 +267,10 @@ export default async function SeatingPage({
             tables={floorNodes}
             elements={data.elements}
             tablePanels={Object.fromEntries(plan.tables.map((tb) => [tb.id, tablePanel(tb)]))}
+            tableCards={Object.fromEntries(plan.tables.map((tb) => [tb.id, tableCard(tb)]))}
+            seatCards={Object.fromEntries(plan.tables.map((tb) => [tb.id, seatCards(tb, views)]))}
+            waitingForSeat={toSeat.length}
+            guestHrefBase={`${base}/guests`}
             elementPanels={Object.fromEntries(
               data.elements.map((e) => [
                 e.id,

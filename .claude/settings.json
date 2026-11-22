@@ -18,7 +18,20 @@
       "Bash(python3 -)",
       "Bash(curl -s https://api.github.com/repos/actions/upload-artifact/releases/latest)",
       "Bash(python3 -c \"import json,sys; print\\(json.load\\(sys.stdin\\).get\\('tag_name'\\)\\)\")",
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git remote *)",
+      "Bash(git push *)",
+      "Bash(gh auth *)",
+      "Bash(gh api *)",
+      "Bash(brew --version)",
+      "Bash(brew info *)",
+      "Bash(docker ps *)",
+      "Read(//Applications/**)",
+      "Bash(orb status *)",
+      "Read(//Users/alang/.orbstack/**)",
+      "Bash(npx pnpm@12.21.0 add -D -E @supabase/supabase-js pg @types/pg)",
+      "Bash(npx pnpm@12.21.0 run format:check)"
     ]
   }
 }

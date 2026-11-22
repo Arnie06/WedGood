@@ -46,6 +46,7 @@ This ledger is for Claude Code, Codex and human maintainers. Keep it factual; do
 | SEAT-3 | done locally; CI not run; uncommitted | working tree on `main` | See 2026-11-21 SEAT-3 entry and the ADR-030 SEAT-3 addendum |
 | SEAT-4 | done locally; CI not run; uncommitted | working tree on `main` | See 2026-11-21 SEAT-4 entry and the ADR-030 SEAT-4 addendum |
 | SEAT-5 | done locally; CI not run; uncommitted | working tree on `main` | See 2026-11-21 SEAT-5 entry and the ADR-030 SEAT-5 addendum |
+| SEAT-6 | done locally; CI not run; uncommitted | working tree on `main` | See 2026-11-21 SEAT-6 entry (floor-plan cards and seat hover; owner-requested, not in the backlog) |
 
 ## Next session: start here
 
@@ -59,6 +60,27 @@ This ledger is for Claude Code, Codex and human maintainers. Keep it factual; do
 6. Conventions established: semantic colour aliases only (raw palette is disabled in Tailwind; `tokens.test.ts` guards contrast); money in integer minor units via `src/domain/money`; date-only values via `src/domain/dates`; no fake success states. Unbuilt tools are labelled "Not available yet", not linked.
 
 ## Session log
+
+### 2026-11-21 · Claude Code · relationship audit and REL plan (docs only) · branch `main`
+
+- **Scope:** Read-only audit of how modules connect (RSVP → seating, meals, budget; venue → events; contract → guarantee), then a plan. No app code, migration or data change.
+- **Outputs:** `audit-output/` (comparison report, capability matrix, data-model comparison, dependency trace, gap backlog, open questions, `IMPLEMENTATION_PLAN.md`). ADR-031 records the owner's decisions D1 to D7. Backlog rows REL-01 to REL-12 added before R1-18.
+- **Key findings:** RSVP → seating, meals and packages works in one transaction. Budget per-guest costs and comparisons use typed counts, not replies. No event ↔ venue/space or booking ↔ event links; no catering guarantee or invoice record; editor role is view-only.
+- **Commands:** `format:check`, `lint`, `typecheck`, `test:unit` (634), all exit 0, run before committing SEAT-6 together with this work. Integration and E2E not re-run by this session (SEAT-6 entry below records the full E2E run).
+- **Next:** **REL-01** (event demand: one server-computed headcount per event, `planning_basis`, owner-only `share_guest_totals`).
+
+### 2026-11-21 · Claude Code · SEAT-6 (floor-plan cards and seat hover) · branch `main` (uncommitted, on top of the SEAT-1 to SEAT-5 commit `f6e29a1`)
+
+- **Scope:** Owner request. On the floor plan, tapping a table or a seat opens a small card right beside it; the card's Edit button opens the large right-hand tray (for a seat, the table tray with that seat selected). Hovering a seat with a mouse shows who is in it. No migration, no server action changes.
+- **Domain:** `src/domain/seating/cards.ts` (pure `tableCard`, `seatCards`, `seatLabel`), `canvasSeats` in `seats.ts` (replaces the now-unused `canvasChips`), `src/lib/anchored-position.ts` (pure `placeCard`: right, left, below, above, else roomiest side clamped on screen).
+- **UI:** `src/components/ui/anchored-card.tsx` (non-modal portal card that follows its target, closes on outside tap, Escape, or the target scrolling out of view), `src/features/seating/floor-cards.tsx` (card bodies), `seat-focus.tsx` (context so the table tray opens on the chosen seat), `floor-plan.tsx` (seats are now buttons; hover label; card and tray state), `TrayButton` gained `isOpen`, `onClosed`, `initialFocus`. Seat chips scroll into view in the tray. The seating page passes `tableCards`, `seatCards`, `waitingForSeat`.
+- **Behaviour:** table card shows seats taken/open, answers, captain, plus-ones and children, meals, counts of dietary and access notes, table notes. Seat card shows who, status (attending or held), captain/plus-one/child, meal, who a plus-one came with, household, dietary and access text (same visibility as the existing guest tray; never in downloads), and says so when a guest has no saved seat number; an empty seat says it is empty and how many guests still need a seat. Focus returns to the table or seat after Escape or after the tray closes.
+- **Tests:** unit +14 (`cards.test.ts`, `anchored-position.test.ts`, `canvasSeats`). E2E: new "floor plan cards" spec (hover label, card beside table and seat, empty seat, unnumbered guest, toggle, Escape and focus return, Edit to tray on the right seat with first usable control focused, outside-tap close, axe with a card open, 320px card on screen with 44px Edit button and tray scrolled to the seat); existing floor-plan, numbered-seats and screenshot specs updated for the two-step flow. A real bug was caught and fixed on the way: focusing a disabled select (swap with no neighbours) silently did nothing.
+- **Commands, all exit 0:** `format:check`, `lint`, `typecheck`, `test:unit` (634), `build`, full `test:e2e` (210 passed, 1 skipped known WebKit case, 2 workers, existing DB, no reset). Integration not run (no DB or server change).
+- **Reviewed by eye:** screenshots at 1280 (table card, seat card, hover label, seat tray) and 320 (seat card at 200% zoom) in `test-results/screenshots/`. Not viewed: 390/768/1440, long names or notes in the card, dense tables with many seats.
+- **Limitations / not verified:** seat chips are about 17 to 23px at 100% zoom on a 12-seat-or-fewer table, below the 44px target guidance; they are enlarged by zoom, and the table card plus tray reach every seat. Seat chips are not in the tab order (a plan can have dozens), so keyboard users go table, card, Edit; screen readers can reach them with full labels. Hover label is mouse only (touch uses the card). No screen reader, 200% browser zoom or reduced-motion pass; Chromium only for the new spec. Room items still open their tray directly (not asked for).
+- **Follow-up (same day):** the guest name in a seat card, and in the tray's selected-seat line, now links to that guest's page (`/app/[w]/guests/[id]`: name, household, adult/child, contact, tags, dietary and access). Meal is a per-event RSVP answer and is not editable on that page; it is edited on the invitations page, which is not deep-linked per guest. E2E extended (card link navigates to the guest page, tray link href, empty seat has no link); seating spec file 8 passed. Not re-run: the full suite (only seating files and the Tray-independent card changed), unit tests (no domain change).
+- **Next:** owner items unchanged. Consider a roving-tabindex for seats if keyboard users want direct access, and a review of the 44px target trade-off.
 
 ### 2026-11-21 · Claude Code · SEAT-5 (suggested seating) · branch `main` (uncommitted, on top of SEAT-1 to SEAT-4)
 

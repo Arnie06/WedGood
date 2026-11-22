@@ -1,5 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { inflateSync } from "node:zlib";
 import {
@@ -46,6 +46,13 @@ async function signInViaUi(page: Page, user: { email: string }) {
   await page.getByRole("button", { name: "Sign in" }).click();
   await page.waitForURL((url) => !url.pathname.startsWith("/sign-in"));
 }
+
+/** A floor-plan table or seat opens a small card first; its Edit button opens the full tray. */
+async function openTrayFromCard(page: Page, target: Locator, edit: RegExp) {
+  await target.click();
+  await page.getByRole("dialog").getByRole("button", { name: edit }).click();
+}
+const openTableTray = (page: Page, table: Locator) => openTrayFromCard(page, table, /^Edit table/);
 
 const NAMES = ["Ada Example", "Bo Example", "Cy Example", "Di Example"];
 
@@ -452,11 +459,16 @@ test("seating pages pass axe and do not overflow at 320 and 1280", async ({ page
         "Details and edit for Head table",
       ],
       ["seating-guest-tray", `/app/${w}/seating/${event}?view=list`, "Ada Example details"],
+      ["seating-floor-table-card", `/app/${w}/seating/${event}`, /^Head table, 0 of 2 seats/],
       ["seating-floor-table-tray", `/app/${w}/seating/${event}`, /^Head table, 0 of 2 seats/],
       ["seating-floor-item-tray", `/app/${w}/seating/${event}`, /^Dance floor, room item/],
     ] as const) {
       await page.goto(path);
-      await page.getByRole("button", { name: trigger }).click();
+      if (name === "seating-floor-table-tray") {
+        await openTableTray(page, page.getByRole("button", { name: trigger }));
+      } else {
+        await page.getByRole("button", { name: trigger }).click();
+      }
       const tray = page.getByRole("dialog");
       await expect(tray).toBeVisible();
       await expect(tray.getByRole("heading", { level: 2 })).toBeVisible();
@@ -566,7 +578,7 @@ test("floor plan: drag and keyboard move, zoom, trays, room items, list fallback
   expect((await position("Garden"))!.pos_y!).toBeLessThanOrEqual(8);
   expect((await position("Garden"))!.pos_x!).toBeGreaterThanOrEqual(0);
 
-  // Keyboard: arrows nudge (Shift is bigger), the change is announced and saved, Enter opens details.
+  // Keyboard: arrows nudge (Shift is bigger), the change is announced and saved, Enter opens its card.
   const start = (await position("Garden"))!;
   await garden.focus();
   await page.keyboard.press("ArrowRight");
@@ -577,7 +589,7 @@ test("floor plan: drag and keyboard move, zoom, trays, room items, list fallback
 
   // Opening a table shows its tray with the typed alternative to dragging.
   const tray = page.getByRole("dialog");
-  await page.getByRole("button", { name: /^Orchard, 0 of 8 seats/ }).click();
+  await openTableTray(page, page.getByRole("button", { name: /^Orchard, 0 of 8 seats/ }));
   await expect(tray.getByRole("heading", { level: 2, name: "Orchard" })).toBeVisible();
   await tray.getByLabel("Column").fill("90");
   await tray.getByLabel("Row").fill("60");
@@ -586,7 +598,7 @@ test("floor plan: drag and keyboard move, zoom, trays, room items, list fallback
   await expect.poll(async () => (await position("Orchard"))?.pos_x).toBe(90);
   expect(await position("Orchard")).toEqual({ pos_x: 90, pos_y: 60 });
   // Out-of-range input is explained and nothing moves.
-  await orchard.click();
+  await openTableTray(page, orchard);
   await tray.getByLabel("Column").fill("500");
   await tray.getByRole("button", { name: /to here$/ }).click();
   await expect(tray.getByText("Enter a whole number from 0 to 120.")).toBeVisible();
@@ -648,7 +660,9 @@ test("floor plan: drag and keyboard move, zoom, trays, room items, list fallback
   // A phone: the plan scrolls inside its frame, tables stay tappable, the page never scrolls sideways.
   await page.setViewportSize({ width: 320, height: 800 });
   await page.goto(`/app/${w}/seating/${event}`);
-  const small = (await page.getByRole("button", { name: /^Garden, / }).boundingBox())!;
+  const small = (await page
+    .getByRole("button", { name: /^Garden, \d+ of \d+ seats/ })
+    .boundingBox())!;
   expect(small.width).toBeGreaterThanOrEqual(44);
   expect(small.height).toBeGreaterThanOrEqual(44);
   expect(
@@ -727,7 +741,7 @@ test("numbered seats: chips on the plan and in the tray, number, swap, move and 
   await page.getByRole("button", { name: "Zoom out" }).click();
 
   const tray = page.getByRole("dialog");
-  await page.getByRole("button", { name: /^Garden, 3 of 4 seats/ }).click();
+  await openTableTray(page, page.getByRole("button", { name: /^Garden, 3 of 4 seats/ }));
   await expect(tray.getByRole("heading", { name: "Seat numbers" })).toBeVisible();
   await expect(tray.getByRole("button", { name: "Seat 2, Ada Example" })).toBeVisible();
   await expect(tray.getByRole("button", { name: "Seat 1, empty" })).toBeVisible();
@@ -797,11 +811,217 @@ test("numbered seats: chips on the plan and in the tray, number, swap, move and 
 
   // At 320 the tray still works without sideways scrolling.
   await page.setViewportSize({ width: 320, height: 700 });
-  await page.getByRole("button", { name: /^Garden, 3 of 4 seats/ }).click();
+  await openTableTray(page, page.getByRole("button", { name: /^Garden, 3 of 4 seats/ }));
   await expect(tray.getByRole("button", { name: "Seat 1, Ada Example" })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
   );
+});
+
+test("floor plan cards: tap a table or seat for a card beside it, hover names a seat, Edit opens the tray", async ({
+  page,
+}) => {
+  test.setTimeout(120_000);
+  const owner = await appUser("seat-cards");
+  const { w, event } = await seed(owner);
+  const rpc = async (fn: string, args: Record<string, unknown>) => {
+    const r = await owner.client.rpc(fn, args);
+    if (r.error) throw new Error(`${fn}: ${r.error.message}`);
+    return r.data;
+  };
+  const layout = (await rpc("ensure_seating_layout", {
+    p_wedding: w,
+    p_event_id: event,
+  })) as string;
+  const table = (await rpc("add_seating_table", {
+    p_wedding: w,
+    p_layout: layout,
+    p_label: "Garden",
+    p_capacity: 4,
+  })) as string;
+  const { data: guestRows } = await owner.client
+    .from("guests")
+    .select("id, full_name")
+    .eq("wedding_id", w);
+  const guestId = (name: string) => guestRows!.find((g) => g.full_name === name)!.id as string;
+  // Ada has seat 2; Bo and Cy have no number yet and are drawn in seats 1 and 3; seat 4 is empty.
+  await rpc("assign_guest_seat", {
+    p_wedding: w,
+    p_layout: layout,
+    p_guest: guestId("Ada Example"),
+    p_table: table,
+    p_seat: 2,
+  });
+  for (const name of ["Bo Example", "Cy Example"]) {
+    await rpc("assign_guest_seat", {
+      p_wedding: w,
+      p_layout: layout,
+      p_guest: guestId(name),
+      p_table: table,
+    });
+  }
+
+  await signInViaUi(page, owner);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto(`/app/${w}/seating/${event}`);
+  const plan = page.getByTestId("floor-plan");
+  await expect(plan).toHaveAttribute("data-hydrated", "true");
+  const gardenTable = page.getByRole("button", { name: /^Garden, 3 of 4 seats/ });
+  const seatButton = (n: number) => plan.locator(`[data-floor-seat="${n}"]`);
+  const card = page.getByRole("dialog");
+  const tip = page.getByTestId("seat-tip");
+
+  // Hover names the person in a seat, or says it is empty; it goes away with the pointer.
+  await expect(seatButton(2)).toHaveAccessibleName("Garden, seat 2, Ada Example");
+  await seatButton(2).hover();
+  await expect(tip).toHaveText("Ada Example");
+  await page.screenshot({ path: "test-results/screenshots/1280/seating-seat-hover.png" });
+  await seatButton(4).hover();
+  await expect(tip).toHaveText("Seat 4, empty");
+  await page.mouse.move(5, 5);
+  await expect(tip).toHaveCount(0);
+
+  // Tapping a table opens a card right beside it, with the facts and an Edit button; no tray yet.
+  await gardenTable.click();
+  await expect(card.getByRole("heading", { level: 2, name: "Garden" })).toBeVisible();
+  await expect(card.getByText("3 of 4 taken, 1 open")).toBeVisible();
+  await expect(card.getByText("3 attending")).toBeVisible();
+  const tableBox = (await gardenTable.boundingBox())!;
+  const cardBox = (await card.boundingBox())!;
+  const gapX = Math.max(
+    cardBox.x - (tableBox.x + tableBox.width),
+    tableBox.x - (cardBox.x + cardBox.width),
+  );
+  const gapY = Math.max(
+    cardBox.y - (tableBox.y + tableBox.height),
+    tableBox.y - (cardBox.y + cardBox.height),
+  );
+  // Beside it, not on top of it and not far away.
+  expect(Math.max(gapX, gapY)).toBeGreaterThanOrEqual(0);
+  expect(Math.max(gapX, gapY)).toBeLessThan(120);
+  expect(cardBox.x).toBeGreaterThanOrEqual(0);
+  expect(cardBox.x + cardBox.width).toBeLessThanOrEqual(1280);
+  const axe = await new AxeBuilder({ page })
+    .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
+    .analyze();
+  expect(axe.violations.map((x) => x.id)).toEqual([]);
+  await page.screenshot({ path: "test-results/screenshots/1280/seating-card-table.png" });
+
+  // Tapping the table again puts the card away; Escape does too and focus goes back to the table.
+  await gardenTable.click();
+  await expect(card).toHaveCount(0);
+  await gardenTable.click();
+  await expect(card).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(card).toHaveCount(0);
+  await expect(gardenTable).toBeFocused();
+
+  // Edit opens the large tray for the table; closing it returns focus to the table.
+  await openTableTray(page, gardenTable);
+  await expect(card.getByRole("heading", { level: 2, name: "Garden" })).toBeVisible();
+  await expect(card.getByRole("heading", { name: "Seat numbers" })).toBeVisible();
+  await expect(card.getByRole("group", { name: /^Seat \d/ })).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await expect(card).toBeHidden();
+  await expect(gardenTable).toBeFocused();
+
+  // Tapping a seat: a card for the person in it.
+  await seatButton(2).click();
+  await expect(card.getByRole("heading", { level: 2, name: "Ada Example" })).toBeVisible();
+  await expect(card.getByText("Garden, seat 2")).toBeVisible();
+  await expect(card.getByText("Attending")).toBeVisible();
+  await expect(card.getByText("Meal")).toBeVisible();
+  await expect(seatButton(2)).toHaveAttribute("aria-expanded", "true");
+  await expect(tip).toHaveCount(0); // the hover label steps aside while the card is open
+  await page.screenshot({ path: "test-results/screenshots/1280/seating-card-seat.png" });
+
+  // A guest with no saved number is drawn in a free seat and the card says so.
+  await seatButton(1).click();
+  await expect(card.getByRole("heading", { level: 2, name: "Bo Example" })).toBeVisible();
+  await expect(card.getByText(/No seat number saved yet/)).toBeVisible();
+
+  // An empty seat: a card that says so, not an invented guest.
+  await seatButton(4).click();
+  await expect(card.getByRole("heading", { level: 2, name: "Seat 4" })).toBeVisible();
+  await expect(card.getByText("No one is in this seat.")).toBeVisible();
+  await expect(card.getByText("Meal")).toHaveCount(0);
+
+  // Tapping the plan elsewhere closes the card.
+  await page.mouse.click(tableBox.x + tableBox.width + 300, tableBox.y + tableBox.height + 150);
+  await expect(card).toHaveCount(0);
+
+  // Edit on a seat opens the table tray on that seat, ready to change it.
+  await openTrayFromCard(page, seatButton(2), /^Edit seat/);
+  await expect(card.getByRole("heading", { level: 2, name: "Garden" })).toBeVisible();
+  await expect(card.getByRole("button", { name: "Seat 2, Ada Example" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await expect(card.getByRole("group", { name: "Seat 2" })).toBeVisible();
+  await expect(page.locator("dialog[data-state=open]")).toBeVisible();
+  await page.waitForTimeout(350); // let the slide-in finish so the screenshot shows the tray
+  await page.screenshot({ path: "test-results/screenshots/1280/seating-seat-tray.png" });
+  // Swap is disabled (no one else is numbered), so focus lands on the first usable control.
+  await expect(card.getByLabel("Move Ada Example to an empty seat")).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(card).toBeHidden();
+  await expect(seatButton(2)).toBeFocused();
+
+  // The empty seat's Edit opens the tray with that seat's "put someone here" form.
+  await openTrayFromCard(page, seatButton(4), /^Edit seat/);
+  await expect(card.getByRole("group", { name: "Seat 4" })).toBeVisible();
+  await expect(card.getByText("Seat 4 is empty.")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(card).toBeHidden();
+
+  // The seat editor's own line for the guest links to their page too.
+  await openTrayFromCard(page, seatButton(2), /^Edit seat/);
+  const adaId = guestId("Ada Example");
+  await expect(card.getByRole("link", { name: /^Ada Example/ })).toHaveAttribute(
+    "href",
+    `/app/${w}/guests/${adaId}`,
+  );
+  await page.keyboard.press("Escape");
+  await expect(card).toBeHidden();
+
+  // The name in a seat's card links out to that guest's own page (name, household, notes).
+  await seatButton(2).click();
+  await card.getByRole("link", { name: /^Ada Example/ }).click();
+  await page.waitForURL(`**/app/${w}/guests/${adaId}`);
+  await expect(page.getByRole("heading", { level: 1, name: "Ada Example" })).toBeVisible();
+  await page.goto(`/app/${w}/seating/${event}`);
+  await expect(plan).toHaveAttribute("data-hydrated", "true");
+  // An empty seat has no guest, so no link.
+  await seatButton(4).click();
+  await expect(card.getByRole("link")).toHaveCount(0);
+  await page.keyboard.press("Escape");
+
+  // A phone: the card stays on screen, its buttons are comfortable targets, nothing scrolls sideways.
+  await page.setViewportSize({ width: 320, height: 800 });
+  await page.goto(`/app/${w}/seating/${event}`);
+  await expect(plan).toHaveAttribute("data-hydrated", "true");
+  await page.getByRole("button", { name: "Zoom in" }).click();
+  await page.getByRole("button", { name: "Zoom in" }).click(); // 200%: bigger seat targets
+  const phoneSeat = seatButton(2);
+  await phoneSeat.scrollIntoViewIfNeeded();
+  await phoneSeat.click();
+  await expect(card.getByRole("heading", { level: 2, name: "Ada Example" })).toBeVisible();
+  const phoneCard = (await card.boundingBox())!;
+  expect(phoneCard.x).toBeGreaterThanOrEqual(0);
+  expect(phoneCard.x + phoneCard.width).toBeLessThanOrEqual(320);
+  expect(phoneCard.y).toBeGreaterThanOrEqual(0);
+  expect(phoneCard.y + phoneCard.height).toBeLessThanOrEqual(800);
+  const edit = (await card.getByRole("button", { name: /^Edit seat/ }).boundingBox())!;
+  expect(edit.height).toBeGreaterThanOrEqual(44);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
+    true,
+  );
+  await page.screenshot({ path: "test-results/screenshots/320/seating-card-seat.png" });
+  await card.getByRole("button", { name: /^Edit seat/ }).click();
+  await expect(card.getByRole("group", { name: "Seat 2" })).toBeVisible();
+  // On a phone the seat's form is below the fold of the bottom sheet, so the tray scrolls it into view.
+  await expect(card.getByRole("group", { name: "Seat 2" })).toBeInViewport();
+  await expect(card.getByLabel("Move Ada Example to an empty seat")).toBeFocused();
 });
 
 test("suggested seating: review, infeasible groups reported, refused after a change, applied", async ({
