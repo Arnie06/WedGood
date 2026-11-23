@@ -1,0 +1,67 @@
+id,dimension,requirement,status,evidence,notes
+UXR-01,NAV,Persistent wedding context (name/role) on every workspace screen,Verified,src/app/app/[w]/layout.tsx; screenshot 320/invitations.png,Header shows wedding and role badge
+UXR-02,NAV,Event context selector available where data is event-specific,Partial,src/features/events/event-switcher.tsx; invitations/page.tsx:131,Switcher on event pages; invitations page stacks all events instead
+UXR-03,NAV,Top-level navigation matches planning mental model (Events/Guests/Budget reachable in one tap),Partial,src/components/shell/nav-groups.ts:17-96,Events and Budget sit under Plan
+UXR-04,NAV,Breadcrumbs / back links on deep screens,Verified,plan/attention/page.tsx:22-26; invitations/page.tsx:116-118,Text back links rather than full breadcrumbs
+UXR-05,NAV,Overview shows status + deep-linked problems,Verified,src/app/app/[w]/page.tsx:89-111,Needs attention card with links
+UXR-06,NAV,Overview shows upcoming RSVP deadlines and pending decisions by event,Missing,src/app/app/[w]/page.tsx,No deadline/pending-reply strip per event
+UXR-07,NAV,Event Hub combines invitees/meals/seating/vendors/agenda/budget for one event,Partial,plan/events/[eventId]/page.tsx:244-555,All but event-scoped budget and invitee list
+UXR-08,NAV,Guest table filterable by event and response status,Missing,src/features/guests/guest-filters.tsx:77-95,Filters: name/email/adult-child/tag only
+UXR-09,NAV,Guest table flags missing meals and unseated guests,Missing,src/app/app/[w]/guests/page.tsx,Only on invitations/event/attention pages as counts
+UXR-10,NAV,Bulk actions on guests/invitations,Partial,src/domain/events/invitation.ts:29-60,Bulk invite by household; no bulk reminder/override
+UXR-11,NAV,Different default density for planner vs couple on shared data,Missing,src/domain/permissions/index.ts,Same layouts for all roles; only permission gating differs
+UXR-12,NAV,Connected-record navigation (guest -> invitation -> event -> seat),Partial,guests/[guestId]/page.tsx:192-218; invitations/page.tsx:227-232,Guest detail shows history but no links to seat/invitation
+UXR-13,FORM,RSVP Form Builder with question types,Missing,code search E-12,Fixed form only
+UXR-14,FORM,Conditional question logic,Missing,src/features/events/rsvp-form.tsx:48-62,Meal select shown even when declining
+UXR-15,FORM,Question-to-canonical-record mapping validated before publish,Missing,E-12,No mappings; fixed fields map directly to invitation_members
+UXR-16,FORM,Published immutable form versions,Missing,E-12,
+UXR-17,FORM,Planner preview of the guest form,Partial,src/app/app/[w]/website/preview/page.tsx,Site preview exists; no RSVP form preview without a live token
+UXR-18,FORM,Invitation scoped to party and eligible events,Partial,20261130090000_events_rsvp.sql:53-75,Scoped to party; one event per invitation
+UXR-19,FORM,One link covers all events a party is invited to,Missing,20261130090000_events_rsvp.sql:56,Party gets one link per event
+UXR-20,FORM,Per-person per-event attendance,Verified,tests/integration/rsvp.test.ts:248;269,T09 observed
+UXR-21,FORM,Meal selection per service from active options only,Verified,20261216090000_reply_and_seating_history.sql:112-117; rsvp.test.ts:280,
+UXR-22,FORM,Guest-submitted dietary/allergy notes,Missing,20261129090000_guests.sql:109-134,Planner-entered only
+UXR-23,FORM,Accessibility / seating needs from guest,Missing,guests/[guestId]/page.tsx:124-125,Planner-entered only
+UXR-24,FORM,Transport request (separate from assignment),Missing,E-12,No transport module
+UXR-25,FORM,Children / age handling in RSVP,Missing,20261129090000_guests.sql:93,age_group planner-only
+UXR-26,FORM,Named plus-one with quota,Verified,rsvp.test.ts:314;343;357,
+UXR-27,FORM,Unnamed plus-one allowance visible without double counting,Verified,20261212090000_event_demand.sql:199-200; event-demand.test.ts:182,
+UXR-28,FORM,Guest can remove a plus-one they added,Partial,20261130090000_events_rsvp.sql:751-771,Can mark declined; place stays used
+UXR-29,FORM,Mobile step-by-step flow with review before submit,Missing,src/features/events/rsvp-form.tsx,Single page; no review step
+UXR-30,FORM,Confirmation summary after submit,Partial,rsvp-form.tsx:92-101,Message only; answers stay visible in form
+UXR-31,FORM,Guest can edit before deadline; closed after,Verified,rsvp.test.ts:368; rsvp-form.tsx:102-106,
+UXR-32,FORM,Deadline expressed in wedding/event time zone,Partial,src/server/events/actions.ts:204-211; rsvp-form.tsx:115-120,End of day UTC not wedding zone
+UXR-33,FORM,Truthful submit feedback (no false success),Verified,src/server/rsvp/actions.ts:74-99,Success only after commit
+UXR-34,FORM,Invitation delivery tracked separately from response,Verified,20261207090000_invitation_delivery.sql:27; invitations/page.tsx:248-257,
+UXR-35,FORM,Guest confirmation email / add to calendar,Missing,docs/15-DECISIONS.md:253,Deferred by ADR
+UXR-36,DATA,Guest submission writes same canonical rows as planner,Verified,20261216090000_reply_and_seating_history.sql:90-136,
+UXR-37,DATA,Server re-validates every field; forged ids rejected,Verified,20261130090000_events_rsvp.sql:707-737; rsvp.test.ts:280,
+UXR-38,DATA,Idempotent retry / double click,Verified,seating.test.ts:1897; rsvp-form.tsx:108,
+UXR-39,DATA,Two-browser concurrency resolved deterministically,Verified,rsvp.test.ts:303,DB-level; not two real devices
+UXR-40,DATA,Immutable per-change history with source,Verified,20261216090000_reply_and_seating_history.sql:10-53; seating.test.ts:1879-1964,
+UXR-41,DATA,Immutable whole-submission record with form version,Missing,E-12,Only per-member change rows
+UXR-42,DATA,Counts distinguish invited/confirmed/pending/declined/potential without double counting,Verified,20261212090000_event_demand.sql:193-205; event-demand.test.ts:145-290,
+UXR-43,DATA,Actual attendance separate from Yes (check-in),Missing,E-12,No check-in
+UXR-44,DATA,Downstream projections updated atomically or on read,Verified,20261222090000_needs_attention.sql:3-6,
+UXR-45,IMPACT,Decline releases live seat; published seating version untouched and flagged stale,Verified,seating.test.ts:488; 20261216090000_reply_and_seating_history.sql:57-77,
+UXR-46,IMPACT,Issue opened once for seat release after finalize,Verified,attention.test.ts:215-311,
+UXR-47,IMPACT,Locked catering guarantee not changed by replies; drift flagged,Verified,catering-guarantee.test.ts:275; attention.ts:185,
+UXR-48,IMPACT,Variable budget forecast follows replies; commitments do not,Verified,20261213090000_budget_item_counts.sql:1-16,REL-03 tests not rerun this session
+UXR-49,IMPACT,Impact preview before planner overrides an answer,Missing,src/features/events/event-forms.tsx OverrideForm (~l.550-590),Reason required but no seat/meal/guarantee preview
+UXR-50,IMPACT,Guest profile shows live vs protected consequences,Missing,guests/[guestId]/page.tsx,
+UXR-51,IMPACT,Issue center with owner/priority/suggested fix/resolution history,Partial,plan/attention/page.tsx; 20261222090000_needs_attention.sql:143-260,Link + dismiss/handled; no owner/priority/history view
+UXR-52,IMPACT,Transport/place card/shuttle impacts flagged,N/A,docs/02-ROADMAP.md,Modules not in current release scope
+UXR-53,IMPACT,Catering view compares live demand vs guaranteed/contracted/invoiced/paid,Partial,features/events/guarantee-card.tsx; plan/budget/bookings,Split across two areas
+UXR-54,SEC,Token high entropy and stored only as hash,Verified,src/server/members/invite-token.ts:1-20; 20261130090000_events_rsvp.sql:60,
+UXR-55,SEC,Unknown/revoked/expired indistinguishable; throttled guessing,Verified,rsvp.test.ts:442;500; e2e rsvp.spec.ts:148,
+UXR-56,SEC,Guest sees only own invitation members; no contact details,Verified,src/server/rsvp/public.ts:35-42; rsvp.test.ts:233,
+UXR-57,SEC,Token pages noindex/no-referrer/no-cache,Verified,src/app/rsvp/[token]/page.tsx:8-13,
+UXR-58,SEC,Throttle client key trustworthy behind production proxy,Unknown,src/server/rsvp/public.ts:51-56,Uses first X-Forwarded-For; depends on deployment proxy
+UXR-59,SEC,Cross-wedding isolation for reply data,Verified,rsvp.test.ts:181;196;216; event-demand.test.ts:309,
+UXR-60,SEC,Reply totals limited by role,Verified,event-demand.test.ts:323,
+UXR-61,SEC,No external messages sent without authorization,Verified,invitations/page.tsx:98-102,
+UXR-62,A11Y,Axe passes and 320px reflow on RSVP and invitations,Verified,tests/e2e/rsvp.spec.ts:164,
+UXR-63,A11Y,Grouped fields with legends and labels; live status,Verified,rsvp-form.tsx:22-26;92-101,
+UXR-64,A11Y,Conditional field changes announced,N/A,rsvp-form.tsx,No conditional fields exist
+UXR-65,A11Y,Screen reader / 200% zoom / keyboard-only verified by hand,Unknown,docs/16-IMPLEMENTATION-STATUS.md carry-over gaps,Not done this session or previously
+UXR-66,A11Y,Visual reuse of design tokens and primitives,Verified,src/components/ui/*; tokens.css,
