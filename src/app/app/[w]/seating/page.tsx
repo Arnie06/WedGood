@@ -6,6 +6,7 @@ import { EVENT_KIND_LABELS } from "@/domain/events/event";
 import { EventForm } from "@/features/events/event-forms";
 import { hasCapability, requireWorkspace } from "@/server/auth/workspace-guard";
 import { loadEventData } from "@/server/events/queries";
+import { listTimeZones } from "@/domain/wedding/settings";
 
 export const metadata: Metadata = { title: "Seating" };
 
@@ -18,14 +19,14 @@ export default async function SeatingIndexPage({ params }: { params: Promise<{ w
   const base = `/app/${wid}`;
   const heading = <h1 className="font-serif text-headline-mobile md:text-headline-lg">Seating</h1>;
 
-  if (!hasCapability(access, "guests.manage")) {
+  if (!hasCapability(access, "seating.manage")) {
     return (
       <div className="max-w-3xl space-y-4">
         {heading}
         <Card>
           <p className="text-body-md">
             Seating shows guest names and answers, so it is limited to the workspace owner and
-            partner.
+            partner, and to planners they have given seating access.
           </p>
         </Card>
       </div>
@@ -60,6 +61,8 @@ export default async function SeatingIndexPage({ params }: { params: Promise<{ w
               capacity: "",
             }}
             submitLabel="Create event"
+            weddingZone={access.wedding.timezone}
+            timeZones={listTimeZones()}
           />
           <Link
             href={`${base}/guests/invitations`}
@@ -91,12 +94,20 @@ export default async function SeatingIndexPage({ params }: { params: Promise<{ w
                     .filter(Boolean)
                     .join(" · ")}
                 </p>
-                <Link
-                  href={`${base}/seating/${event.id}`}
-                  className={`${link} inline-flex min-h-11 items-center`}
-                >
-                  Open the seating plan<span className="sr-only"> for {event.name}</span>
-                </Link>
+                <p className="flex flex-wrap gap-x-6">
+                  <Link
+                    href={`${base}/seating/${event.id}`}
+                    className={`${link} inline-flex min-h-11 items-center`}
+                  >
+                    Open the seating plan<span className="sr-only"> for {event.name}</span>
+                  </Link>
+                  <Link
+                    href={`${base}/plan/events/${event.id}`}
+                    className={`${link} inline-flex min-h-11 items-center`}
+                  >
+                    Event page<span className="sr-only"> for {event.name}</span>
+                  </Link>
+                </p>
               </Card>
             </li>
           );

@@ -80,8 +80,8 @@ export async function lookupPublishedSite(slug: string): Promise<SiteLookup> {
 export async function lookupInvitedSite(slug: string, rawToken: string): Promise<SiteLookup> {
   const valid = validateSlug(slug);
   const admin = createAdminClient();
-  if (!admin) return { kind: "unavailable" };
   const client = await clientKey();
+  if (!admin || !client) return { kind: "unavailable" };
   const digest = tokenDigest(rawToken);
   // Malformed input still counts as a failed guess.
   const { data, error } = await admin.rpc("public_site_invite_view", {

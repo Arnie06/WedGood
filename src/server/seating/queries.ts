@@ -1,4 +1,5 @@
 import "server-only";
+import { parseFrozenPlan, type FrozenPlan } from "@/domain/seating/versions";
 import { isElementKind, type FloorElement } from "@/domain/seating/floor";
 import type {
   GuestInfo,
@@ -30,7 +31,13 @@ export type SeatingTableRecord = PlanTable & {
 export type SeatingElementRecord = FloorElement & { version: number };
 
 export type SeatingData = {
-  event: { id: string; name: string; localDate: string | null; capacity: number | null };
+  event: {
+    id: string;
+    name: string;
+    kind: string;
+    localDate: string | null;
+    capacity: number | null;
+  };
   layout: SeatingLayoutRecord | null;
   tables: SeatingTableRecord[];
   elements: SeatingElementRecord[];
@@ -60,7 +67,7 @@ export async function loadSeating(
   const supabase = await createUserClient();
   const eventRes = await supabase
     .from("events")
-    .select("id, name, local_date, capacity")
+    .select("id, name, kind, local_date, capacity")
     .eq("wedding_id", workspaceId)
     .eq("id", eventId)
     .maybeSingle();
@@ -221,6 +228,7 @@ export async function loadSeating(
     event: {
       id: eventRes.data.id,
       name: eventRes.data.name,
+      kind: eventRes.data.kind,
       localDate: eventRes.data.local_date,
       capacity: eventRes.data.capacity,
     },
@@ -257,4 +265,131 @@ export async function loadSeating(
     info,
     meals: mealRes.data.map((m) => ({ id: m.id, name: m.name, active: m.active })),
   };
+}
+
+export type SeatingVersionSummary = {
+  id: string;
+  revision: number;
+  finalizedAt: string;
+  accepted: number;
+  confirmedSeated: number;
+  tentativeSeated: number;
+};
+
+/**
+ * Every finalized copy of an event's plan, newest first. RLS limits these rows to owner and
+ * partner. Only the counts are read here; the full copy is loaded one at a time.
+ */
+export async function loadSeatingVersions(
+  workspaceId: string,
+  eventId: string,
+): Promise<SeatingVersionSummary[]> {
+  const supabase = await createUserClient();
+  const { data, error } = await supabase
+    .from("seating_snapshots")
+    .select("id, revision, finalized_at, snapshot")
+    .eq("wedding_id", workspaceId)
+    .eq("event_id", eventId)
+    .order("finalized_at", { ascending: false })
+    .order("id", { ascending: false })
+    .limit(100);
+  if (error) throw new Error("Could not load finalized versions");
+  return data.map((row) => {
+    const plan = parseFrozenPlan(row.snapshot);
+    return {
+      id: row.id,
+      revision: row.revision,
+      finalizedAt: row.finalized_at,
+      accepted: plan?.accepted ?? 0,
+      confirmedSeated: plan?.confirmedSeated ?? 0,
+      tentativeSeated: plan?.tentativeSeated ?? 0,
+    };
+  });
+}
+
+export type SeatingVersion = {
+  id: string;
+  eventName: string;
+  revision: number;
+  finalizedAt: string;
+  plan: FrozenPlan;
+  /** True when this is the copy the layout currently holds (not an older one). */
+  isLatest: boolean;
+  /** True when the live plan has changed since this copy was frozen. */
+  outOfDate: boolean;
+};
+
+/** Null when the copy is not in this workspace and event (or the caller may not read it). */
+export async function loadSeatingVersion(
+  workspaceId: string,
+  eventId: string,
+  snapshotId: string,
+): Promise<SeatingVersion | null> {
+  const supabase = await createUserClient();
+  const [snapRes, eventRes, layoutRes, latestRes] = await Promise.all([
+    supabase
+      .from("seating_snapshots")
+      .select("id, revision, finalized_at, snapshot")
+      .eq("wedding_id", workspaceId)
+      .eq("event_id", eventId)
+      .eq("id", snapshotId)
+      .maybeSingle(),
+    supabase
+      .from("events")
+      .select("name")
+      .eq("wedding_id", workspaceId)
+      .eq("id", eventId)
+      .maybeSingle(),
+    supabase
+      .from("seating_layouts")
+      .select("revision")
+      .eq("wedding_id", workspaceId)
+      .eq("event_id", eventId)
+      .maybeSingle(),
+    supabase
+      .from("seating_snapshots")
+      .select("id")
+      .eq("wedding_id", workspaceId)
+      .eq("event_id", eventId)
+      .order("finalized_at", { ascending: false })
+      .order("id", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+  if (snapRes.error || eventRes.error || layoutRes.error || latestRes.error)
+    throw new Error("Could not load the finalized version");
+  if (!snapRes.data || !eventRes.data) return null;
+  const plan = parseFrozenPlan(snapRes.data.snapshot);
+  if (!plan) return null;
+  const isLatest = latestRes.data?.id === snapRes.data.id;
+  return {
+    id: snapRes.data.id,
+    eventName: eventRes.data.name,
+    revision: snapRes.data.revision,
+    finalizedAt: snapRes.data.finalized_at,
+    plan,
+    isLatest,
+    outOfDate:
+      !isLatest || (layoutRes.data?.revision ?? snapRes.data.revision) !== snapRes.data.revision,
+  };
+}
+
+/**
+ * Seat total of each event's tables (event id to seats). Events with no plan or no tables are
+ * absent. RLS limits seating rows to owner and partner, so anyone else gets an empty map.
+ */
+export async function loadTableSeatTotals(workspaceId: string): Promise<Map<string, number>> {
+  const supabase = await createUserClient();
+  const [layouts, tables] = await Promise.all([
+    supabase.from("seating_layouts").select("id, event_id").eq("wedding_id", workspaceId),
+    supabase.from("seating_tables").select("layout_id, capacity").eq("wedding_id", workspaceId),
+  ]);
+  if (layouts.error || tables.error) throw new Error("Could not load seating totals");
+  const eventOf = new Map(layouts.data.map((l) => [l.id, l.event_id]));
+  const totals = new Map<string, number>();
+  for (const t of tables.data) {
+    const event = eventOf.get(t.layout_id);
+    if (event) totals.set(event, (totals.get(event) ?? 0) + t.capacity);
+  }
+  return totals;
 }

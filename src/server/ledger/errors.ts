@@ -9,6 +9,8 @@ export function friendlyLedgerError(error: { code?: string; message?: string }):
     case "55000":
       return "Someone changed this while you were looking. Reload to see the latest, then try again.";
     case "23505":
+      if (m.includes("invoices_number_idx"))
+        return "This booking already has an invoice with that number. Check for a double entry.";
       return "That reference or form was already used with different details. Reload and try again.";
     case "22023":
       if (m.includes("cost already booked"))
@@ -25,6 +27,10 @@ export function friendlyLedgerError(error: { code?: string; message?: string }):
         return "This venue or vendor can't be booked from its current stage. Reopen it from Passed, or it may already be booked.";
       if (m.includes("quote not available"))
         return "That quote isn't available to book from. Reload and choose again.";
+      if (m.includes("invoice not available"))
+        return "That invoice isn't available for this booking. Reload and choose again.";
+      if (m.includes("invalid invoice"))
+        return "Please check the invoice details. The amount must be above zero and the due date can't be before the issue date.";
       if (m.includes("refund exceeds paid"))
         return "A refund can't be more than what's been paid so far.";
       if (m.includes("refunds depend on this payment"))

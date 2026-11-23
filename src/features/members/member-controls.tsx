@@ -5,13 +5,23 @@ import { useState, type ReactNode } from "react";
 import { useTrayActionState } from "@/components/ui/tray";
 import { Button } from "@/components/ui/button";
 import { TextField } from "@/components/ui/text-field";
-import { ROLE_LABELS, type MembershipRole } from "@/domain/permissions";
+import {
+  GRANT_AREAS,
+  GRANT_LABELS,
+  GRANT_REQUIRES,
+  ROLE_LABELS,
+  normalizeAreas,
+  type GrantArea,
+  type MembershipRole,
+} from "@/domain/permissions";
 import {
   changeMemberRole,
   inviteCollaborator,
   removeMember,
   revokeInvite,
+  setEditorGrants,
   setPartnerGrant,
+  setShareGuestTotals,
   type ActionState,
 } from "@/server/members/actions";
 
@@ -234,6 +244,96 @@ export function GrantForm({
           {enabled
             ? `Stop letting ${memberLabel} manage people`
             : `Let ${memberLabel} invite editors and viewers`}
+        </Button>
+      )}
+    </InlineForm>
+  );
+}
+
+/**
+ * What a planner/editor may change. Everything unchecked stays read-only for them. Areas that need
+ * another (seating needs guests) are disabled until it is checked, and uncheck with it.
+ */
+export function EditorGrantsForm({
+  workspaceId,
+  membershipId,
+  version,
+  granted,
+  memberLabel,
+}: {
+  workspaceId: string;
+  membershipId: string;
+  version: number;
+  granted: readonly GrantArea[];
+  memberLabel: string;
+}) {
+  const [checked, setChecked] = useState<GrantArea[]>(() => normalizeAreas(granted));
+  const toggle = (area: GrantArea, on: boolean) =>
+    setChecked((cur) => normalizeAreas(on ? [...cur, area] : cur.filter((a) => a !== area)));
+  return (
+    <InlineForm
+      action={setEditorGrants}
+      hidden={{ workspaceId, membershipId, version: String(version) }}
+    >
+      {(pending) => (
+        <fieldset className="space-y-2" data-testid={`grants-${membershipId}`}>
+          <legend className="text-label-lg font-semibold text-ink">
+            What they can change<span className="sr-only"> ({memberLabel})</span>
+          </legend>
+          <p className="text-body-sm text-ink-muted">
+            They can always read the plan, budget amounts and the checklist. Nothing is changed
+            unless you tick it here.
+          </p>
+          <ul className="space-y-1">
+            {GRANT_AREAS.map((area) => {
+              const needs = GRANT_REQUIRES[area];
+              const blocked = needs !== undefined && !checked.includes(needs);
+              const id = `grant-${membershipId}-${area}`;
+              return (
+                <li key={area}>
+                  <label htmlFor={id} className="flex min-h-11 items-start gap-3 text-body-md">
+                    <input
+                      id={id}
+                      type="checkbox"
+                      name="area"
+                      value={area}
+                      checked={checked.includes(area)}
+                      disabled={blocked}
+                      onChange={(e) => toggle(area, e.currentTarget.checked)}
+                      className="mt-1 size-5 shrink-0 accent-[var(--color-action-secondary)]"
+                    />
+                    <span>
+                      <span className="font-semibold">{GRANT_LABELS[area].label}</span>
+                      <span className="block text-body-sm text-ink-muted">
+                        {GRANT_LABELS[area].help}
+                      </span>
+                    </span>
+                  </label>
+                </li>
+              );
+            })}
+          </ul>
+          <Button type="submit" variant="secondary" size="sm" disabled={pending}>
+            Save access
+          </Button>
+        </fieldset>
+      )}
+    </InlineForm>
+  );
+}
+
+export function ShareTotalsForm({
+  workspaceId,
+  enabled,
+}: {
+  workspaceId: string;
+  enabled: boolean;
+}) {
+  return (
+    <InlineForm action={setShareGuestTotals} hidden={{ workspaceId, enabled: String(!enabled) }}>
+      {(pending) => (
+        <Button type="submit" variant={enabled ? "outline" : "secondary"} disabled={pending}>
+          {enabled ? "Stop sharing guest totals" : "Let collaborators see guest totals"}
         </Button>
       )}
     </InlineForm>

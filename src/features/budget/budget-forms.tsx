@@ -7,8 +7,13 @@ import { Button } from "@/components/ui/button";
 import { SelectField } from "@/components/ui/select-field";
 import { TextAreaField } from "@/components/ui/text-area-field";
 import { TextField } from "@/components/ui/text-field";
-import { BUDGET_COST_MODES, type CategoryField, type ItemField } from "@/domain/budget/input";
-import type { BudgetCostMode } from "@/domain/budget/summary";
+import {
+  BUDGET_COST_MODES,
+  COUNT_SOURCE_OPTIONS,
+  type CategoryField,
+  type ItemField,
+} from "@/domain/budget/input";
+import { isReplyBased, type BudgetCostMode, type CountSource } from "@/domain/budget/summary";
 import {
   addSuggestedCategories,
   archiveCategory,
@@ -136,15 +141,6 @@ export function SuggestedCategoriesForm({
 // ---------------------------------------------------------------- item
 
 export type ItemFormDefaults = Record<ItemField, string>;
-export const EMPTY_ITEM: ItemFormDefaults = {
-  name: "",
-  category: "",
-  costMode: "fixed",
-  amount: "",
-  quantity: "",
-  minQty: "",
-  notes: "",
-};
 
 /** One planned cost. Fields follow the chosen mode, and a blank amount is saved as unknown. */
 export function ItemForm({
@@ -152,6 +148,7 @@ export function ItemForm({
   workspaceId,
   currency,
   categories,
+  events,
   defaults,
   extraHidden,
   submitLabel,
@@ -163,6 +160,8 @@ export function ItemForm({
   workspaceId: string;
   currency: string;
   categories: readonly { id: string; name: string }[];
+  /** Events a per-guest cost can follow. Empty = only the guest target or a typed number. */
+  events: readonly { id: string; name: string }[];
   defaults: ItemFormDefaults;
   extraHidden?: Record<string, string | number>;
   submitLabel: string;
@@ -175,12 +174,22 @@ export function ItemForm({
   const [created, setCreated] = useState(0);
   const [keyBase] = useState(() => crypto.randomUUID());
   const [mode, setMode] = useState<BudgetCostMode>(defaults.costMode as BudgetCostMode);
+  const [source, setSource] = useState<CountSource>(
+    COUNT_SOURCE_OPTIONS.some((o) => o.value === defaults.countSource)
+      ? (defaults.countSource as CountSource)
+      : "guest_target",
+  );
+  // A stored event source stays visible even if the event list is empty, so nothing is silently dropped.
+  const sourceOptions = COUNT_SOURCE_OPTIONS.filter(
+    (o) => !isReplyBased(o.value) || events.length > 0 || o.value === source,
+  );
   const [state, formAction, pending] = useActionState(
     async (prev: BudgetActionState, form: FormData) => {
       const next = await action(prev, form);
       if (rotateKey && next.status === "ok") {
         setCreated((n) => n + 1);
         setMode("fixed");
+        setSource(defaults.countSource as CountSource);
       }
       if (next.status === "ok") {
         closeTray();
@@ -264,6 +273,49 @@ export function ItemForm({
           autoComplete="off"
           defaultValue={v("quantity")}
           error={errors.quantity}
+        />
+      )}
+      {mode === "per_guest" && (
+        <SelectField
+          label="Which guest count?"
+          hint="Follows replies when you pick an event, so the cost updates as guests answer."
+          name="countSource"
+          value={source}
+          onChange={(e) => setSource(e.target.value as CountSource)}
+          error={errors.countSource}
+        >
+          {sourceOptions.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </SelectField>
+      )}
+      {mode === "per_guest" && isReplyBased(source) && (
+        <SelectField
+          label="Which event?"
+          name="countEvent"
+          required
+          defaultValue={v("countEvent")}
+          error={errors.countEvent}
+        >
+          <option value="">Choose an event</option>
+          {events.map((e) => (
+            <option key={e.id} value={e.id}>
+              {e.name}
+            </option>
+          ))}
+        </SelectField>
+      )}
+      {mode === "per_guest" && source === "typed" && (
+        <TextField
+          label="How many guests?"
+          hint="Leave blank if unknown."
+          name="countTyped"
+          inputMode="numeric"
+          autoComplete="off"
+          defaultValue={v("countTyped")}
+          error={errors.countTyped}
         />
       )}
       {mode === "per_guest" && (

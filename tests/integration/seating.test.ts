@@ -1819,3 +1819,308 @@ describe("suggested seating", () => {
     }
   });
 });
+
+// ---------------------------------------------------------------- REL-05 history
+const submit = async (f: Fixture, responses: unknown[]) => {
+  const client = `c-${randomUUID().slice(0, 12)}`;
+  const view = (await ok(
+    adminClient().rpc("rsvp_view", { p_token_hash: sha(f.invitation.raw), p_client: client }),
+  )) as { version: number };
+  return adminClient().rpc("rsvp_submit", {
+    p_token_hash: sha(f.invitation.raw),
+    p_client: client,
+    p_expected_version: view.version,
+    p_responses: responses,
+  });
+};
+const changes = async (f: Fixture, guest: string) =>
+  withSuperuser(
+    async (db) =>
+      (
+        await db.query(
+          "select * from public.rsvp_changes where wedding_id = $1 and guest_id = $2 order by occurred_at, id",
+          [f.w, guest],
+        )
+      ).rows,
+  );
+const versions = async (f: Fixture) =>
+  withSuperuser(
+    async (db) =>
+      (
+        await db.query(
+          "select * from public.seating_snapshots where layout_id = $1 order by finalized_at, id",
+          [f.layout],
+        )
+      ).rows,
+  );
+const finalize = (f: Fixture, revision: number) =>
+  owner.client.rpc("finalize_seating_layout", {
+    p_wedding: f.w,
+    p_layout: f.layout,
+    p_expected_revision: revision,
+  });
+
+async function joinAs(f: Fixture, label: string, role: "editor" | "viewer" | "partner") {
+  const user = await createUser(label);
+  const raw = randomBytes(32).toString("base64url");
+  await ok(
+    owner.client.rpc("create_collaborator_invite", {
+      p_wedding: f.w,
+      p_email: user.email,
+      p_role: role,
+      p_token_hash: sha(raw),
+    }),
+  );
+  await ok(user.client.rpc("redeem_collaborator_invite", { p_token_hash: sha(raw) }));
+  return user;
+}
+
+describe("reply history", () => {
+  it("records each real change once, with the answer and meal before and after", async () => {
+    const f = await setup(2);
+    await ok(submit(f, [{ memberId: f.members[0], status: "accepted", mealOptionId: f.meals[0] }]));
+    await ok(submit(f, [{ memberId: f.members[0], status: "accepted", mealOptionId: f.meals[1] }]));
+    await ok(submit(f, [{ memberId: f.members[0], status: "declined" }]));
+    const rows = await changes(f, f.guests[0]!);
+    expect(
+      rows.map((r) => [r.from_status, r.to_status, r.from_meal_option_id, r.to_meal_option_id]),
+    ).toEqual([
+      ["pending", "accepted", null, f.meals[0]],
+      ["accepted", "accepted", f.meals[0], f.meals[1]],
+      ["accepted", "declined", f.meals[1], null],
+    ]);
+    // A guest's own link has no signed-in actor.
+    expect(rows.every((r) => r.source === "guest" && r.actor_id === null)).toBe(true);
+    expect(await changes(f, f.guests[1]!)).toHaveLength(0);
+  });
+
+  it("writes nothing when a retry changes nothing", async () => {
+    const f = await setup(1);
+    await ok(submit(f, [{ memberId: f.members[0], status: "accepted", mealOptionId: f.meals[0] }]));
+    await ok(submit(f, [{ memberId: f.members[0], status: "accepted", mealOptionId: f.meals[0] }]));
+    await ok(submit(f, [{ memberId: f.members[0], status: "accepted", mealOptionId: f.meals[0] }]));
+    expect(await changes(f, f.guests[0]!)).toHaveLength(1);
+  });
+
+  it("records the owner's override with who and why, and nothing for a no-op override", async () => {
+    const f = await setup(1);
+    await ok(
+      owner.client.rpc("override_rsvp_response", {
+        p_wedding: f.w,
+        p_member_id: f.members[0]!,
+        p_status: "accepted",
+        p_reason: "Phoned us on Sunday",
+        p_meal_option_id: f.meals[0]!,
+      }),
+    );
+    await ok(
+      owner.client.rpc("override_rsvp_response", {
+        p_wedding: f.w,
+        p_member_id: f.members[0]!,
+        p_status: "accepted",
+        p_reason: "Same again",
+        p_meal_option_id: f.meals[0]!,
+      }),
+    );
+    const rows = await changes(f, f.guests[0]!);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      source: "couple",
+      actor_id: owner.id,
+      reason: "Phoned us on Sunday",
+    });
+  });
+
+  it("records a plus-one's answer when the guest adds them", async () => {
+    const f = await setup(1);
+    await withSuperuser((db) =>
+      db.query("update public.invitations set plus_one_quota = 1 where id = $1", [f.invitation.id]),
+    );
+    const client = `c-${randomUUID().slice(0, 12)}`;
+    const view = (await ok(
+      adminClient().rpc("rsvp_view", { p_token_hash: sha(f.invitation.raw), p_client: client }),
+    )) as { version: number };
+    await ok(
+      adminClient().rpc("rsvp_submit", {
+        p_token_hash: sha(f.invitation.raw),
+        p_client: client,
+        p_expected_version: view.version,
+        p_responses: [],
+        p_plus_one: { name: "Plus One Example", mealOptionId: f.meals[0] },
+      }),
+    );
+    const rows = await withSuperuser(
+      async (db) =>
+        (
+          await db.query(
+            "select c.to_status from public.rsvp_changes c join public.guests g on g.id = c.guest_id where c.wedding_id = $1 and g.full_name = 'Plus One Example'",
+            [f.w],
+          )
+        ).rows,
+    );
+    expect(rows).toEqual([{ to_status: "accepted" }]);
+  });
+
+  it("cannot be edited or deleted, by clients or by the database owner's ordinary statements", async () => {
+    const f = await setup(1);
+    await accept(f, 0, f.meals[0]);
+    expect(
+      (
+        await owner.client
+          .from("rsvp_changes")
+          .update({ reason: "tamper" })
+          .eq("wedding_id", f.w)
+          .select()
+      ).data ?? [],
+    ).toHaveLength(0);
+    expect(
+      (await owner.client.from("rsvp_changes").delete().eq("wedding_id", f.w).select()).data ?? [],
+    ).toHaveLength(0);
+    expect(
+      (
+        await owner.client.from("rsvp_changes").insert({
+          wedding_id: f.w,
+          event_id: f.event,
+          guest_id: f.guests[0]!,
+          from_status: "pending",
+          to_status: "declined",
+          source: "couple",
+        })
+      ).error,
+    ).not.toBeNull();
+    await expect(
+      withSuperuser((db) =>
+        db.query("update public.rsvp_changes set reason = 'x' where wedding_id = $1", [f.w]),
+      ),
+    ).rejects.toThrow(/append-only/);
+    await expect(
+      withSuperuser((db) =>
+        db.query("delete from public.rsvp_changes where wedding_id = $1", [f.w]),
+      ),
+    ).rejects.toThrow(/append-only/);
+    expect(await changes(f, f.guests[0]!)).toHaveLength(1);
+  });
+
+  it("is readable by owner and partner only, and only in their own wedding", async () => {
+    const f = await setup(1);
+    await accept(f, 0, f.meals[0]);
+    const partner = await joinAs(f, "hist-partner", "partner");
+    const editor = await joinAs(f, "hist-editor", "editor");
+    const viewer = await joinAs(f, "hist-viewer", "viewer");
+    const read = async (u: TestUser) =>
+      (await u.client.from("rsvp_changes").select("id").eq("wedding_id", f.w)).data ?? [];
+    expect(await read(owner)).toHaveLength(1);
+    expect(await read(partner)).toHaveLength(1);
+    expect(await read(editor)).toHaveLength(0);
+    expect(await read(viewer)).toHaveLength(0);
+    expect(await read(stranger)).toHaveLength(0);
+    expect(
+      (await anonClient().from("rsvp_changes").select("id").eq("wedding_id", f.w)).data ?? [],
+    ).toHaveLength(0);
+  });
+});
+
+describe("finalized seating versions", () => {
+  it("keeps every finalization as its own row, and an older row is never rewritten", async () => {
+    const f = await setup(2);
+    const t = await addTable(f, "A", 2);
+    await accept(f, 0, f.meals[0]);
+    await ok(assign(f, 0, t));
+    await ok(finalize(f, (await layoutRow(f)).revision));
+    const first = await versions(f);
+    expect(first).toHaveLength(1);
+    expect(first[0]!.snapshot).toMatchObject({ accepted: 1, confirmedSeated: 1 });
+
+    await accept(f, 1, f.meals[1]);
+    await ok(assign(f, 1, t));
+    const rev = (await layoutRow(f)).revision;
+    await ok(finalize(f, rev));
+    const both = await versions(f);
+    expect(both).toHaveLength(2);
+    expect(both[0]!.id).toBe(first[0]!.id);
+    expect(JSON.stringify(both[0]!.snapshot)).toBe(JSON.stringify(first[0]!.snapshot));
+    expect(both[1]!.snapshot).toMatchObject({ accepted: 2, confirmedSeated: 2 });
+    expect(both[1]!.revision).toBe(rev);
+    // The layout still holds the latest copy.
+    expect((await layoutRow(f)).snapshot).toEqual(both[1]!.snapshot);
+  });
+
+  it("finalizing an unchanged plan again adds nothing", async () => {
+    const f = await setup(1);
+    const t = await addTable(f, "A", 2);
+    await accept(f, 0);
+    await ok(assign(f, 0, t));
+    const rev = (await layoutRow(f)).revision;
+    await ok(finalize(f, rev));
+    const before = await layoutRow(f);
+    await ok(finalize(f, rev));
+    expect(await versions(f)).toHaveLength(1);
+    expect((await layoutRow(f)).version).toBe(before.version);
+  });
+
+  it("a stale revision is still refused and writes no version", async () => {
+    const f = await setup(1);
+    const rev = (await layoutRow(f)).revision as number;
+    expect((await finalize(f, rev - 1)).error?.code).toBe("55000");
+    expect(await versions(f)).toHaveLength(0);
+  });
+
+  it("staleness still follows the plan: a change after finalizing keeps the version and flags it", async () => {
+    const f = await setup(1);
+    const t = await addTable(f, "A", 2);
+    await accept(f, 0);
+    await ok(assign(f, 0, t));
+    await ok(finalize(f, (await layoutRow(f)).revision));
+    await ok(submit(f, [{ memberId: f.members[0], status: "declined" }]));
+    const layout = await layoutRow(f);
+    expect(layout.revision).toBeGreaterThan(layout.finalized_revision);
+    const rows = await versions(f);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.snapshot).toMatchObject({ confirmedSeated: 1 });
+  });
+
+  it("cannot be edited or deleted", async () => {
+    const f = await setup(1);
+    await ok(finalize(f, (await layoutRow(f)).revision));
+    await expect(
+      withSuperuser((db) =>
+        db.query("update public.seating_snapshots set snapshot = '{}' where layout_id = $1", [
+          f.layout,
+        ]),
+      ),
+    ).rejects.toThrow(/append-only/);
+    await expect(
+      withSuperuser((db) =>
+        db.query("delete from public.seating_snapshots where layout_id = $1", [f.layout]),
+      ),
+    ).rejects.toThrow(/append-only/);
+    expect(
+      (await owner.client.from("seating_snapshots").delete().eq("layout_id", f.layout).select())
+        .data ?? [],
+    ).toHaveLength(0);
+    expect(await versions(f)).toHaveLength(1);
+  });
+
+  it("is readable by owner and partner only", async () => {
+    const f = await setup(1);
+    await ok(finalize(f, (await layoutRow(f)).revision));
+    const partner = await joinAs(f, "ver-partner", "partner");
+    const editor = await joinAs(f, "ver-editor", "editor");
+    const viewer = await joinAs(f, "ver-viewer", "viewer");
+    const read = async (u: TestUser) =>
+      (await u.client.from("seating_snapshots").select("id").eq("wedding_id", f.w)).data ?? [];
+    expect(await read(owner)).toHaveLength(1);
+    expect(await read(partner)).toHaveLength(1);
+    expect(await read(editor)).toHaveLength(0);
+    expect(await read(viewer)).toHaveLength(0);
+    expect(await read(stranger)).toHaveLength(0);
+  });
+
+  it("a layout with no finalization has no versions, and others' versions stay separate", async () => {
+    const f = await setup(1);
+    const other = await setup(1);
+    await ok(finalize(other, (await layoutRow(other)).revision));
+    expect(await versions(f)).toHaveLength(0);
+    expect(await versions(other)).toHaveLength(1);
+  });
+});

@@ -67,6 +67,9 @@ const ITEM_FIELDS = [
   "quantity",
   "minQty",
   "notes",
+  "countSource",
+  "countEvent",
+  "countTyped",
 ] as const;
 
 /** Optional arguments are only sent when set, so unknown stays null in the database. */
@@ -77,6 +80,9 @@ function itemArgs(v: {
   quantity: number | null;
   minQty: number | null;
   notes: string | null;
+  countSource: string;
+  countEventId: string | null;
+  countTyped: number | null;
 }) {
   return {
     p_name: v.name,
@@ -85,6 +91,9 @@ function itemArgs(v: {
     ...(v.quantity !== null && { p_quantity: v.quantity }),
     ...(v.minQty !== null && { p_min_qty: v.minQty }),
     ...(v.notes !== null && { p_notes: v.notes }),
+    p_count_source: v.countSource,
+    ...(v.countEventId !== null && { p_count_event: v.countEventId }),
+    ...(v.countTyped !== null && { p_count_typed: v.countTyped }),
   };
 }
 
@@ -220,6 +229,12 @@ export async function createItem(_: BudgetActionState, form: FormData): Promise<
       { category: "Choose a category." },
       values,
     );
+  if (parsed.value.countEventId !== null && !uuid.safeParse(parsed.value.countEventId).success)
+    return fail(
+      "Please check the highlighted details.",
+      { countEvent: "Choose an event." },
+      values,
+    );
 
   const supabase = await createUserClient();
   const { error } = await supabase.rpc("create_budget_item", {
@@ -252,6 +267,12 @@ export async function updateItem(_: BudgetActionState, form: FormData): Promise<
     return fail(
       "Please check the highlighted details.",
       { category: "Choose a category." },
+      values,
+    );
+  if (parsed.value.countEventId !== null && !uuid.safeParse(parsed.value.countEventId).success)
+    return fail(
+      "Please check the highlighted details.",
+      { countEvent: "Choose an event." },
       values,
     );
 

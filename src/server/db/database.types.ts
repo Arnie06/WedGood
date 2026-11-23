@@ -5,7 +5,53 @@ export type Database = {
   
   "public": {
           Tables: {
-            "audit_events": {
+            "attention_dismissals": {
+                  Row: {
+                    "dismissed_at": string,"dismissed_by": string | null,"fingerprint": string,"guest_data": boolean | null,"id": string,"kind": string,"subject_id": string,"wedding_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "dismissed_at"?: string,"dismissed_by"?: string | null,"fingerprint": string,"guest_data"?: never,"id"?: string,"kind": string,"subject_id": string,"wedding_id": string
+                  }
+                  Update: {
+                    "dismissed_at"?: string,"dismissed_by"?: string | null,"fingerprint"?: string,"guest_data"?: never,"id"?: string,"kind"?: string,"subject_id"?: string,"wedding_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "attention_dismissals_wedding_id_fkey"
+      columns: ["wedding_id"]
+isOneToOne: false
+      referencedRelation: "weddings"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"attention_items": {
+                  Row: {
+                    "created_at": string,"event_id": string,"id": string,"kind": string,"occurrences": number,"resolved_at": string | null,"resolved_by": string | null,"status": string,"updated_at": string,"wedding_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"event_id": string,"id"?: string,"kind": string,"occurrences"?: number,"resolved_at"?: string | null,"resolved_by"?: string | null,"status"?: string,"updated_at"?: string,"wedding_id": string
+                  }
+                  Update: {
+                    "created_at"?: string,"event_id"?: string,"id"?: string,"kind"?: string,"occurrences"?: number,"resolved_at"?: string | null,"resolved_by"?: string | null,"status"?: string,"updated_at"?: string,"wedding_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "attention_items_wedding_id_event_id_fkey"
+      columns: ["wedding_id","event_id"]
+isOneToOne: false
+      referencedRelation: "events"
+      referencedColumns: ["wedding_id","id"]
+    },{
+      foreignKeyName: "attention_items_wedding_id_fkey"
+      columns: ["wedding_id"]
+isOneToOne: false
+      referencedRelation: "weddings"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"audit_events": {
                   Row: {
                     "action": string,"actor_id": string | null,"entity_id": string,"entity_type": string,"id": string,"occurred_at": string,"request_id": string | null,"revision": number,"safe_changes": NonNullable<Json>,"wedding_id": string
                   }
@@ -47,17 +93,23 @@ isOneToOne: false
                   ]
                 },"budget_items": {
                   Row: {
-                    "amount_minor": number | null,"archived_at": string | null,"category_id": string,"cost_mode": string,"created_at": string,"created_by": string | null,"id": string,"min_qty": number | null,"name": string,"notes": string | null,"quantity": number | null,"updated_at": string,"version": number,"wedding_id": string
+                    "amount_minor": number | null,"archived_at": string | null,"category_id": string,"cost_mode": string,"count_event_id": string | null,"count_source": string,"count_typed": number | null,"created_at": string,"created_by": string | null,"id": string,"min_qty": number | null,"name": string,"notes": string | null,"quantity": number | null,"updated_at": string,"version": number,"wedding_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "amount_minor"?: number | null,"archived_at"?: string | null,"category_id": string,"cost_mode"?: string,"created_at"?: string,"created_by"?: string | null,"id"?: string,"min_qty"?: number | null,"name": string,"notes"?: string | null,"quantity"?: number | null,"updated_at"?: string,"version"?: number,"wedding_id": string
+                    "amount_minor"?: number | null,"archived_at"?: string | null,"category_id": string,"cost_mode"?: string,"count_event_id"?: string | null,"count_source"?: string,"count_typed"?: number | null,"created_at"?: string,"created_by"?: string | null,"id"?: string,"min_qty"?: number | null,"name": string,"notes"?: string | null,"quantity"?: number | null,"updated_at"?: string,"version"?: number,"wedding_id": string
                   }
                   Update: {
-                    "amount_minor"?: number | null,"archived_at"?: string | null,"category_id"?: string,"cost_mode"?: string,"created_at"?: string,"created_by"?: string | null,"id"?: string,"min_qty"?: number | null,"name"?: string,"notes"?: string | null,"quantity"?: number | null,"updated_at"?: string,"version"?: number,"wedding_id"?: string
+                    "amount_minor"?: number | null,"archived_at"?: string | null,"category_id"?: string,"cost_mode"?: string,"count_event_id"?: string | null,"count_source"?: string,"count_typed"?: number | null,"created_at"?: string,"created_by"?: string | null,"id"?: string,"min_qty"?: number | null,"name"?: string,"notes"?: string | null,"quantity"?: number | null,"updated_at"?: string,"version"?: number,"wedding_id"?: string
                   }
                   Relationships: [
                     {
+      foreignKeyName: "budget_items_count_event_fk"
+      columns: ["wedding_id","count_event_id"]
+isOneToOne: false
+      referencedRelation: "events"
+      referencedColumns: ["wedding_id","id"]
+    },{
       foreignKeyName: "budget_items_wedding_id_category_id_fkey"
       columns: ["wedding_id","category_id"]
 isOneToOne: false
@@ -103,6 +155,44 @@ isOneToOne: true
 isOneToOne: false
       referencedRelation: "weddings"
       referencedColumns: ["id"]
+    }
+                  ]
+                },"catering_guarantees": {
+                  Row: {
+                    "candidate_id": string | null,"due_on": string | null,"event_id": string,"guaranteed_count": number,"id": string,"kind": string,"locked_at": string,"locked_by": string | null,"meals": NonNullable<Json>,"reason": string | null,"status": string,"superseded_at": string | null,"supersedes_id": string | null,"wedding_id": string,"without_meal_at_lock": number,"yes_at_lock": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "candidate_id"?: string | null,"due_on"?: string | null,"event_id": string,"guaranteed_count": number,"id"?: string,"kind"?: string,"locked_at"?: string,"locked_by"?: string | null,"meals": NonNullable<Json>,"reason"?: string | null,"status"?: string,"superseded_at"?: string | null,"supersedes_id"?: string | null,"wedding_id": string,"without_meal_at_lock": number,"yes_at_lock": number
+                  }
+                  Update: {
+                    "candidate_id"?: string | null,"due_on"?: string | null,"event_id"?: string,"guaranteed_count"?: number,"id"?: string,"kind"?: string,"locked_at"?: string,"locked_by"?: string | null,"meals"?: NonNullable<Json>,"reason"?: string | null,"status"?: string,"superseded_at"?: string | null,"supersedes_id"?: string | null,"wedding_id"?: string,"without_meal_at_lock"?: number,"yes_at_lock"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "catering_guarantees_wedding_id_candidate_id_kind_fkey"
+      columns: ["wedding_id","candidate_id","kind"]
+isOneToOne: false
+      referencedRelation: "candidates"
+      referencedColumns: ["wedding_id","id","kind"]
+    },{
+      foreignKeyName: "catering_guarantees_wedding_id_event_id_fkey"
+      columns: ["wedding_id","event_id"]
+isOneToOne: false
+      referencedRelation: "events"
+      referencedColumns: ["wedding_id","id"]
+    },{
+      foreignKeyName: "catering_guarantees_wedding_id_fkey"
+      columns: ["wedding_id"]
+isOneToOne: false
+      referencedRelation: "weddings"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "catering_guarantees_wedding_id_supersedes_id_fkey"
+      columns: ["wedding_id","supersedes_id"]
+isOneToOne: false
+      referencedRelation: "catering_guarantees"
+      referencedColumns: ["wedding_id","id"]
     }
                   ]
                 },"collaborator_invites": {
@@ -237,17 +327,23 @@ isOneToOne: false
                   ]
                 },"comparisons": {
                   Row: {
-                    "accepts_unknowns": boolean,"archived_at": string | null,"created_at": string,"created_by": string | null,"criteria": NonNullable<Json>,"currency": string,"id": string,"scenario_guest_count": number,"title": string,"updated_at": string,"version": number,"wedding_id": string
+                    "accepts_unknowns": boolean,"archived_at": string | null,"count_event_id": string | null,"created_at": string,"created_by": string | null,"criteria": NonNullable<Json>,"currency": string,"id": string,"scenario_guest_count": number,"title": string,"updated_at": string,"version": number,"wedding_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "accepts_unknowns"?: boolean,"archived_at"?: string | null,"created_at"?: string,"created_by"?: string | null,"criteria"?: NonNullable<Json>,"currency": string,"id"?: string,"scenario_guest_count": number,"title": string,"updated_at"?: string,"version"?: number,"wedding_id": string
+                    "accepts_unknowns"?: boolean,"archived_at"?: string | null,"count_event_id"?: string | null,"created_at"?: string,"created_by"?: string | null,"criteria"?: NonNullable<Json>,"currency": string,"id"?: string,"scenario_guest_count": number,"title": string,"updated_at"?: string,"version"?: number,"wedding_id": string
                   }
                   Update: {
-                    "accepts_unknowns"?: boolean,"archived_at"?: string | null,"created_at"?: string,"created_by"?: string | null,"criteria"?: NonNullable<Json>,"currency"?: string,"id"?: string,"scenario_guest_count"?: number,"title"?: string,"updated_at"?: string,"version"?: number,"wedding_id"?: string
+                    "accepts_unknowns"?: boolean,"archived_at"?: string | null,"count_event_id"?: string | null,"created_at"?: string,"created_by"?: string | null,"criteria"?: NonNullable<Json>,"currency"?: string,"id"?: string,"scenario_guest_count"?: number,"title"?: string,"updated_at"?: string,"version"?: number,"wedding_id"?: string
                   }
                   Relationships: [
                     {
+      foreignKeyName: "comparisons_count_event_fk"
+      columns: ["wedding_id","count_event_id"]
+isOneToOne: false
+      referencedRelation: "events"
+      referencedColumns: ["wedding_id","id"]
+    },{
       foreignKeyName: "comparisons_wedding_id_fkey"
       columns: ["wedding_id"]
 isOneToOne: false
@@ -391,16 +487,74 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
-                },"events": {
+                },"event_locations": {
                   Row: {
-                    "capacity": number | null,"created_at": string,"id": string,"kind": string,"local_date": string | null,"name": string,"target_attendance": number | null,"updated_at": string,"version": number,"wedding_id": string
+                    "candidate_id": string,"created_at": string,"event_id": string,"kind": string,"set_by": string | null,"space_id": string | null,"updated_at": string,"version": number,"wedding_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "capacity"?: number | null,"created_at"?: string,"id"?: string,"kind"?: string,"local_date"?: string | null,"name": string,"target_attendance"?: number | null,"updated_at"?: string,"version"?: number,"wedding_id": string
+                    "candidate_id": string,"created_at"?: string,"event_id": string,"kind"?: string,"set_by"?: string | null,"space_id"?: string | null,"updated_at"?: string,"version"?: number,"wedding_id": string
                   }
                   Update: {
-                    "capacity"?: number | null,"created_at"?: string,"id"?: string,"kind"?: string,"local_date"?: string | null,"name"?: string,"target_attendance"?: number | null,"updated_at"?: string,"version"?: number,"wedding_id"?: string
+                    "candidate_id"?: string,"created_at"?: string,"event_id"?: string,"kind"?: string,"set_by"?: string | null,"space_id"?: string | null,"updated_at"?: string,"version"?: number,"wedding_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "event_locations_wedding_id_candidate_id_kind_fkey"
+      columns: ["wedding_id","candidate_id","kind"]
+isOneToOne: false
+      referencedRelation: "candidates"
+      referencedColumns: ["wedding_id","id","kind"]
+    },{
+      foreignKeyName: "event_locations_wedding_id_candidate_id_space_id_fkey"
+      columns: ["wedding_id","candidate_id","space_id"]
+isOneToOne: false
+      referencedRelation: "venue_spaces"
+      referencedColumns: ["wedding_id","candidate_id","id"]
+    },{
+      foreignKeyName: "event_locations_wedding_id_event_id_fkey"
+      columns: ["wedding_id","event_id"]
+isOneToOne: false
+      referencedRelation: "events"
+      referencedColumns: ["wedding_id","id"]
+    }
+                  ]
+                },"event_vendors": {
+                  Row: {
+                    "candidate_id": string,"created_at": string,"created_by": string | null,"event_id": string,"kind": string,"wedding_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "candidate_id": string,"created_at"?: string,"created_by"?: string | null,"event_id": string,"kind"?: string,"wedding_id": string
+                  }
+                  Update: {
+                    "candidate_id"?: string,"created_at"?: string,"created_by"?: string | null,"event_id"?: string,"kind"?: string,"wedding_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "event_vendors_wedding_id_candidate_id_kind_fkey"
+      columns: ["wedding_id","candidate_id","kind"]
+isOneToOne: false
+      referencedRelation: "candidates"
+      referencedColumns: ["wedding_id","id","kind"]
+    },{
+      foreignKeyName: "event_vendors_wedding_id_event_id_fkey"
+      columns: ["wedding_id","event_id"]
+isOneToOne: false
+      referencedRelation: "events"
+      referencedColumns: ["wedding_id","id"]
+    }
+                  ]
+                },"events": {
+                  Row: {
+                    "capacity": number | null,"created_at": string,"id": string,"invitations_final": boolean,"kind": string,"local_date": string | null,"location_seq": number,"name": string,"plan_open_plus_ones": boolean,"planning_basis": string,"target_attendance": number | null,"time_zone": string | null,"updated_at": string,"version": number,"wedding_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "capacity"?: number | null,"created_at"?: string,"id"?: string,"invitations_final"?: boolean,"kind"?: string,"local_date"?: string | null,"location_seq"?: number,"name": string,"plan_open_plus_ones"?: boolean,"planning_basis"?: string,"target_attendance"?: number | null,"time_zone"?: string | null,"updated_at"?: string,"version"?: number,"wedding_id": string
+                  }
+                  Update: {
+                    "capacity"?: number | null,"created_at"?: string,"id"?: string,"invitations_final"?: boolean,"kind"?: string,"local_date"?: string | null,"location_seq"?: number,"name"?: string,"plan_open_plus_ones"?: boolean,"planning_basis"?: string,"target_attendance"?: number | null,"time_zone"?: string | null,"updated_at"?: string,"version"?: number,"wedding_id"?: string
                   }
                   Relationships: [
                     {
@@ -431,16 +585,48 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
-                },"guest_private_details": {
+                },"guest_messages": {
                   Row: {
-                    "accessibility": string | null,"dietary": string | null,"guest_id": string,"notes": string | null,"updated_at": string,"wedding_id": string
+                    "approved_at": string | null,"approved_by": string | null,"attempts": number,"body": string,"cancelled_at": string | null,"created_at": string,"created_by": string | null,"dedupe_key": string,"event_id": string,"guest_id": string,"id": string,"invitation_id": string,"kind": string,"last_error": string | null,"provider": string | null,"provider_receipt": string | null,"recipient_email": string,"sending_since": string | null,"sent_at": string | null,"state_hash": string,"status": string,"subject": string,"updated_at": string,"version": number,"wedding_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "accessibility"?: string | null,"dietary"?: string | null,"guest_id": string,"notes"?: string | null,"updated_at"?: string,"wedding_id": string
+                    "approved_at"?: string | null,"approved_by"?: string | null,"attempts"?: number,"body": string,"cancelled_at"?: string | null,"created_at"?: string,"created_by"?: string | null,"dedupe_key": string,"event_id": string,"guest_id": string,"id"?: string,"invitation_id": string,"kind": string,"last_error"?: string | null,"provider"?: string | null,"provider_receipt"?: string | null,"recipient_email": string,"sending_since"?: string | null,"sent_at"?: string | null,"state_hash": string,"status"?: string,"subject": string,"updated_at"?: string,"version"?: number,"wedding_id": string
                   }
                   Update: {
-                    "accessibility"?: string | null,"dietary"?: string | null,"guest_id"?: string,"notes"?: string | null,"updated_at"?: string,"wedding_id"?: string
+                    "approved_at"?: string | null,"approved_by"?: string | null,"attempts"?: number,"body"?: string,"cancelled_at"?: string | null,"created_at"?: string,"created_by"?: string | null,"dedupe_key"?: string,"event_id"?: string,"guest_id"?: string,"id"?: string,"invitation_id"?: string,"kind"?: string,"last_error"?: string | null,"provider"?: string | null,"provider_receipt"?: string | null,"recipient_email"?: string,"sending_since"?: string | null,"sent_at"?: string | null,"state_hash"?: string,"status"?: string,"subject"?: string,"updated_at"?: string,"version"?: number,"wedding_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "guest_messages_wedding_id_fkey"
+      columns: ["wedding_id"]
+isOneToOne: false
+      referencedRelation: "weddings"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "guest_messages_wedding_id_guest_id_fkey"
+      columns: ["wedding_id","guest_id"]
+isOneToOne: false
+      referencedRelation: "guests"
+      referencedColumns: ["wedding_id","id"]
+    },{
+      foreignKeyName: "guest_messages_wedding_id_invitation_id_event_id_fkey"
+      columns: ["wedding_id","invitation_id","event_id"]
+isOneToOne: false
+      referencedRelation: "invitations"
+      referencedColumns: ["wedding_id","id","event_id"]
+    }
+                  ]
+                },"guest_private_details": {
+                  Row: {
+                    "accessibility": string | null,"dietary": string | null,"guest_answered_at": string | null,"guest_id": string,"notes": string | null,"updated_at": string,"wedding_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "accessibility"?: string | null,"dietary"?: string | null,"guest_answered_at"?: string | null,"guest_id": string,"notes"?: string | null,"updated_at"?: string,"wedding_id": string
+                  }
+                  Update: {
+                    "accessibility"?: string | null,"dietary"?: string | null,"guest_answered_at"?: string | null,"guest_id"?: string,"notes"?: string | null,"updated_at"?: string,"wedding_id"?: string
                   }
                   Relationships: [
                     {
@@ -549,19 +735,51 @@ isOneToOne: false
       referencedColumns: ["wedding_id","id","event_id"]
     }
                   ]
-                },"invitations": {
+                },"invitation_parties": {
                   Row: {
-                    "batch_id": string,"created_at": string,"created_by": string | null,"deadline": string | null,"delivery_marked_at": string | null,"delivery_status": string,"event_id": string,"expires_at": string,"household_id": string | null,"id": string,"label": string,"last_responded_at": string | null,"plus_one_quota": number,"plus_ones_used": number,"revoked_at": string | null,"token_hash": string,"updated_at": string,"version": number,"wedding_id": string
+                    "created_at": string,"created_by": string | null,"expires_at": string,"household_id": string | null,"id": string,"label": string,"revoked_at": string | null,"token_hash": string,"updated_at": string,"version": number,"wedding_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "batch_id": string,"created_at"?: string,"created_by"?: string | null,"deadline"?: string | null,"delivery_marked_at"?: string | null,"delivery_status"?: string,"event_id": string,"expires_at": string,"household_id"?: string | null,"id"?: string,"label": string,"last_responded_at"?: string | null,"plus_one_quota"?: number,"plus_ones_used"?: number,"revoked_at"?: string | null,"token_hash": string,"updated_at"?: string,"version"?: number,"wedding_id": string
+                    "created_at"?: string,"created_by"?: string | null,"expires_at": string,"household_id"?: string | null,"id"?: string,"label": string,"revoked_at"?: string | null,"token_hash": string,"updated_at"?: string,"version"?: number,"wedding_id": string
                   }
                   Update: {
-                    "batch_id"?: string,"created_at"?: string,"created_by"?: string | null,"deadline"?: string | null,"delivery_marked_at"?: string | null,"delivery_status"?: string,"event_id"?: string,"expires_at"?: string,"household_id"?: string | null,"id"?: string,"label"?: string,"last_responded_at"?: string | null,"plus_one_quota"?: number,"plus_ones_used"?: number,"revoked_at"?: string | null,"token_hash"?: string,"updated_at"?: string,"version"?: number,"wedding_id"?: string
+                    "created_at"?: string,"created_by"?: string | null,"expires_at"?: string,"household_id"?: string | null,"id"?: string,"label"?: string,"revoked_at"?: string | null,"token_hash"?: string,"updated_at"?: string,"version"?: number,"wedding_id"?: string
                   }
                   Relationships: [
                     {
+      foreignKeyName: "invitation_parties_wedding_id_fkey"
+      columns: ["wedding_id"]
+isOneToOne: false
+      referencedRelation: "weddings"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "invitation_parties_wedding_id_household_id_fkey"
+      columns: ["wedding_id","household_id"]
+isOneToOne: false
+      referencedRelation: "households"
+      referencedColumns: ["wedding_id","id"]
+    }
+                  ]
+                },"invitations": {
+                  Row: {
+                    "batch_id": string,"created_at": string,"created_by": string | null,"deadline": string | null,"delivery_marked_at": string | null,"delivery_status": string,"event_id": string,"expires_at": string,"household_id": string | null,"id": string,"label": string,"last_responded_at": string | null,"party_id": string | null,"plus_one_quota": number,"plus_ones_used": number,"revoked_at": string | null,"token_hash": string,"updated_at": string,"version": number,"wedding_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "batch_id": string,"created_at"?: string,"created_by"?: string | null,"deadline"?: string | null,"delivery_marked_at"?: string | null,"delivery_status"?: string,"event_id": string,"expires_at": string,"household_id"?: string | null,"id"?: string,"label": string,"last_responded_at"?: string | null,"party_id"?: string | null,"plus_one_quota"?: number,"plus_ones_used"?: number,"revoked_at"?: string | null,"token_hash": string,"updated_at"?: string,"version"?: number,"wedding_id": string
+                  }
+                  Update: {
+                    "batch_id"?: string,"created_at"?: string,"created_by"?: string | null,"deadline"?: string | null,"delivery_marked_at"?: string | null,"delivery_status"?: string,"event_id"?: string,"expires_at"?: string,"household_id"?: string | null,"id"?: string,"label"?: string,"last_responded_at"?: string | null,"party_id"?: string | null,"plus_one_quota"?: number,"plus_ones_used"?: number,"revoked_at"?: string | null,"token_hash"?: string,"updated_at"?: string,"version"?: number,"wedding_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "invitations_party_fk"
+      columns: ["wedding_id","party_id"]
+isOneToOne: false
+      referencedRelation: "invitation_parties"
+      referencedColumns: ["wedding_id","id"]
+    },{
       foreignKeyName: "invitations_wedding_id_event_id_fkey"
       columns: ["wedding_id","event_id"]
 isOneToOne: false
@@ -572,6 +790,26 @@ isOneToOne: false
       columns: ["wedding_id","household_id"]
 isOneToOne: false
       referencedRelation: "households"
+      referencedColumns: ["wedding_id","id"]
+    }
+                  ]
+                },"invoices": {
+                  Row: {
+                    "amount_minor": number,"commitment_id": string,"created_at": string,"created_by": string | null,"due_on": string | null,"id": string,"issued_on": string | null,"note": string | null,"number": string | null,"void_reason": string | null,"voided_at": string | null,"wedding_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "amount_minor": number,"commitment_id": string,"created_at"?: string,"created_by"?: string | null,"due_on"?: string | null,"id"?: string,"issued_on"?: string | null,"note"?: string | null,"number"?: string | null,"void_reason"?: string | null,"voided_at"?: string | null,"wedding_id": string
+                  }
+                  Update: {
+                    "amount_minor"?: number,"commitment_id"?: string,"created_at"?: string,"created_by"?: string | null,"due_on"?: string | null,"id"?: string,"issued_on"?: string | null,"note"?: string | null,"number"?: string | null,"void_reason"?: string | null,"voided_at"?: string | null,"wedding_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "invoices_wedding_id_commitment_id_fkey"
+      columns: ["wedding_id","commitment_id"]
+isOneToOne: false
+      referencedRelation: "commitments"
       referencedColumns: ["wedding_id","id"]
     }
                   ]
@@ -677,17 +915,23 @@ isOneToOne: false
                   ]
                 },"payments": {
                   Row: {
-                    "amount_minor": number,"budget_item_id": string | null,"commitment_id": string | null,"created_at": string,"created_by": string | null,"external_ref": string | null,"id": string,"kind": string,"method_label": string | null,"note": string | null,"paid_on": string,"void_reason": string | null,"voided_at": string | null,"wedding_id": string
+                    "amount_minor": number,"budget_item_id": string | null,"commitment_id": string | null,"created_at": string,"created_by": string | null,"external_ref": string | null,"id": string,"invoice_id": string | null,"kind": string,"method_label": string | null,"note": string | null,"paid_on": string,"void_reason": string | null,"voided_at": string | null,"wedding_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "amount_minor": number,"budget_item_id"?: string | null,"commitment_id"?: string | null,"created_at"?: string,"created_by"?: string | null,"external_ref"?: string | null,"id"?: string,"kind": string,"method_label"?: string | null,"note"?: string | null,"paid_on": string,"void_reason"?: string | null,"voided_at"?: string | null,"wedding_id": string
+                    "amount_minor": number,"budget_item_id"?: string | null,"commitment_id"?: string | null,"created_at"?: string,"created_by"?: string | null,"external_ref"?: string | null,"id"?: string,"invoice_id"?: string | null,"kind": string,"method_label"?: string | null,"note"?: string | null,"paid_on": string,"void_reason"?: string | null,"voided_at"?: string | null,"wedding_id": string
                   }
                   Update: {
-                    "amount_minor"?: number,"budget_item_id"?: string | null,"commitment_id"?: string | null,"created_at"?: string,"created_by"?: string | null,"external_ref"?: string | null,"id"?: string,"kind"?: string,"method_label"?: string | null,"note"?: string | null,"paid_on"?: string,"void_reason"?: string | null,"voided_at"?: string | null,"wedding_id"?: string
+                    "amount_minor"?: number,"budget_item_id"?: string | null,"commitment_id"?: string | null,"created_at"?: string,"created_by"?: string | null,"external_ref"?: string | null,"id"?: string,"invoice_id"?: string | null,"kind"?: string,"method_label"?: string | null,"note"?: string | null,"paid_on"?: string,"void_reason"?: string | null,"voided_at"?: string | null,"wedding_id"?: string
                   }
                   Relationships: [
                     {
+      foreignKeyName: "payments_invoice_fk"
+      columns: ["invoice_id","commitment_id"]
+isOneToOne: false
+      referencedRelation: "invoices"
+      referencedColumns: ["id","commitment_id"]
+    },{
       foreignKeyName: "payments_wedding_id_budget_item_id_fkey"
       columns: ["wedding_id","budget_item_id"]
 isOneToOne: false
@@ -761,6 +1005,94 @@ isOneToOne: false
       referencedColumns: ["wedding_id","id"]
     }
                   ]
+                },"rsvp_answers": {
+                  Row: {
+                    "answered_at": string,"event_id": string,"form_version_id": string,"guest_id": string,"id": string,"invitation_id": string,"member_id": string,"question_key": string,"updated_at": string,"value": string,"wedding_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "answered_at"?: string,"event_id": string,"form_version_id": string,"guest_id": string,"id"?: string,"invitation_id": string,"member_id": string,"question_key": string,"updated_at"?: string,"value": string,"wedding_id": string
+                  }
+                  Update: {
+                    "answered_at"?: string,"event_id"?: string,"form_version_id"?: string,"guest_id"?: string,"id"?: string,"invitation_id"?: string,"member_id"?: string,"question_key"?: string,"updated_at"?: string,"value"?: string,"wedding_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "rsvp_answers_wedding_id_fkey"
+      columns: ["wedding_id"]
+isOneToOne: false
+      referencedRelation: "weddings"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "rsvp_answers_wedding_id_form_version_id_event_id_fkey"
+      columns: ["wedding_id","form_version_id","event_id"]
+isOneToOne: false
+      referencedRelation: "rsvp_form_versions"
+      referencedColumns: ["wedding_id","id","event_id"]
+    },{
+      foreignKeyName: "rsvp_answers_wedding_id_guest_id_fkey"
+      columns: ["wedding_id","guest_id"]
+isOneToOne: false
+      referencedRelation: "guests"
+      referencedColumns: ["wedding_id","id"]
+    },{
+      foreignKeyName: "rsvp_answers_wedding_id_invitation_id_event_id_fkey"
+      columns: ["wedding_id","invitation_id","event_id"]
+isOneToOne: false
+      referencedRelation: "invitations"
+      referencedColumns: ["wedding_id","id","event_id"]
+    },{
+      foreignKeyName: "rsvp_answers_wedding_id_member_id_fkey"
+      columns: ["wedding_id","member_id"]
+isOneToOne: false
+      referencedRelation: "invitation_members"
+      referencedColumns: ["wedding_id","id"]
+    }
+                  ]
+                },"rsvp_changes": {
+                  Row: {
+                    "actor_id": string | null,"event_id": string,"from_meal_option_id": string | null,"from_status": string,"guest_id": string,"id": string,"occurred_at": string,"reason": string | null,"source": string,"to_meal_option_id": string | null,"to_status": string,"wedding_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "actor_id"?: string | null,"event_id": string,"from_meal_option_id"?: string | null,"from_status": string,"guest_id": string,"id"?: string,"occurred_at"?: string,"reason"?: string | null,"source": string,"to_meal_option_id"?: string | null,"to_status": string,"wedding_id": string
+                  }
+                  Update: {
+                    "actor_id"?: string | null,"event_id"?: string,"from_meal_option_id"?: string | null,"from_status"?: string,"guest_id"?: string,"id"?: string,"occurred_at"?: string,"reason"?: string | null,"source"?: string,"to_meal_option_id"?: string | null,"to_status"?: string,"wedding_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "rsvp_changes_wedding_id_event_id_fkey"
+      columns: ["wedding_id","event_id"]
+isOneToOne: false
+      referencedRelation: "events"
+      referencedColumns: ["wedding_id","id"]
+    },{
+      foreignKeyName: "rsvp_changes_wedding_id_event_id_from_meal_option_id_fkey"
+      columns: ["wedding_id","event_id","from_meal_option_id"]
+isOneToOne: false
+      referencedRelation: "meal_options"
+      referencedColumns: ["wedding_id","event_id","id"]
+    },{
+      foreignKeyName: "rsvp_changes_wedding_id_event_id_to_meal_option_id_fkey"
+      columns: ["wedding_id","event_id","to_meal_option_id"]
+isOneToOne: false
+      referencedRelation: "meal_options"
+      referencedColumns: ["wedding_id","event_id","id"]
+    },{
+      foreignKeyName: "rsvp_changes_wedding_id_fkey"
+      columns: ["wedding_id"]
+isOneToOne: false
+      referencedRelation: "weddings"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "rsvp_changes_wedding_id_guest_id_fkey"
+      columns: ["wedding_id","guest_id"]
+isOneToOne: false
+      referencedRelation: "guests"
+      referencedColumns: ["wedding_id","id"]
+    }
+                  ]
                 },"rsvp_failures": {
                   Row: {
                     "client_hash": string,"id": number,"occurred_at": string
@@ -774,6 +1106,102 @@ isOneToOne: false
                   }
                   Relationships: [
                     
+                  ]
+                },"rsvp_form_versions": {
+                  Row: {
+                    "definition": NonNullable<Json>,"event_id": string,"form_id": string,"id": string,"published_at": string,"published_by": string | null,"version": number,"wedding_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "definition": NonNullable<Json>,"event_id": string,"form_id": string,"id"?: string,"published_at"?: string,"published_by"?: string | null,"version": number,"wedding_id": string
+                  }
+                  Update: {
+                    "definition"?: NonNullable<Json>,"event_id"?: string,"form_id"?: string,"id"?: string,"published_at"?: string,"published_by"?: string | null,"version"?: number,"wedding_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "rsvp_form_versions_wedding_id_fkey"
+      columns: ["wedding_id"]
+isOneToOne: false
+      referencedRelation: "weddings"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "rsvp_form_versions_wedding_id_form_id_fkey"
+      columns: ["wedding_id","form_id"]
+isOneToOne: false
+      referencedRelation: "rsvp_forms"
+      referencedColumns: ["wedding_id","id"]
+    }
+                  ]
+                },"rsvp_forms": {
+                  Row: {
+                    "created_at": string,"draft": NonNullable<Json>,"event_id": string,"id": string,"published_version_id": string | null,"updated_at": string,"version": number,"wedding_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"draft"?: NonNullable<Json>,"event_id": string,"id"?: string,"published_version_id"?: string | null,"updated_at"?: string,"version"?: number,"wedding_id": string
+                  }
+                  Update: {
+                    "created_at"?: string,"draft"?: NonNullable<Json>,"event_id"?: string,"id"?: string,"published_version_id"?: string | null,"updated_at"?: string,"version"?: number,"wedding_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "rsvp_forms_wedding_id_event_id_fkey"
+      columns: ["wedding_id","event_id"]
+isOneToOne: false
+      referencedRelation: "events"
+      referencedColumns: ["wedding_id","id"]
+    },{
+      foreignKeyName: "rsvp_forms_wedding_id_fkey"
+      columns: ["wedding_id"]
+isOneToOne: false
+      referencedRelation: "weddings"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "rsvp_forms_wedding_id_published_version_id_fkey"
+      columns: ["wedding_id","published_version_id"]
+isOneToOne: false
+      referencedRelation: "rsvp_form_versions"
+      referencedColumns: ["wedding_id","id"]
+    }
+                  ]
+                },"rsvp_submissions": {
+                  Row: {
+                    "accepted_count": number,"accepted_revision": number,"answers_count": number,"declined_count": number,"details_count": number,"event_id": string,"form_version": number,"form_version_id": string | null,"id": string,"invitation_id": string,"invitation_version": number,"party_id": string | null,"payload_hash": string,"plus_one_added": boolean,"plus_ones_removed": number,"send_id": string,"submitted_at": string,"wedding_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "accepted_count"?: number,"accepted_revision": number,"answers_count"?: number,"declined_count"?: number,"details_count"?: number,"event_id": string,"form_version"?: number,"form_version_id"?: string | null,"id"?: string,"invitation_id": string,"invitation_version": number,"party_id"?: string | null,"payload_hash": string,"plus_one_added"?: boolean,"plus_ones_removed"?: number,"send_id": string,"submitted_at"?: string,"wedding_id": string
+                  }
+                  Update: {
+                    "accepted_count"?: number,"accepted_revision"?: number,"answers_count"?: number,"declined_count"?: number,"details_count"?: number,"event_id"?: string,"form_version"?: number,"form_version_id"?: string | null,"id"?: string,"invitation_id"?: string,"invitation_version"?: number,"party_id"?: string | null,"payload_hash"?: string,"plus_one_added"?: boolean,"plus_ones_removed"?: number,"send_id"?: string,"submitted_at"?: string,"wedding_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "rsvp_submissions_wedding_id_fkey"
+      columns: ["wedding_id"]
+isOneToOne: false
+      referencedRelation: "weddings"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "rsvp_submissions_wedding_id_form_version_id_fkey"
+      columns: ["wedding_id","form_version_id"]
+isOneToOne: false
+      referencedRelation: "rsvp_form_versions"
+      referencedColumns: ["wedding_id","id"]
+    },{
+      foreignKeyName: "rsvp_submissions_wedding_id_invitation_id_event_id_fkey"
+      columns: ["wedding_id","invitation_id","event_id"]
+isOneToOne: false
+      referencedRelation: "invitations"
+      referencedColumns: ["wedding_id","id","event_id"]
+    },{
+      foreignKeyName: "rsvp_submissions_wedding_id_party_id_fkey"
+      columns: ["wedding_id","party_id"]
+isOneToOne: false
+      referencedRelation: "invitation_parties"
+      referencedColumns: ["wedding_id","id"]
+    }
                   ]
                 },"seat_assignments": {
                   Row: {
@@ -841,6 +1269,32 @@ isOneToOne: false
       referencedColumns: ["wedding_id","id"]
     }
                   ]
+                },"seating_snapshots": {
+                  Row: {
+                    "event_id": string,"finalized_at": string,"finalized_by": string | null,"id": string,"layout_id": string,"revision": number,"snapshot": NonNullable<Json>,"wedding_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "event_id": string,"finalized_at"?: string,"finalized_by"?: string | null,"id"?: string,"layout_id": string,"revision": number,"snapshot": NonNullable<Json>,"wedding_id": string
+                  }
+                  Update: {
+                    "event_id"?: string,"finalized_at"?: string,"finalized_by"?: string | null,"id"?: string,"layout_id"?: string,"revision"?: number,"snapshot"?: NonNullable<Json>,"wedding_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "seating_snapshots_wedding_id_fkey"
+      columns: ["wedding_id"]
+isOneToOne: false
+      referencedRelation: "weddings"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "seating_snapshots_wedding_id_layout_id_event_id_fkey"
+      columns: ["wedding_id","layout_id","event_id"]
+isOneToOne: false
+      referencedRelation: "seating_layouts"
+      referencedColumns: ["wedding_id","id","event_id"]
+    }
+                  ]
                 },"seating_tables": {
                   Row: {
                     "capacity": number,"created_at": string,"id": string,"label": string,"layout_id": string,"notes": string | null,"pos_x": number | null,"pos_y": number | null,"shape": string,"updated_at": string,"version": number,"wedding_id": string
@@ -858,6 +1312,52 @@ isOneToOne: false
       columns: ["wedding_id","layout_id"]
 isOneToOne: false
       referencedRelation: "seating_layouts"
+      referencedColumns: ["wedding_id","id"]
+    }
+                  ]
+                },"shuttle_assignments": {
+                  Row: {
+                    "assigned_at": string,"direction": string,"event_id": string,"guest_id": string,"id": string,"run_id": string,"wedding_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "assigned_at"?: string,"direction": string,"event_id": string,"guest_id": string,"id"?: string,"run_id": string,"wedding_id": string
+                  }
+                  Update: {
+                    "assigned_at"?: string,"direction"?: string,"event_id"?: string,"guest_id"?: string,"id"?: string,"run_id"?: string,"wedding_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "shuttle_assignments_wedding_id_event_id_run_id_direction_fkey"
+      columns: ["wedding_id","event_id","run_id","direction"]
+isOneToOne: false
+      referencedRelation: "shuttle_runs"
+      referencedColumns: ["wedding_id","event_id","id","direction"]
+    },{
+      foreignKeyName: "shuttle_assignments_wedding_id_guest_id_fkey"
+      columns: ["wedding_id","guest_id"]
+isOneToOne: false
+      referencedRelation: "guests"
+      referencedColumns: ["wedding_id","id"]
+    }
+                  ]
+                },"shuttle_runs": {
+                  Row: {
+                    "capacity": number,"created_at": string,"departs_at": string,"direction": string,"dropoff": string | null,"event_id": string,"id": string,"label": string,"notes": string | null,"pickup": string,"updated_at": string,"version": number,"wedding_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "capacity": number,"created_at"?: string,"departs_at": string,"direction": string,"dropoff"?: string | null,"event_id": string,"id"?: string,"label": string,"notes"?: string | null,"pickup": string,"updated_at"?: string,"version"?: number,"wedding_id": string
+                  }
+                  Update: {
+                    "capacity"?: number,"created_at"?: string,"departs_at"?: string,"direction"?: string,"dropoff"?: string | null,"event_id"?: string,"id"?: string,"label"?: string,"notes"?: string | null,"pickup"?: string,"updated_at"?: string,"version"?: number,"wedding_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "shuttle_runs_wedding_id_event_id_fkey"
+      columns: ["wedding_id","event_id"]
+isOneToOne: false
+      referencedRelation: "events"
       referencedColumns: ["wedding_id","id"]
     }
                   ]
@@ -907,6 +1407,26 @@ isOneToOne: false
       referencedColumns: ["wedding_id","id"]
     }
                   ]
+                },"venue_spaces": {
+                  Row: {
+                    "archived_at": string | null,"candidate_id": string,"created_at": string,"id": string,"kind": string,"name": string,"notes": string | null,"seated_capacity": number | null,"standing_capacity": number | null,"updated_at": string,"version": number,"wedding_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "archived_at"?: string | null,"candidate_id": string,"created_at"?: string,"id"?: string,"kind"?: string,"name": string,"notes"?: string | null,"seated_capacity"?: number | null,"standing_capacity"?: number | null,"updated_at"?: string,"version"?: number,"wedding_id": string
+                  }
+                  Update: {
+                    "archived_at"?: string | null,"candidate_id"?: string,"created_at"?: string,"id"?: string,"kind"?: string,"name"?: string,"notes"?: string | null,"seated_capacity"?: number | null,"standing_capacity"?: number | null,"updated_at"?: string,"version"?: number,"wedding_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "venue_spaces_wedding_id_candidate_id_kind_fkey"
+      columns: ["wedding_id","candidate_id","kind"]
+isOneToOne: false
+      referencedRelation: "candidates"
+      referencedColumns: ["wedding_id","id","kind"]
+    }
+                  ]
                 },"venues": {
                   Row: {
                     "candidate_id": string,"ceremony_capacity": number | null,"created_at": string,"kind": string,"seated_capacity": number | null,"updated_at": string,"version": number,"wedding_id": string
@@ -949,14 +1469,14 @@ isOneToOne: true
                   ]
                 },"weddings": {
                   Row: {
-                    "base_currency": string,"created_at": string,"created_by": string,"date": string | null,"id": string,"location": string | null,"name": string,"preferences": NonNullable<Json>,"revision": number,"target_budget_minor": number | null,"target_guest_count": number | null,"timezone": string,"updated_at": string,"version": number
+                    "base_currency": string,"created_at": string,"created_by": string,"date": string | null,"id": string,"location": string | null,"name": string,"preferences": NonNullable<Json>,"revision": number,"share_guest_totals": boolean,"target_budget_minor": number | null,"target_guest_count": number | null,"timezone": string,"updated_at": string,"version": number
                   }
                   ComputedFields: never
                   Insert: {
-                    "base_currency": string,"created_at"?: string,"created_by": string,"date"?: string | null,"id"?: string,"location"?: string | null,"name": string,"preferences"?: NonNullable<Json>,"revision"?: number,"target_budget_minor"?: number | null,"target_guest_count"?: number | null,"timezone": string,"updated_at"?: string,"version"?: number
+                    "base_currency": string,"created_at"?: string,"created_by": string,"date"?: string | null,"id"?: string,"location"?: string | null,"name": string,"preferences"?: NonNullable<Json>,"revision"?: number,"share_guest_totals"?: boolean,"target_budget_minor"?: number | null,"target_guest_count"?: number | null,"timezone": string,"updated_at"?: string,"version"?: number
                   }
                   Update: {
-                    "base_currency"?: string,"created_at"?: string,"created_by"?: string,"date"?: string | null,"id"?: string,"location"?: string | null,"name"?: string,"preferences"?: NonNullable<Json>,"revision"?: number,"target_budget_minor"?: number | null,"target_guest_count"?: number | null,"timezone"?: string,"updated_at"?: string,"version"?: number
+                    "base_currency"?: string,"created_at"?: string,"created_by"?: string,"date"?: string | null,"id"?: string,"location"?: string | null,"name"?: string,"preferences"?: NonNullable<Json>,"revision"?: number,"share_guest_totals"?: boolean,"target_budget_minor"?: number | null,"target_guest_count"?: number | null,"timezone"?: string,"updated_at"?: string,"version"?: number
                   }
                   Relationships: [
                     
@@ -984,6 +1504,9 @@ isOneToOne: true
                            },
 "add_seating_table":
 { Args: { "p_capacity": number,"p_label": string,"p_layout": string,"p_shape"?: string,"p_wedding": string }; Returns: string
+                           },
+"add_shuttle_run":
+{ Args: { "p_capacity": number,"p_departs_at": string,"p_direction": string,"p_dropoff": string,"p_event": string,"p_label": string,"p_notes"?: string,"p_pickup": string,"p_wedding": string }; Returns: string
                            },
 "add_suggested_budget_categories":
 { Args: { "p_names": Json,"p_wedding": string }; Returns: number
@@ -1018,14 +1541,28 @@ isOneToOne: true
 "archive_task":
 { Args: { "p_expected_version": number,"p_task": string,"p_wedding": string }; Returns: undefined
                            },
+"archive_venue_space":
+{ Args: { "p_expected_version": number,"p_space": string,"p_wedding": string }; Returns: number
+                           },
 "assign_guest_seat":
 { Args: { "p_guest": string,"p_layout": string,"p_seat"?: number,"p_table": string,"p_wedding": string }; Returns: undefined
                            },
 "assign_household_seats":
 { Args: { "p_guests": (string)[],"p_layout": string,"p_table": string,"p_wedding": string }; Returns: number
                            },
+"assign_shuttle_guests":
+{ Args: { "p_guests": (string)[],"p_run": string,"p_wedding": string }; Returns: number
+                           },
+"begin_guest_message_send":
+{ Args: { "p_expected_version": number,"p_message": string,"p_wedding": string }; Returns: Json
+                           },
 "book_commitment":
 { Args: { "p_allocations": Json,"p_amount_minor": number,"p_candidate": string,"p_confirmed": boolean,"p_expected_candidate_version": number,"p_idempotency_key"?: string,"p_installments": Json,"p_proposal"?: string,"p_signed_on"?: string,"p_title": string,"p_wedding": string }; Returns: string
+                           },
+"budget_item_counts":
+{ Args: { "p_wedding": string }; Returns: {
+              "actual_count": number,"event_id": string,"invitations_final": boolean,"item_count": number,"item_id": string,"plan_count": number
+            }[]
                            },
 "change_member_role":
 { Args: { "p_expected_version": number,"p_membership": string,"p_role": Database["public"]['Enums']["membership_role"] }; Returns: undefined
@@ -1046,7 +1583,7 @@ isOneToOne: true
 { Args: { "p_allocation_minor"?: number,"p_idempotency_key"?: string,"p_name": string,"p_wedding": string }; Returns: string
                            },
 "create_budget_item":
-{ Args: { "p_amount_minor"?: number,"p_category": string,"p_cost_mode"?: string,"p_idempotency_key"?: string,"p_min_qty"?: number,"p_name": string,"p_notes"?: string,"p_quantity"?: number,"p_wedding": string }; Returns: string
+{ Args: { "p_amount_minor"?: number,"p_category": string,"p_cost_mode"?: string,"p_count_event"?: string,"p_count_source"?: string,"p_count_typed"?: number,"p_idempotency_key"?: string,"p_min_qty"?: number,"p_name": string,"p_notes"?: string,"p_quantity"?: number,"p_wedding": string }; Returns: string
                            },
 "create_candidate":
 { Args: { "p_category": string,"p_ceremony_capacity"?: number,"p_idempotency_key"?: string,"p_kind": string,"p_location"?: string,"p_name": string,"p_notes"?: string,"p_price_basis"?: string,"p_price_minor"?: number,"p_pricing_display"?: string,"p_seated_capacity"?: number,"p_source_checked_on"?: string,"p_source_url"?: string,"p_wedding": string }; Returns: string
@@ -1055,7 +1592,7 @@ isOneToOne: true
 { Args: { "p_email": string,"p_role": Database["public"]['Enums']["membership_role"],"p_token_hash": string,"p_valid_for"?: string,"p_wedding": string }; Returns: string
                            },
 "create_comparison":
-{ Args: { "p_criteria": Json,"p_guest_count": number,"p_idempotency_key"?: string,"p_proposals": (string)[],"p_title": string,"p_wedding": string }; Returns: string
+{ Args: { "p_count_event"?: string,"p_criteria": Json,"p_guest_count": number,"p_idempotency_key"?: string,"p_proposals": (string)[],"p_title": string,"p_wedding": string }; Returns: string
                            },
 "create_design_board":
 { Args: { "p_description"?: string,"p_idempotency_key"?: string,"p_palette"?: (string)[],"p_title": string,"p_wedding": string }; Returns: string
@@ -1077,8 +1614,16 @@ isOneToOne: true
               "o_invitation_id": string,"o_label": string,"o_replayed": boolean
             }[]
                            },
+"create_invoice":
+{ Args: { "p_amount_minor": number,"p_commitment": string,"p_due_on"?: string,"p_idempotency_key"?: string,"p_issued_on"?: string,"p_note"?: string,"p_number"?: string,"p_wedding": string }; Returns: string
+                           },
 "create_package":
 { Args: { "p_artifacts": Json,"p_digest": string,"p_expected_revision": number,"p_formats": (string)[],"p_generated_at": string,"p_id": string,"p_options": Json,"p_orientation": string,"p_paper": string,"p_preset": string,"p_recipient": string,"p_sections": (string)[],"p_snapshot": Json,"p_template_version": number,"p_title": string,"p_wedding": string }; Returns: string
+                           },
+"create_party_link":
+{ Args: { "p_expires_at": string,"p_idempotency_key": string,"p_invitation_ids": (string)[],"p_token_hash": string,"p_wedding": string }; Returns: {
+              "o_label": string,"o_party_id": string,"o_replayed": boolean
+            }[]
                            },
 "create_proposal":
 { Args: { "p_candidate": string,"p_idempotency_key"?: string,"p_notes"?: string,"p_received_on"?: string,"p_source_url"?: string,"p_title": string,"p_valid_until"?: string,"p_wedding": string }; Returns: string
@@ -1087,7 +1632,10 @@ isOneToOne: true
 { Args: { "p_assignee"?: string,"p_due_date"?: string,"p_idempotency_key"?: string,"p_notes"?: string,"p_title": string,"p_wedding": string }; Returns: string
                            },
 "create_timeline_item":
-{ Args: { "p_assignee"?: string,"p_contact"?: string,"p_ends_at"?: string,"p_event": string,"p_idempotency_key"?: string,"p_location"?: string,"p_notes"?: string,"p_responsible_label"?: string,"p_starts_at": string,"p_status"?: string,"p_title": string,"p_vendor"?: string,"p_wedding": string }; Returns: string
+{ Args: { "p_assignee"?: string,"p_contact"?: string,"p_ends_at"?: string,"p_event": string,"p_expected_zone"?: string,"p_idempotency_key"?: string,"p_location"?: string,"p_notes"?: string,"p_responsible_label"?: string,"p_starts_at": string,"p_status"?: string,"p_title": string,"p_vendor"?: string,"p_wedding": string }; Returns: string
+                           },
+"create_venue_space":
+{ Args: { "p_candidate": string,"p_idempotency_key"?: string,"p_name": string,"p_notes"?: string,"p_seated_capacity"?: number,"p_standing_capacity"?: number,"p_wedding": string }; Returns: string
                            },
 "create_wedding":
 { Args: { "p_base_currency": string,"p_date"?: string,"p_idempotency_key"?: string,"p_location"?: string,"p_name": string,"p_target_budget_minor"?: number,"p_target_guest_count"?: number,"p_timezone": string }; Returns: string
@@ -1101,17 +1649,34 @@ isOneToOne: true
 "delete_timeline_item":
 { Args: { "p_expected_version": number,"p_item": string,"p_wedding": string }; Returns: undefined
                            },
+"discard_guest_message":
+{ Args: { "p_expected_version": number,"p_message": string,"p_wedding": string }; Returns: number
+                           },
+"dismiss_attention":
+{ Args: { "p_fingerprint": string,"p_kind": string,"p_subject": string,"p_wedding": string }; Returns: undefined
+                           },
 "edit_comment":
 { Args: { "p_body": string,"p_comment": string,"p_expected_version": number,"p_wedding": string }; Returns: number
                            },
 "ensure_seating_layout":
 { Args: { "p_event_id": string,"p_wedding": string }; Returns: string
                            },
+"event_demand":
+{ Args: { "p_wedding": string }; Returns: {
+              "event_id": string,"invited": number,"meals": Json,"no": number,"open_plus_ones": number,"plan_open_plus_ones": boolean,"planning_basis": string,"seated_confirmed": number,"seated_tentative": number,"waiting_closed": number,"waiting_open": number,"yes": number,"yes_without_meal": number
+            }[]
+                           },
 "finalize_seating_layout":
 { Args: { "p_expected_revision": number,"p_layout": string,"p_wedding": string }; Returns: undefined
                            },
+"finish_guest_message_send":
+{ Args: { "p_error"?: string,"p_message": string,"p_outcome": string,"p_provider"?: string,"p_receipt"?: string,"p_version": number,"p_wedding": string }; Returns: number
+                           },
 "generate_checklist":
 { Args: { "p_items": Json,"p_wedding": string }; Returns: number
+                           },
+"handle_attention_item":
+{ Args: { "p_item": string,"p_wedding": string }; Returns: undefined
                            },
 "link_document":
 { Args: { "p_document": string,"p_target": string,"p_target_type": string,"p_wedding": string }; Returns: undefined
@@ -1123,13 +1688,16 @@ isOneToOne: true
                            },
 "list_event_labels":
 { Args: { "p_wedding": string }; Returns: {
-              "id": string,"kind": string,"local_date": string,"name": string
+              "effective_time_zone": string,"id": string,"kind": string,"local_date": string,"name": string,"time_zone": string
             }[]
                            },
 "list_members":
 { Args: { "p_wedding": string }; Returns: {
               "display_name": string,"email": string,"joined_at": string,"membership_id": string,"permissions": Json,"role": Database["public"]['Enums']["membership_role"],"user_id": string,"version": number
             }[]
+                           },
+"lock_guarantee":
+{ Args: { "p_candidate"?: string,"p_count": number,"p_due"?: string,"p_event": string,"p_idempotency_key"?: string,"p_seen": Json,"p_wedding": string }; Returns: string
                            },
 "move_design_item":
 { Args: { "p_direction": string,"p_item": string,"p_wedding": string }; Returns: undefined
@@ -1146,11 +1714,17 @@ isOneToOne: true
 "override_rsvp_response":
 { Args: { "p_meal_option_id"?: string,"p_member_id": string,"p_reason": string,"p_status": string,"p_wedding": string }; Returns: undefined
                            },
+"prepare_guest_messages":
+{ Args: { "p_items": Json,"p_wedding": string }; Returns: Json
+                           },
 "public_site_invite_view":
 { Args: { "p_client": string,"p_slug": string,"p_token_hash": string }; Returns: Json
                            },
 "public_site_view":
 { Args: { "p_slug": string }; Returns: Json
+                           },
+"publish_rsvp_form":
+{ Args: { "p_event_id": string,"p_expected_version": number,"p_wedding": string }; Returns: number
                            },
 "publish_site":
 { Args: { "p_expected_version": number,"p_slug": string,"p_wedding": string }; Returns: number
@@ -1161,13 +1735,16 @@ isOneToOne: true
             }[]
                            },
 "record_payment":
-{ Args: { "p_amount_minor": number,"p_commitment"?: string,"p_external_ref"?: string,"p_idempotency_key"?: string,"p_item"?: string,"p_kind": string,"p_method"?: string,"p_note"?: string,"p_paid_on": string,"p_wedding": string }; Returns: string
+{ Args: { "p_amount_minor": number,"p_commitment"?: string,"p_external_ref"?: string,"p_idempotency_key"?: string,"p_invoice"?: string,"p_item"?: string,"p_kind": string,"p_method"?: string,"p_note"?: string,"p_paid_on": string,"p_wedding": string }; Returns: string
                            },
 "redeem_collaborator_invite":
 { Args: { "p_token_hash": string }; Returns: string
                            },
 "reissue_invitation":
 { Args: { "p_expected_version": number,"p_invitation_id": string,"p_token_hash": string,"p_wedding": string }; Returns: undefined
+                           },
+"reissue_party_link":
+{ Args: { "p_expected_version": number,"p_party_id": string,"p_token_hash": string,"p_wedding": string }; Returns: undefined
                            },
 "reject_design_image":
 { Args: { "p_item": string,"p_reason": string }; Returns: undefined
@@ -1190,8 +1767,20 @@ isOneToOne: true
 "remove_seating_table":
 { Args: { "p_expected_version": number,"p_table": string,"p_wedding": string }; Returns: number
                            },
+"remove_shuttle_run":
+{ Args: { "p_expected_version": number,"p_run": string,"p_wedding": string }; Returns: number
+                           },
+"reprice_comparison":
+{ Args: { "p_comparison": string,"p_guest_count": number,"p_idempotency_key": string,"p_wedding": string }; Returns: string
+                           },
 "reschedule_relative_tasks":
 { Args: { "p_approved": Json,"p_wedding": string }; Returns: number
+                           },
+"restore_attention":
+{ Args: { "p_kind": string,"p_subject": string,"p_wedding": string }; Returns: undefined
+                           },
+"revise_guarantee":
+{ Args: { "p_candidate"?: string,"p_count": number,"p_due"?: string,"p_guarantee": string,"p_idempotency_key"?: string,"p_reason": string,"p_seen": Json,"p_wedding": string }; Returns: string
                            },
 "revoke_collaborator_invite":
 { Args: { "p_invite": string }; Returns: undefined
@@ -1199,11 +1788,23 @@ isOneToOne: true
 "revoke_invitation":
 { Args: { "p_expected_version": number,"p_invitation_id": string,"p_wedding": string }; Returns: undefined
                            },
+"revoke_party_link":
+{ Args: { "p_expected_version": number,"p_party_id": string,"p_wedding": string }; Returns: undefined
+                           },
+"rsvp_party_submit":
+{ Args: { "p_client": string,"p_replies": Json,"p_token_hash": string }; Returns: Json
+                           },
+"rsvp_party_view":
+{ Args: { "p_client": string,"p_token_hash": string }; Returns: Json
+                           },
 "rsvp_submit":
-{ Args: { "p_client": string,"p_expected_version": number,"p_plus_one"?: Json,"p_responses": Json,"p_token_hash": string }; Returns: Json
+{ Args: { "p_client": string,"p_expected_version": number,"p_form_version"?: string,"p_plus_one"?: Json,"p_responses": Json,"p_token_hash": string }; Returns: Json
                            },
 "rsvp_view":
 { Args: { "p_client": string,"p_token_hash": string }; Returns: Json
+                           },
+"save_rsvp_form_draft":
+{ Args: { "p_draft": Json,"p_event_id": string,"p_expected_version": number,"p_wedding": string }; Returns: number
                            },
 "save_site_draft":
 { Args: { "p_draft": Json,"p_expected_version": number,"p_wedding": string }; Returns: number
@@ -1223,6 +1824,15 @@ isOneToOne: true
 "set_design_favorite":
 { Args: { "p_expected_version": number,"p_favorite": boolean,"p_item": string,"p_wedding": string }; Returns: number
                            },
+"set_editor_grants":
+{ Args: { "p_areas": (string)[],"p_expected_version": number,"p_membership": string }; Returns: undefined
+                           },
+"set_event_location":
+{ Args: { "p_candidate"?: string,"p_event": string,"p_expected_version": number,"p_space"?: string,"p_update_agenda"?: boolean,"p_wedding": string }; Returns: Json
+                           },
+"set_event_vendors":
+{ Args: { "p_add"?: (string)[],"p_event": string,"p_remove"?: (string)[],"p_wedding": string }; Returns: Json
+                           },
 "set_guest_archived":
 { Args: { "p_archived": boolean,"p_expected_version": number,"p_guest_id": string,"p_wedding": string }; Returns: undefined
                            },
@@ -1241,17 +1851,26 @@ isOneToOne: true
 "set_seating_tentative":
 { Args: { "p_allow": boolean,"p_expected_version": number,"p_layout": string,"p_wedding": string }; Returns: undefined
                            },
+"set_share_guest_totals":
+{ Args: { "p_enabled": boolean,"p_wedding": string }; Returns: boolean
+                           },
 "set_table_captain":
 { Args: { "p_guest"?: string,"p_table": string,"p_wedding": string }; Returns: undefined
                            },
 "set_task_status":
 { Args: { "p_done": boolean,"p_expected_version": number,"p_task": string,"p_wedding": string }; Returns: number
                            },
+"set_vendor_events":
+{ Args: { "p_add"?: (string)[],"p_candidate": string,"p_remove"?: (string)[],"p_wedding": string }; Returns: Json
+                           },
 "swap_guest_seats":
 { Args: { "p_guest_a": string,"p_guest_b": string,"p_layout": string,"p_wedding": string }; Returns: undefined
                            },
 "unassign_guest_seat":
 { Args: { "p_guest": string,"p_layout": string,"p_wedding": string }; Returns: undefined
+                           },
+"unassign_shuttle_guest":
+{ Args: { "p_guest": string,"p_run": string,"p_wedding": string }; Returns: undefined
                            },
 "unlink_document":
 { Args: { "p_document": string,"p_target": string,"p_target_type": string,"p_wedding": string }; Returns: undefined
@@ -1263,7 +1882,7 @@ isOneToOne: true
 { Args: { "p_allocation_minor"?: number,"p_category": string,"p_expected_version": number,"p_name": string,"p_wedding": string }; Returns: number
                            },
 "update_budget_item":
-{ Args: { "p_amount_minor"?: number,"p_category": string,"p_cost_mode": string,"p_expected_version": number,"p_item": string,"p_min_qty"?: number,"p_name": string,"p_notes"?: string,"p_quantity"?: number,"p_wedding": string }; Returns: number
+{ Args: { "p_amount_minor"?: number,"p_category": string,"p_cost_mode": string,"p_count_event"?: string,"p_count_source"?: string,"p_count_typed"?: number,"p_expected_version": number,"p_item": string,"p_min_qty"?: number,"p_name": string,"p_notes"?: string,"p_quantity"?: number,"p_wedding": string }; Returns: number
                            },
 "update_candidate":
 { Args: { "p_candidate": string,"p_category": string,"p_ceremony_capacity"?: number,"p_expected_version": number,"p_location"?: string,"p_name": string,"p_notes"?: string,"p_price_basis"?: string,"p_price_minor"?: number,"p_pricing_display"?: string,"p_seated_capacity"?: number,"p_source_checked_on"?: string,"p_source_url"?: string,"p_wedding": string }; Returns: number
@@ -1304,14 +1923,23 @@ isOneToOne: true
 "update_seating_table":
 { Args: { "p_capacity": number,"p_expected_version": number,"p_label": string,"p_notes"?: string,"p_shape"?: string,"p_table": string,"p_wedding": string }; Returns: undefined
                            },
+"update_shuttle_run":
+{ Args: { "p_capacity": number,"p_departs_at": string,"p_dropoff": string,"p_expected_version": number,"p_label": string,"p_notes"?: string,"p_pickup": string,"p_run": string,"p_wedding": string }; Returns: number
+                           },
 "update_task":
 { Args: { "p_assignee"?: string,"p_due_date"?: string,"p_expected_version": number,"p_notes"?: string,"p_task": string,"p_title": string,"p_wedding": string }; Returns: number
                            },
 "update_timeline_item":
 { Args: { "p_assignee"?: string,"p_contact"?: string,"p_ends_at"?: string,"p_expected_version": number,"p_item": string,"p_location"?: string,"p_notes"?: string,"p_responsible_label"?: string,"p_starts_at": string,"p_status"?: string,"p_title": string,"p_vendor"?: string,"p_wedding": string }; Returns: number
                            },
+"update_venue_space":
+{ Args: { "p_expected_version": number,"p_name": string,"p_notes"?: string,"p_seated_capacity"?: number,"p_space": string,"p_standing_capacity"?: number,"p_wedding": string }; Returns: number
+                           },
 "update_wedding_settings":
 { Args: { "p_base_currency": string,"p_date"?: string,"p_expected_version": number,"p_location"?: string,"p_name": string,"p_target_budget_minor"?: number,"p_target_guest_count"?: number,"p_timezone": string,"p_wedding": string }; Returns: number
+                           },
+"void_invoice":
+{ Args: { "p_invoice": string,"p_reason": string,"p_wedding": string }; Returns: undefined
                            },
 "void_payment":
 { Args: { "p_payment": string,"p_reason": string,"p_wedding": string }; Returns: undefined

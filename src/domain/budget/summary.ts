@@ -1,4 +1,5 @@
 import { assertMinorUnits } from "@/domain/money/money";
+import { invoiceRows, type InvoiceRecord } from "@/domain/ledger/invoices";
 import { summarizeCommitments, type Commitment, type PaymentRecord } from "./commitments";
 
 /**
@@ -12,14 +13,39 @@ import { summarizeCommitments, type Commitment, type PaymentRecord } from "./com
  * - An uncommitted item counts its estimate, but never less than what was already paid for it.
  * - An unknown estimate adds nothing to the figures and sets `incomplete`. It is never read as zero.
  * - The reserve is a planned percentage of the known subtotal. It is not a payment or obligation.
+ * - A per-guest item counts what its `countSource` says (ADR-031 D1): an event's planning number,
+ *   an event's attending count, the wedding's guest target, or a typed number. Reply-based counts
+ *   are resolved by the database and passed in as `eventCounts`; they are never recomputed here.
+ *   A missing count makes the item unknown. It is never read as zero.
  */
 
 export type BudgetCostMode = "fixed" | "per_guest" | "quantity";
+
+export const COUNT_SOURCES = ["event_plan", "event_yes", "guest_target", "typed"] as const;
+export type CountSource = (typeof COUNT_SOURCES)[number];
+export const isCountSource = (v: unknown): v is CountSource =>
+  typeof v === "string" && (COUNT_SOURCES as readonly string[]).includes(v);
+/** Sources that follow replies, so the number changes when guests answer. */
+export const isReplyBased = (source: CountSource | undefined) =>
+  source === "event_plan" || source === "event_yes";
 
 export type BudgetCategory = {
   id: string;
   name: string;
   allocationMinor: number | null;
+};
+
+/**
+ * What the database knows about a reply-based item's guests. `plan` is the event's planned attendance,
+ * which replies never replace. `actual` comes from replies and is null for members who may not read
+ * guest totals, and while nobody is invited. `count` is what the cost is priced by: the larger of plan
+ * and actual until the event's invitations are complete, then the actual alone.
+ */
+export type ItemCounts = {
+  count: number | null;
+  plan: number | null;
+  actual: number | null;
+  final: boolean;
 };
 
 export type BudgetItem = {
@@ -33,6 +59,12 @@ export type BudgetItem = {
   quantity: number | null;
   /** Contractual minimum guests for `per_guest`. */
   minQty: number | null;
+  /** What a `per_guest` item counts. Omitted = the wedding's guest target. */
+  countSource?: CountSource;
+  /** The event behind `event_plan` and `event_yes`. */
+  countEventId?: string | null;
+  /** The number behind `typed`. Null = not known yet. */
+  countTyped?: number | null;
 };
 
 export type ItemAllocation = { commitmentId: string; budgetItemId: string; amountMinor: number };
@@ -44,24 +76,53 @@ export type BudgetPayment = {
   budgetItemId: string | null;
   kind: "charge" | "refund";
   amountMinor: number;
+  /** The invoice a charge pays, when it names one (REL-09). */
+  invoiceId?: string | null;
 };
+
+/** A vendor invoice on one booking. Not a commitment and not a payment (REL-09). */
+export type BudgetInvoice = Pick<InvoiceRecord, "id" | "commitmentId" | "amountMinor" | "voided">;
 
 export type BudgetInput = {
   targetMinor: number | null;
   /** Percent of the known subtotal, in basis points (1000 = 10%). Null = no reserve. */
   reserveBp: number | null;
-  /** The scenario's guest count. Null = unknown, so per-guest items are unknown. */
+  /** The wedding's guest target, for items counting `guest_target`. Null = unknown. */
   guestCount: number | null;
+  /**
+   * Resolved reply-based counts by item id (from `budget_item_counts`). Null or absent = no count
+   * yet, so that item is unknown.
+   */
+  eventCounts?: ReadonlyMap<string, ItemCounts>;
   categories: readonly BudgetCategory[];
   items: readonly BudgetItem[];
   commitments?: readonly Commitment[];
   allocations?: readonly ItemAllocation[];
   payments?: readonly BudgetPayment[];
+  /** Invoices on bookings. They never change the forecast; they only feed `invoicedUnpaidMinor`. */
+  invoices?: readonly BudgetInvoice[];
 };
 
 export type ItemEstimate =
   | { state: "known"; amountMinor: number; billedQuantity: number | null }
   | { state: "unknown"; reason: "no_amount" | "no_guest_count" | "no_quantity" };
+
+/** The number a per-guest item is priced by, or null when it is not known yet. */
+export function resolveItemCount(
+  item: BudgetItem,
+  guestTarget: number | null,
+  eventCounts?: ReadonlyMap<string, ItemCounts>,
+): number | null {
+  switch (item.countSource ?? "guest_target") {
+    case "guest_target":
+      return guestTarget;
+    case "typed":
+      return item.countTyped ?? null;
+    case "event_plan":
+    case "event_yes":
+      return eventCounts?.get(item.id)?.count ?? null;
+  }
+}
 
 export function estimateItem(item: BudgetItem, guestCount: number | null): ItemEstimate {
   if (item.amountMinor !== null) assertMinorUnits(item.amountMinor);
@@ -108,6 +169,30 @@ export type CategoryRow = {
   overAllocationMinor: number;
 };
 
+/** One cost as the forecast sees it, so pages never recompute an estimate. */
+export type ItemFigure = {
+  itemId: string;
+  /** The count a per-guest item was priced by; null for other modes or when not known. */
+  count: number | null;
+  estimate: ItemEstimate;
+  /** The amount an active commitment covers, or null when the item is not booked. */
+  committedMinor: number | null;
+  /** The permanent plan behind a reply-based cost: planned guests and what they would cost. */
+  planCount: number | null;
+  planMinor: number | null;
+  /** Where replies stand: guests so far and what they would cost. Null when the reader may not see counts. */
+  actualCount: number | null;
+  actualMinor: number | null;
+  /** The event's invitations are complete, so the cost follows replies alone. */
+  final: boolean;
+};
+
+const costFor = (item: BudgetItem, count: number | null): number | null => {
+  if (count === null) return null;
+  const e = estimateItem(item, count);
+  return e.state === "known" ? e.amountMinor : null;
+};
+
 export type BudgetSummary = {
   targetMinor: number | null;
   allocatedMinor: number;
@@ -118,6 +203,8 @@ export type BudgetSummary = {
   netPaidMinor: number;
   outstandingMinor: number;
   overpaidMinor: number;
+  /** What open invoices on active bookings still ask for, after the payments that name them. */
+  invoicedUnpaidMinor: number;
   /** Uncommitted items' expected costs (known part). */
   uncommittedMinor: number;
   /** committed + uncommitted, before the reserve. */
@@ -133,6 +220,7 @@ export type BudgetSummary = {
   /** target - forecast. Null without a target. Negative means the forecast is over the target. */
   headroomMinor: number | null;
   categories: CategoryRow[];
+  items: ItemFigure[];
 };
 
 export function summarizeBudget(input: BudgetInput): BudgetSummary {
@@ -167,6 +255,28 @@ export function summarizeBudget(input: BudgetInput): BudgetSummary {
       } satisfies PaymentRecord;
     }),
   );
+
+  // Invoices are a request for money inside a contract, not more cost: they leave every other figure alone.
+  const openInvoices = invoiceRows(
+    (input.invoices ?? [])
+      .filter((i) => activeCommitment.has(i.commitmentId))
+      .map((i) => ({
+        ...i,
+        number: null,
+        issuedOn: null,
+        dueOn: null,
+        note: null,
+        voidReason: null,
+      })),
+    payments.map((p) => ({
+      invoiceId: p.invoiceId ?? null,
+      kind: p.kind,
+      amountMinor: p.amountMinor,
+      voided: false,
+    })),
+    "9999-12-31",
+  );
+  const invoicedUnpaid = openInvoices.reduce((n, r) => n + r.unpaidMinor, 0);
 
   // Items that an active commitment covers are counted as the commitment, once.
   const coveredAllocation = new Map<string, number>();
@@ -221,9 +331,30 @@ export function summarizeBudget(input: BudgetInput): BudgetSummary {
   let uncommitted = 0;
   let standalonePaid = 0;
   let unknownItemCount = 0;
+  const figures: ItemFigure[] = [];
   for (const item of input.items) {
     const row = rows.get(item.categoryId) as CategoryRow;
+    const count =
+      item.costMode === "per_guest"
+        ? resolveItemCount(item, input.guestCount, input.eventCounts)
+        : null;
+    const estimate = estimateItem(item, count);
     const covered = coveredAllocation.get(item.id);
+    const counts =
+      item.costMode === "per_guest" && isReplyBased(item.countSource)
+        ? input.eventCounts?.get(item.id)
+        : undefined;
+    figures.push({
+      itemId: item.id,
+      count,
+      estimate,
+      committedMinor: covered ?? null,
+      planCount: counts?.plan ?? null,
+      planMinor: costFor(item, counts?.plan ?? null),
+      actualCount: counts?.actual ?? null,
+      actualMinor: costFor(item, counts?.actual ?? null),
+      final: counts?.final ?? false,
+    });
     if (covered !== undefined) {
       row.committedMinor += covered;
       continue;
@@ -231,7 +362,6 @@ export function summarizeBudget(input: BudgetInput): BudgetSummary {
     const paid = itemPaid.get(item.id) ?? 0;
     if (paid < 0) throw new RangeError(`Refunds exceed payments for item ${item.id}`);
     standalonePaid += paid;
-    const estimate = estimateItem(item, input.guestCount);
     if (estimate.state === "unknown") {
       unknownItemCount += 1;
       row.unknownItemCount += 1;
@@ -264,6 +394,7 @@ export function summarizeBudget(input: BudgetInput): BudgetSummary {
     netPaidMinor: money.netPaidMinor + standalonePaid,
     outstandingMinor: money.outstandingMinor,
     overpaidMinor: money.overpaidMinor,
+    invoicedUnpaidMinor: invoicedUnpaid,
     uncommittedMinor: uncommitted,
     subtotalMinor: subtotal,
     reserveBp: input.reserveBp,
@@ -275,5 +406,6 @@ export function summarizeBudget(input: BudgetInput): BudgetSummary {
       target === null ? null : target - money.committedMinor - standalonePaid,
     headroomMinor: target === null ? null : target - forecast,
     categories: input.categories.map((c) => rows.get(c.id) as CategoryRow),
+    items: figures,
   };
 }

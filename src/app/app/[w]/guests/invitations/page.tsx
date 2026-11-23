@@ -3,9 +3,14 @@ import Link from "next/link";
 import { Badge, type BadgeTone } from "@/components/ui/badge";
 import { Card, CardTitle } from "@/components/ui/card";
 import { TrayButton } from "@/components/ui/tray";
-import { EVENT_KIND_LABELS } from "@/domain/events/event";
+import { EVENT_KIND_LABELS, effectiveEventZone } from "@/domain/events/event";
 import { invitationState, type InvitationState } from "@/domain/events/invitation";
-import { summarizeResponses } from "@/domain/guests/rsvp";
+import { partyGroups, partyIsLive, type PartyGroup } from "@/domain/events/party";
+import { lockedTypes, summarizeAnswers } from "@/domain/guests/rsvp-form";
+import { CountStrip } from "@/features/events/count-strip";
+import { RsvpAnswers } from "@/features/events/rsvp-answers";
+import { RsvpFormBuilder } from "@/features/events/rsvp-form-builder";
+import { PartyLinkControls } from "@/features/events/party-forms";
 import {
   EventForm,
   InvitationActions,
@@ -15,9 +20,15 @@ import {
   OverrideForm,
 } from "@/features/events/event-forms";
 import { hasCapability, requireWorkspace } from "@/server/auth/workspace-guard";
-import { loadEventData } from "@/server/events/queries";
+import { loadEventDemand } from "@/server/events/demand";
+import { loadEventData, loadInvitationSubmissions } from "@/server/events/queries";
+import { zoneLabel } from "@/features/events/reply-by";
+import { ZonedDate } from "@/features/events/zoned-date";
 import { loadGuests } from "@/server/guests/queries";
 import { getMailProvider } from "@/server/mail/provider";
+import { loadRsvpForms } from "@/server/events/rsvp-forms";
+import { formBuilderEnabled, guestEmailEnabled, partyLinksEnabled } from "@/server/rsvp/flags";
+import { listTimeZones } from "@/domain/wedding/settings";
 
 export const metadata: Metadata = { title: "Events and invitations" };
 
@@ -40,6 +51,7 @@ const STATUS_LABEL = {
   declined: "Not attending",
 } as const;
 
+const sentLabel = (n: number) => (n === 1 ? "Sent once" : `Sent ${n} times`);
 const dayFmt = (iso: string) =>
   new Date(iso).toLocaleDateString("en-US", {
     year: "numeric",
@@ -70,11 +82,37 @@ export default async function InvitationsPage({ params }: { params: Promise<{ w:
     );
   }
 
-  const [data, guestData] = await Promise.all([loadEventData(wid), loadGuests(wid)]);
+  const showForms = formBuilderEnabled();
+  const [data, guestData, demand, submissions, forms] = await Promise.all([
+    loadEventData(wid),
+    loadGuests(wid),
+    loadEventDemand(wid, {
+      canManageGuests: true,
+      shareGuestTotals: access.wedding.shareGuestTotals,
+    }),
+    loadInvitationSubmissions(wid),
+    showForms ? loadRsvpForms(wid) : null,
+  ]);
   const now = new Date();
+  const mail = getMailProvider();
   const guestById = new Map(guestData.guests.map((g) => [g.id, g]));
   const activeGuests = guestData.guests.filter((g) => !g.archived);
   const defaultExpires = new Date(now.getTime() + 120 * 86_400_000).toISOString().slice(0, 10);
+  const showParties = partyLinksEnabled();
+  const groups = showParties
+    ? partyGroups({
+        // Event order (date, then name), so each party lists its events as the guest sees them.
+        invitations: [...data.invitations].sort(
+          (a, b) =>
+            data.events.findIndex((e) => e.id === a.eventId) -
+            data.events.findIndex((e) => e.id === b.eventId),
+        ),
+        members: data.members,
+        parties: data.parties,
+        now,
+      })
+    : [];
+  const livePartyIds = new Set(data.parties.filter((p) => partyIsLive(p, now)).map((p) => p.id));
 
   return (
     <div className="max-w-3xl space-y-8">
@@ -87,23 +125,48 @@ export default async function InvitationsPage({ params }: { params: Promise<{ w:
           it yourself. Guests answer without an account.
         </p>
         <p className="text-body-md text-ink-muted" data-testid="mail-status">
-          {getMailProvider().configured
+          {mail.configured && !mail.captureOnly
             ? "Email sending is set up, but nothing is sent unless you approve it."
-            : "Email sending isn't set up, so copy each link and share it yourself. “Shared” means you told us you shared it, not that it was delivered or read."}
+            : `${mail.captureOnly ? "Email is in test mode and reaches no one" : "Email sending isn't set up"}, so copy each link and share it yourself. “Shared” means you told us you shared it, not that it was delivered or read.`}
         </p>
+        {guestEmailEnabled() && (
+          <p className="text-body-md">
+            <Link href={`${base}/guests/messages`} className={link}>
+              Guest emails
+            </Link>
+            : prepare reply confirmations and reminders, and read each one before it can be sent.
+          </p>
+        )}
         <div className="flex flex-wrap items-center gap-3 pt-1">
           <TrayButton
             label="Add an event"
             title="Add an event"
             description="Such as your ceremony or reception. Guests are invited to each event separately."
           >
-            <EventForm workspaceId={wid} submitLabel="Add event" />
+            <EventForm
+              workspaceId={wid}
+              submitLabel="Add event"
+              weddingZone={access.wedding.timezone}
+              timeZones={listTimeZones()}
+            />
           </TrayButton>
           <Link href={`${base}/guests`} className={`${link} inline-flex min-h-11 items-center`}>
             Back to the guest list
           </Link>
         </div>
       </header>
+
+      {groups.length > 0 && (
+        <PartyLinksSection
+          workspaceId={wid}
+          groups={groups}
+          eventName={(invitationId) => {
+            const inv = data.invitations.find((i) => i.id === invitationId);
+            return data.events.find((e) => e.id === inv?.eventId)?.name ?? "Event";
+          }}
+          weddingZone={access.wedding.timezone}
+        />
+      )}
 
       {data.events.length === 0 && (
         <Card>
@@ -116,17 +179,11 @@ export default async function InvitationsPage({ params }: { params: Promise<{ w:
 
       {data.events.map((event) => {
         const members = data.members.filter((m) => m.eventId === event.id && m.active);
-        const summary = summarizeResponses(
-          members.map((m) => ({
-            guestId: m.guestId,
-            eligible: true,
-            rsvpStatus: m.status,
-            mealOptionId: m.mealOptionId,
-          })),
-        );
+        const counts = demand.byEvent.get(event.id);
         const meals = data.mealOptions.filter((m) => m.eventId === event.id);
         const activeMeals = meals.filter((m) => m.active);
         const invitations = data.invitations.filter((i) => i.eventId === event.id);
+        const eventZone = effectiveEventZone(event.timeZone, access.wedding.timezone);
         const invitedGuestIds = new Set(members.map((m) => m.guestId));
         const householdPicks = guestData.households
           .map((h) => {
@@ -142,10 +199,23 @@ export default async function InvitationsPage({ params }: { params: Promise<{ w:
         const soloPicks = activeGuests
           .filter((g) => g.householdId === null && !invitedGuestIds.has(g.id))
           .map((g) => ({ id: g.id, name: g.fullName }));
-        const overCapacity = event.capacity !== null && summary.accepted > event.capacity;
         const mealName = (id: string | null) =>
           id ? (meals.find((m) => m.id === id)?.name ?? "Unknown") : null;
         const eventHeading = `event-${event.id}`;
+        const form = forms?.byEvent(event.id) ?? null;
+        // Answers from people attending now, to questions guests are asked now (UX-11).
+        const attendingIds = new Set(
+          members.filter((m) => m.status === "accepted").map((m) => m.id),
+        );
+        const eventAnswers = forms ? forms.answers.filter((a) => a.eventId === event.id) : [];
+        const askedKeys = new Set(form?.published?.definition.questions.map((q) => q.key) ?? []);
+        const shownAnswers = eventAnswers
+          .filter((a) => attendingIds.has(a.memberId) && askedKeys.has(a.questionKey))
+          .map((a) => ({
+            questionKey: a.questionKey,
+            value: a.value,
+            guestName: guestById.get(a.guestId)?.fullName ?? "Guest",
+          }));
         return (
           <section key={event.id} aria-labelledby={eventHeading} className="space-y-4">
             <Card className="space-y-4">
@@ -162,40 +232,21 @@ export default async function InvitationsPage({ params }: { params: Promise<{ w:
                     : ""}
                 </p>
               </div>
-              <dl
-                className="grid grid-cols-2 gap-4 sm:grid-cols-4"
-                aria-label={`Responses for ${event.name}`}
-              >
-                {[
-                  ["Invited", summary.invited],
-                  ["Attending", summary.accepted],
-                  ["Waiting", summary.pending],
-                  ["Not attending", summary.declined],
-                ].map(([label, n]) => (
-                  <div key={label}>
-                    <dt className="text-label-lg text-ink-muted">{label}</dt>
-                    <dd className="font-serif text-headline-sm">{n}</dd>
-                  </div>
-                ))}
-              </dl>
-              {overCapacity && (
-                <p role="status" className="text-body-md text-danger">
-                  {summary.accepted} guests are attending, which is more than the capacity of{" "}
-                  {event.capacity}.
-                </p>
+              {counts && (
+                <CountStrip demand={counts} eventName={event.name} capacity={event.capacity} />
               )}
-              {summary.accepted > 0 && (
+              {counts && counts.yes > 0 && (
                 <div>
                   <h3 className="text-label-lg font-semibold">Meal choices so far</h3>
                   <ul className="text-body-md">
-                    {[...summary.mealCounts.entries()].map(([id, n]) => (
-                      <li key={id}>
-                        {mealName(id)}: {n}
-                      </li>
-                    ))}
-                    {summary.acceptedWithoutMeal > 0 && (
-                      <li>No choice yet: {summary.acceptedWithoutMeal}</li>
-                    )}
+                    {counts.meals
+                      .filter((m) => m.count > 0)
+                      .map((m) => (
+                        <li key={m.id}>
+                          {m.name}: {m.count}
+                        </li>
+                      ))}
+                    {counts.yesWithoutMeal > 0 && <li>No choice yet: {counts.yesWithoutMeal}</li>}
                   </ul>
                 </div>
               )}
@@ -214,6 +265,10 @@ export default async function InvitationsPage({ params }: { params: Promise<{ w:
                   households={householdPicks}
                   guests={soloPicks}
                   defaultExpires={defaultExpires}
+                  zoneLabel={zoneLabel(
+                    effectiveEventZone(event.timeZone, access.wedding.timezone),
+                    now,
+                  )}
                 />
               </TrayButton>
               <TrayButton
@@ -237,27 +292,54 @@ export default async function InvitationsPage({ params }: { params: Promise<{ w:
                 </ul>
                 <MealOptionForm workspaceId={wid} eventId={event.id} />
               </TrayButton>
-              <TrayButton
-                label="Edit event"
-                variant="outline"
-                size="sm"
-                title="Edit event"
-                description={event.name}
+              {form && (
+                <TrayButton
+                  label={`Guest questions (${form.published?.definition.questions.length ?? 0})`}
+                  variant="outline"
+                  size="sm"
+                  title="Guest questions"
+                  description={event.name}
+                >
+                  <RsvpFormBuilder
+                    workspaceId={wid}
+                    eventId={event.id}
+                    eventName={event.name}
+                    version={form.version}
+                    draft={form.draft}
+                    published={
+                      form.published
+                        ? {
+                            version: form.published.version,
+                            definition: form.published.definition,
+                            publishedOn: dayFmt(form.published.publishedAt),
+                          }
+                        : null
+                    }
+                    lockedTypes={Object.fromEntries(lockedTypes(form.history))}
+                  />
+                </TrayButton>
+              )}
+              {form?.published && form.published.definition.questions.length > 0 && (
+                <TrayButton
+                  label="Answers"
+                  ariaLabel={`Answers to your questions for ${event.name}`}
+                  variant="outline"
+                  size="sm"
+                  title="Answers to your questions"
+                  description={event.name}
+                >
+                  <RsvpAnswers
+                    summaries={summarizeAnswers(form.published.definition, shownAnswers)}
+                    hiddenCount={eventAnswers.length - shownAnswers.length}
+                  />
+                </TrayButton>
+              )}
+              <Link
+                href={`${base}/plan/events/${event.id}`}
+                className={`${link} inline-flex min-h-11 items-center`}
               >
-                <EventForm
-                  workspaceId={wid}
-                  event={{ id: event.id, version: event.version }}
-                  initial={{
-                    name: event.name,
-                    kind: event.kind,
-                    localDate: event.localDate ?? "",
-                    targetAttendance:
-                      event.targetAttendance === null ? "" : String(event.targetAttendance),
-                    capacity: event.capacity === null ? "" : String(event.capacity),
-                  }}
-                  submitLabel="Save event"
-                />
-              </TrayButton>
+                Open the event page<span className="sr-only"> for {event.name}</span>
+              </Link>
             </div>
 
             <div className="space-y-3">
@@ -268,6 +350,7 @@ export default async function InvitationsPage({ params }: { params: Promise<{ w:
               {invitations.map((inv) => {
                 const state = invitationState(inv, now);
                 const invMembers = data.members.filter((m) => m.invitationId === inv.id);
+                const sends = submissions.get(inv.id) ?? [];
                 return (
                   <Card key={inv.id} className="space-y-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -287,9 +370,20 @@ export default async function InvitationsPage({ params }: { params: Promise<{ w:
                         <Badge tone={STATE_TONE[state]}>{STATE_LABEL[state]}</Badge>
                       </div>
                     </div>
+                    {inv.partyId && livePartyIds.has(inv.partyId) && state !== "revoked" && (
+                      <p className="text-body-sm text-ink-muted">
+                        Also answered through the link for all events.
+                      </p>
+                    )}
                     <p className="text-body-sm text-ink-muted">
-                      Link works until {dayFmt(inv.expiresAt)}
-                      {inv.deadline ? ` · reply by ${dayFmt(inv.deadline)}` : ""}
+                      Link works until{" "}
+                      <ZonedDate iso={inv.expiresAt} timeZone={eventZone} month="short" />
+                      {inv.deadline && (
+                        <>
+                          {" · reply by "}
+                          <ZonedDate iso={inv.deadline} timeZone={eventZone} month="short" />
+                        </>
+                      )}
                       {inv.plusOneQuota > 0
                         ? ` · plus-ones ${inv.plusOnesUsed} of ${inv.plusOneQuota} used`
                         : ""}
@@ -307,6 +401,51 @@ export default async function InvitationsPage({ params }: { params: Promise<{ w:
                         );
                       })}
                     </ul>
+                    {sends.length > 0 && (
+                      <TrayButton
+                        triggerStyle="link"
+                        label={sentLabel(sends.length)}
+                        ariaLabel={`${sentLabel(sends.length)} by the guest for ${inv.label}`}
+                        title="What the guest sent"
+                        description={inv.label}
+                      >
+                        <p className="text-body-sm text-ink-muted">
+                          One line for each time the guest pressed Send and something changed. Sends
+                          that changed nothing are not listed. Names, answers and notes are not kept
+                          here; the fingerprint only shows whether two sends were the same.
+                        </p>
+                        <ol className="mt-3 space-y-3">
+                          {sends.map((x) => (
+                            <li key={x.id} className="space-y-1 text-body-md">
+                              <p className="font-semibold">
+                                <ZonedDate iso={x.submittedAt} timeZone={eventZone} month="short" />
+                                {x.partyId ? " · through the link for all events" : ""}
+                              </p>
+                              <p className="text-body-sm text-ink-muted">
+                                {x.acceptedCount} accepted · {x.declinedCount} declined
+                                {x.plusOneAdded ? " · plus-one added" : ""}
+                                {x.plusOnesRemoved > 0
+                                  ? ` · ${x.plusOnesRemoved} ${x.plusOnesRemoved === 1 ? "plus-one" : "plus-ones"} removed`
+                                  : ""}
+                                {x.detailsCount > 0
+                                  ? ` · notes saved for ${x.detailsCount} ${x.detailsCount === 1 ? "person" : "people"}`
+                                  : ""}
+                                {x.answersCount > 0
+                                  ? ` · answered your questions for ${x.answersCount} ${x.answersCount === 1 ? "person" : "people"}`
+                                  : ""}
+                              </p>
+                              <p className="text-body-sm text-ink-muted">
+                                {x.customForm
+                                  ? `Your questions, version ${x.formVersion}`
+                                  : "Standard form"}{" "}
+                                · workspace revision {x.acceptedRevision} · fingerprint{" "}
+                                <span className="font-mono">{x.payloadHash.slice(0, 10)}</span>
+                              </p>
+                            </li>
+                          ))}
+                        </ol>
+                      </TrayButton>
+                    )}
                     {state !== "revoked" && (
                       <>
                         <TrayButton
@@ -353,5 +492,83 @@ export default async function InvitationsPage({ params }: { params: Promise<{ w:
         );
       })}
     </div>
+  );
+}
+
+const BLOCKED: Record<Exclude<PartyGroup["blocked"], null | "has_link">, string> = {
+  too_few_events: "Invite them to another event to make one link.",
+  same_event_twice:
+    "They have two invitations to the same event, so these can't share one link. Revoke one first.",
+  too_many_events: "One link can cover up to 12 events.",
+};
+
+/** UX-06: one link per household for every event it is invited to. */
+function PartyLinksSection({
+  workspaceId,
+  groups,
+  eventName,
+  weddingZone,
+}: {
+  workspaceId: string;
+  groups: PartyGroup[];
+  eventName: (invitationId: string) => string;
+  weddingZone: string;
+}) {
+  return (
+    <section aria-labelledby="party-links" className="space-y-3">
+      <h2 id="party-links" className="font-serif text-headline-sm">
+        One link for all events
+      </h2>
+      <p className="text-body-md text-ink-muted">
+        A household invited to more than one event can answer them all from one link. Their link for
+        each event keeps working, and both show the same answers.
+      </p>
+      <ul className="space-y-3">
+        {groups.map((g) => {
+          const covered = g.party
+            ? g.invitationIds.filter((id) => !g.notInLink.includes(id))
+            : g.invitationIds;
+          return (
+            <li key={g.key}>
+              <Card className="space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="font-semibold">{g.label}</p>
+                  <Badge tone={g.party ? "confirmed" : "neutral"}>
+                    {g.party ? "Link made" : "No link yet"}
+                  </Badge>
+                </div>
+                <p className="text-body-md">
+                  {g.party ? "Covers " : "Would cover "}
+                  {covered.map(eventName).join(", ")}
+                </p>
+                {g.party && (
+                  <p className="text-body-sm text-ink-muted">
+                    Link works until{" "}
+                    <ZonedDate iso={g.party.expiresAt} timeZone={weddingZone} month="short" />. Each
+                    event keeps its own reply-by date.
+                  </p>
+                )}
+                {g.notInLink.length > 0 && (
+                  <p className="text-body-sm text-ink-muted">
+                    Not in this link: {g.notInLink.map(eventName).join(", ")}. To include it, revoke
+                    this link and make a new one.
+                  </p>
+                )}
+                {g.blocked && g.blocked !== "has_link" && (
+                  <p className="text-body-sm text-ink-muted">{BLOCKED[g.blocked]}</p>
+                )}
+                <PartyLinkControls
+                  workspaceId={workspaceId}
+                  label={g.label}
+                  invitationIds={g.invitationIds}
+                  canCreate={g.blocked === null}
+                  party={g.party ? { id: g.party.id, version: g.party.version } : null}
+                />
+              </Card>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }

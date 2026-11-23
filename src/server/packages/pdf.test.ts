@@ -41,6 +41,7 @@ const base = (over: Partial<ProjectionInput> = {}): ProjectionInput => ({
   budget: null,
   payments: null,
   rsvp: [],
+  guarantees: [],
   seating: [],
   boards: [],
   documents: [],

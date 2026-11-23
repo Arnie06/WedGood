@@ -86,7 +86,9 @@ test("owner marks an invitation shared and the page never claims delivery", asyn
   const { owner, wedding } = await setup("deliv-mark");
   await signInViaUi(page, owner);
   await page.goto(`/app/${wedding}/guests/invitations`);
-  await expect(page.getByTestId("mail-status")).toContainText("Email sending isn't set up");
+  await expect(page.getByTestId("mail-status")).toContainText(
+    "Email is in test mode and reaches no one",
+  );
   await expect(page.getByText("Not shared yet")).toBeVisible();
   await page.getByRole("button", { name: /Mark as shared/ }).click();
   await expect(page.getByText(/Shared by you/)).toBeVisible();

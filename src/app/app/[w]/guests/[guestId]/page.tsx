@@ -4,11 +4,29 @@ import { notFound } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardTitle } from "@/components/ui/card";
 import { TrayButton } from "@/components/ui/tray";
+import { ConsequencesPanel } from "@/features/guests/consequences-panel";
 import { ArchiveGuestForm, GuestForm, HouseholdForm } from "@/features/guests/guest-forms";
 import { hasCapability, requireWorkspace } from "@/server/auth/workspace-guard";
-import { loadGuestPrivateDetails, loadGuests } from "@/server/guests/queries";
+import { loadGuestConsequences } from "@/server/guests/consequences";
+import {
+  loadGuestPrivateDetails,
+  loadGuestReplyHistory,
+  loadGuests,
+} from "@/server/guests/queries";
+import {
+  describeReplyChange,
+  describeReplySource,
+  groupReplyChanges,
+} from "@/domain/guests/history";
 
 export const metadata: Metadata = { title: "Guest" };
+
+const when = (iso: string) =>
+  new Date(iso).toLocaleString("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "UTC",
+  }) + " UTC";
 
 const link = "font-semibold text-action-emphasis underline underline-offset-4";
 
@@ -29,7 +47,12 @@ export default async function GuestPage({
   const canSeePrivate = hasCapability(access, "guests.sensitive.read");
   const details = canSeePrivate
     ? await loadGuestPrivateDetails(wid, guestId)
-    : { dietary: null, accessibility: null, notes: null };
+    : { dietary: null, accessibility: null, notes: null, guestAnswered: false };
+  const [history, consequences] = await Promise.all([
+    loadGuestReplyHistory(wid, guestId),
+    loadGuestConsequences(wid, guestId, access.wedding.timezone),
+  ]);
+  const replyGroups = groupReplyChanges(history.changes);
   const household = data.households.find((h) => h.id === guest.householdId);
   const housemates = household
     ? data.guests.filter((g) => g.householdId === household.id && g.id !== guest.id && !g.archived)
@@ -87,40 +110,48 @@ export default async function GuestPage({
           {guest.archived ? (
             <p className="text-body-md text-ink-muted">Restore this guest to edit their details.</p>
           ) : (
-            <dl className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
-              {[
-                ["Household", household?.name ?? "None"],
-                [
-                  "Adult or child",
-                  guest.ageGroup === "adult"
-                    ? "Adult"
-                    : guest.ageGroup === "child"
-                      ? "Child"
-                      : "Not set",
-                ],
-                ["Email", guest.email ?? "Not set"],
-                ["Phone", guest.phone ?? "Not set"],
-                ["Tags", guest.tags.length > 0 ? guest.tags.join(", ") : "None"],
-                ...(canSeePrivate
-                  ? [
-                      ["Dietary needs", details.dietary ?? "None noted"],
-                      ["Accessibility needs", details.accessibility ?? "None noted"],
-                      ["Private notes", details.notes ?? "None"],
-                    ]
-                  : []),
-              ].map(([label, value]) => (
-                <div key={label} className="min-w-0">
-                  <dt className="text-label-lg text-ink-muted">{label}</dt>
-                  <dd className="text-body-lg break-words">{value}</dd>
-                </div>
-              ))}
-            </dl>
+            <div className="space-y-4">
+              <dl className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
+                {[
+                  ["Household", household?.name ?? "None"],
+                  [
+                    "Adult or child",
+                    guest.ageGroup === "adult"
+                      ? "Adult"
+                      : guest.ageGroup === "child"
+                        ? "Child"
+                        : "Not set",
+                  ],
+                  ["Email", guest.email ?? "Not set"],
+                  ["Phone", guest.phone ?? "Not set"],
+                  ["Tags", guest.tags.length > 0 ? guest.tags.join(", ") : "None"],
+                  ...(canSeePrivate
+                    ? [
+                        ["Dietary needs", details.dietary ?? "None noted"],
+                        ["Accessibility needs", details.accessibility ?? "None noted"],
+                        ["Private notes", details.notes ?? "None"],
+                      ]
+                    : []),
+                ].map(([label, value]) => (
+                  <div key={label} className="min-w-0">
+                    <dt className="text-label-lg text-ink-muted">{label}</dt>
+                    <dd className="text-body-lg break-words">{value}</dd>
+                  </div>
+                ))}
+              </dl>
+              {canSeePrivate && details.guestAnswered && (
+                <p className="text-body-sm text-ink-muted">
+                  The guest added dietary or accessibility notes through their RSVP link. Editing
+                  replaces them.
+                </p>
+              )}
+            </div>
           )}
         </Card>
         {canSeePrivate && !guest.archived && (
           <p className="text-body-sm text-ink-muted">
-            Dietary, accessibility and private notes are only visible to the owner and partner, and
-            are left out of exports.
+            Dietary, accessibility and private notes are only visible to people with access to
+            private details (the owner and partner by default), and are left out of exports.
           </p>
         )}
       </section>
@@ -169,6 +200,49 @@ export default async function GuestPage({
           </Card>
         </section>
       )}
+
+      {consequences.length > 0 && (
+        <section aria-labelledby="consequences" className="space-y-3">
+          <div className="space-y-1">
+            <h2 id="consequences" className="font-serif text-headline-sm">
+              What the latest changes affected
+            </h2>
+            <p className="text-body-md text-ink-muted">
+              For each event, the most recent change to this guest&apos;s answer or meal, with
+              totals as they stand now.
+            </p>
+          </div>
+          <ConsequencesPanel base={base} items={consequences} when={when} />
+        </section>
+      )}
+
+      <section aria-labelledby="replies" className="space-y-3">
+        <h2 id="replies" className="font-serif text-headline-sm">
+          Reply history
+        </h2>
+        {replyGroups.length === 0 ? (
+          <p className="text-body-md text-ink-muted">
+            No answers have changed yet. Each time this guest&apos;s answer or meal changes, it is
+            recorded here.
+          </p>
+        ) : (
+          replyGroups.map((group) => (
+            <Card key={group.eventId} className="space-y-2">
+              <CardTitle as="h3">{history.eventNames[group.eventId] ?? "Event"}</CardTitle>
+              <ol className="divide-y divide-border-hairline">
+                {group.changes.map((c) => (
+                  <li key={c.id} className="space-y-1 py-2">
+                    <p className="text-body-md font-semibold">{describeReplyChange(c)}</p>
+                    <p className="text-body-sm text-ink-muted">
+                      {when(c.occurredAt)}. {describeReplySource(c)}.
+                    </p>
+                  </li>
+                ))}
+              </ol>
+            </Card>
+          ))
+        )}
+      </section>
 
       <section aria-labelledby="archive" className="border-t border-border-hairline pt-6">
         <h2 id="archive" className="sr-only">

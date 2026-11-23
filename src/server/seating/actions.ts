@@ -30,7 +30,7 @@ function read(form: FormData, fields: readonly string[]): Record<string, string>
 
 async function authorize(workspaceId: string): Promise<EventActionState | null> {
   try {
-    await requireCapability(workspaceId, "guests.manage");
+    await requireCapability(workspaceId, "seating.manage");
     return null;
   } catch (e) {
     if (e instanceof ForbiddenError) return fail(friendlySeatingError({ code: "42501" }));

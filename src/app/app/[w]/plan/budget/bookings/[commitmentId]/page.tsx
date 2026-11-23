@@ -5,14 +5,23 @@ import { Badge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import { formatDateOnly, isDateOnly, todayInZone } from "@/domain/dates/date-only";
+import { invoiceWarning } from "@/domain/ledger/invoices";
 import { scheduleWarning } from "@/domain/ledger/schedule";
 import { formatMinor } from "@/domain/money/money";
-import { PaymentForm, VoidPaymentForm } from "@/features/ledger/ledger-forms";
+import {
+  InvoiceForm,
+  PaymentForm,
+  VoidInvoiceForm,
+  VoidPaymentForm,
+} from "@/features/ledger/ledger-forms";
 import { viewCommitment } from "@/features/ledger/view";
 import { hasCapability, requireWorkspace } from "@/server/auth/workspace-guard";
 import { loadBudget } from "@/server/budget/queries";
 import { loadCandidate } from "@/server/candidates/queries";
 import { loadDocuments } from "@/server/documents/queries";
+import { loadEventVendorData } from "@/server/events/vendors";
+import { loadEventLabels } from "@/server/timeline/queries";
+import { WorksAt } from "@/features/events/works-at";
 import { loadLedger } from "@/server/ledger/queries";
 import { loadWeddingSettings } from "@/server/workspace/queries";
 
@@ -21,6 +30,14 @@ export const metadata: Metadata = { title: "Booking" };
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const link = "font-semibold text-action-emphasis underline underline-offset-4";
 const dateText = (v: string) => (isDateOnly(v) ? formatDateOnly(v) : v);
+
+const INVOICE_STATUS = {
+  paid: { label: "Paid", tone: "confirmed" },
+  overdue: { label: "Past due", tone: "pending" },
+  partly_paid: { label: "Partly paid", tone: "neutral" },
+  unpaid: { label: "Not paid yet", tone: "neutral" },
+  void: { label: "Entered by mistake", tone: "neutral" },
+} as const;
 
 const STATUS_LABEL = {
   overdue: "Past due",
@@ -69,6 +86,11 @@ export default async function BookingPage({
   const candidate = commitment.candidateId
     ? await loadCandidate(wid, commitment.candidateId)
     : null;
+  // Which events this vendor works at. The link is on the vendor, so an amendment keeps it.
+  const [eventLabels, eventVendors] =
+    candidate?.kind === "vendor"
+      ? await Promise.all([loadEventLabels(wid), loadEventVendorData(wid)])
+      : [[], null];
   const itemName = (id: string) => budget.items.find((i) => i.id === id)?.name ?? "A removed cost";
   const isActive = commitment.status === "active";
 
@@ -81,6 +103,13 @@ export default async function BookingPage({
   }
   const replacedBy = ledger.commitments.find((c) => c.supersedesId === commitment.id);
   const warn = scheduleWarning(v.schedule.state, v.schedule.unscheduledMinor, money);
+  const invoiceWarn = invoiceWarning(v.ladder, money);
+  const liveInvoices = v.invoices.filter((i) => i.status !== "void");
+  const invoiceLabel = (i: (typeof v.invoices)[number]) =>
+    `${i.number ? `No. ${i.number}` : "Invoice"} · ${money(i.amountMinor)}${
+      i.dueOn ? ` · due ${dateText(i.dueOn)}` : ""
+    }${i.unpaidMinor < i.amountMinor ? ` · ${money(i.unpaidMinor)} to pay` : ""}`;
+  const invoiceOf = new Map(v.invoices.map((i) => [i.id, i]));
 
   return (
     <div className="max-w-3xl space-y-8">
@@ -122,14 +151,32 @@ export default async function BookingPage({
       )}
 
       <Card>
-        <dl className="grid gap-x-6 gap-y-4 sm:grid-cols-3">
-          <Figure label="Committed" value={money(commitment.amountMinor)} />
+        <h2 className="sr-only">Contract, invoiced, paid and still to pay</h2>
+        <dl className="grid gap-x-6 gap-y-4 sm:grid-cols-2 lg:grid-cols-4">
+          <Figure
+            label="Contract"
+            value={money(v.ladder.contractMinor)}
+            note="What you committed to."
+          />
+          <Figure
+            label="Invoiced"
+            value={money(v.ladder.invoicedMinor)}
+            note={
+              liveInvoices.length === 0
+                ? "No invoices recorded."
+                : `${money(v.ladder.invoicedUnpaidMinor)} of it not paid yet.`
+            }
+          />
           <Figure
             label="Paid so far"
             value={money(v.netPaidMinor)}
             note="Payments minus refunds."
           />
-          <Figure label="Still owed" value={money(v.outstandingMinor)} />
+          <Figure
+            label="Still to pay"
+            value={money(v.outstandingMinor)}
+            note="Contract minus paid."
+          />
         </dl>
         {v.overpaidMinor > 0 && (
           <p role="status" className="mt-4 text-body-md">
@@ -137,7 +184,24 @@ export default async function BookingPage({
             than this booking. Check for a credit or a refund due.
           </p>
         )}
+        {invoiceWarn && (
+          <p role="status" className="mt-4 text-body-md">
+            <Badge tone="pending">Check</Badge> {invoiceWarn}
+          </p>
+        )}
       </Card>
+
+      {candidate?.kind === "vendor" && eventVendors && (
+        <WorksAt
+          workspaceId={wid}
+          vendorId={candidate.id}
+          vendorName={candidate.name}
+          events={eventLabels}
+          linkedEventIds={eventVendors.byVendor.get(candidate.id) ?? []}
+          canManage={hasCapability(access, "vendors.manage")}
+          headingId="works-at"
+        />
+      )}
 
       <section aria-labelledby="covers" className="space-y-3">
         <h2 id="covers" className="font-serif text-headline-sm">
@@ -208,6 +272,87 @@ export default async function BookingPage({
         </p>
       </section>
 
+      <section aria-labelledby="invoices" className="space-y-3">
+        <h2 id="invoices" className="font-serif text-headline-sm">
+          Invoices
+        </h2>
+        {v.invoices.length === 0 ? (
+          <Card>
+            <p className="text-body-md text-ink-muted">
+              No invoices recorded. When the vendor sends one, record it here to see what is asked
+              for and what is still unpaid.
+            </p>
+          </Card>
+        ) : (
+          <Card>
+            <ul className="divide-y divide-border-hairline">
+              {v.invoices.map((i) => {
+                const st = INVOICE_STATUS[i.status];
+                return (
+                  <li key={i.id} className="space-y-2 py-3">
+                    <div className="flex flex-wrap items-baseline justify-between gap-x-4">
+                      <span
+                        className={
+                          i.voided ? "text-body-lg text-ink-muted line-through" : "text-body-lg"
+                        }
+                      >
+                        {i.number ? `Invoice ${i.number}` : "Invoice"}
+                      </span>
+                      <span className="font-semibold">{money(i.amountMinor)}</span>
+                    </div>
+                    <p className="flex flex-wrap items-center gap-2 text-body-sm text-ink-muted">
+                      <Badge tone={st.tone}>{st.label}</Badge>
+                      {i.issuedOn && <span>Issued {dateText(i.issuedOn)}</span>}
+                      {i.dueOn && <span>Due {dateText(i.dueOn)}</span>}
+                      {!i.voided && i.paidMinor > 0 && (
+                        <span>
+                          {money(i.paidMinor)} paid
+                          {i.unpaidMinor > 0 && `, ${money(i.unpaidMinor)} to go`}
+                        </span>
+                      )}
+                      {!i.voided && i.overpaidMinor > 0 && (
+                        <span>{money(i.overpaidMinor)} more than the invoice</span>
+                      )}
+                    </p>
+                    {i.note && <p className="text-body-sm text-ink-muted">{i.note}</p>}
+                    {i.voided && <p className="text-body-sm">{i.voidReason}</p>}
+                    {canEdit && isActive && !i.voided && (
+                      <details>
+                        <summary className="min-h-11 cursor-pointer py-2 text-label-lg font-semibold text-action-emphasis">
+                          Entered by mistake?
+                        </summary>
+                        <div className="mt-3">
+                          <VoidInvoiceForm workspaceId={wid} invoiceId={i.id} />
+                        </div>
+                      </details>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </Card>
+        )}
+        {v.ladder.paidWithoutInvoiceMinor > 0 && liveInvoices.length > 0 && (
+          <p className="text-body-sm text-ink-muted">
+            {money(v.ladder.paidWithoutInvoiceMinor)} of what you&apos;ve paid isn&apos;t linked to
+            an invoice.
+          </p>
+        )}
+        {canEdit && isActive && (
+          <Card>
+            <CardTitle>Add an invoice</CardTitle>
+            <div className="mt-4">
+              <InvoiceForm
+                workspaceId={wid}
+                commitmentId={commitment.id}
+                currency={cur}
+                idPrefix={`inv-${commitment.id}`}
+              />
+            </div>
+          </Card>
+        )}
+      </section>
+
       <section aria-labelledby="payments" className="space-y-3">
         <h2 id="payments" className="font-serif text-headline-sm">
           Payments and refunds
@@ -235,7 +380,14 @@ export default async function BookingPage({
                     </span>
                   </div>
                   <p className="text-body-sm text-ink-muted">
-                    {[p.method, p.externalRef && `Ref ${p.externalRef}`, p.note]
+                    {[
+                      p.method,
+                      p.externalRef && `Ref ${p.externalRef}`,
+                      p.invoiceId && invoiceOf.get(p.invoiceId)
+                        ? `For ${invoiceOf.get(p.invoiceId)?.number ? `invoice ${invoiceOf.get(p.invoiceId)?.number}` : "an invoice"}`
+                        : null,
+                      p.note,
+                    ]
                       .filter(Boolean)
                       .join(" · ") || "No details"}
                   </p>
@@ -266,6 +418,9 @@ export default async function BookingPage({
               <PaymentForm
                 workspaceId={wid}
                 commitmentId={commitment.id}
+                invoices={liveInvoices
+                  .filter((i) => i.status !== "paid")
+                  .map((i) => ({ id: i.id, label: invoiceLabel(i) }))}
                 currency={cur}
                 today={today}
                 idPrefix={`pay-${commitment.id}`}
@@ -282,7 +437,7 @@ export default async function BookingPage({
           </h2>
           <p className="text-body-md text-ink-muted">
             An amendment keeps this version in the history and replaces it with a new one. Your
-            recorded payments move to the new version.
+            recorded payments and invoices move to the new version.
           </p>
           <ButtonLink
             href={`${base}/plan/budget/bookings/${commitment.id}/amend`}

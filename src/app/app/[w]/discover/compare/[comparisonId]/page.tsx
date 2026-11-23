@@ -6,11 +6,13 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { evaluateComparison } from "@/domain/comparison/evaluate";
 import { decisionWarnings } from "@/domain/comparison/figures";
+import { repriceSuggestion } from "@/domain/comparison/reprice";
 import { STALE_REASON_TEXT, staleReasons } from "@/domain/comparison/staleness";
 import {
   ArchiveForm,
   DecideForm,
   RatingsForm,
+  RepriceForm,
   SettingsForm,
 } from "@/features/compare/compare-forms";
 import { isRemoved, optionLabel, toOptionInputs } from "@/features/compare/mappers";
@@ -18,6 +20,7 @@ import { OptionCard } from "@/features/compare/option-card";
 import { shortDate } from "@/features/plan/format";
 import { CommentsSection } from "@/features/comments/comments-section";
 import { hasCapability, requireWorkspace } from "@/server/auth/workspace-guard";
+import { loadLiveCounts } from "@/server/comparisons/live-count";
 import { loadComparison } from "@/server/comparisons/queries";
 
 export const metadata: Metadata = { title: "Comparison" };
@@ -38,6 +41,12 @@ export default async function ComparisonPage({
   if (!cmp) notFound();
   const base = `/app/${access.wedding.id}`;
   const canManage = hasCapability(access, "vendors.manage");
+
+  // Replies may have moved since this count was saved. The saved comparison never changes; we only
+  // offer a copy. Only shown to those who may see guest totals (ADR-031 D2).
+  const counts = cmp.countEventId ? await loadLiveCounts(access) : null;
+  const followed = counts?.events.find((e) => e.eventId === cmp.countEventId) ?? null;
+  const suggested = followed ? repriceSuggestion(cmp.guestCount, followed.planningNumber) : null;
 
   const evaluation = evaluateComparison({
     guestCount: cmp.guestCount,
@@ -65,8 +74,28 @@ export default async function ComparisonPage({
         </h1>
         <p className="text-body-md text-ink-muted">
           Every option is priced for {cmp.guestCount} guests in {cmp.currency}.
+          {followed && ` The count started from replies to ${followed.eventName}.`}
         </p>
       </header>
+
+      {followed && suggested !== null && (
+        <Card as="section" aria-labelledby="reprice-heading" className="space-y-3">
+          <h2 id="reprice-heading" className="font-serif text-headline-sm">
+            Replies now suggest {suggested} guests
+          </h2>
+          <p className="text-body-md">
+            This comparison is priced for {cmp.guestCount}. The planning number for{" "}
+            {followed.eventName} is {suggested} now.
+          </p>
+          {canManage && (
+            <RepriceForm
+              hidden={{ workspaceId: access.wedding.id, comparisonId: cmp.id }}
+              suggested={suggested}
+              idempotencyKey={randomUUID()}
+            />
+          )}
+        </Card>
+      )}
 
       {decision && (
         <Card as="section" aria-labelledby="decision-heading" className="space-y-2">

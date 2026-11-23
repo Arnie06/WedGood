@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  newItemDefaults,
   parseCategoryInput,
   parseItemInput,
   parseReservePercent,
@@ -73,5 +74,76 @@ describe("reserve percent", () => {
     expect(reservePercentText(750)).toBe("7.5");
     expect(reservePercentText(1000)).toBe("10");
     expect(reservePercentText(null)).toBe("");
+  });
+});
+
+describe("parseItemInput count source (REL-03)", () => {
+  const base = { name: "Dinner", category: "c1", costMode: "per_guest", amount: "95" };
+  const ok = (raw: Record<string, string>) => {
+    const r = parseItemInput({ ...base, ...raw }, "USD");
+    if (!r.ok) throw new Error(JSON.stringify(r.errors));
+    return r.value;
+  };
+
+  it("defaults to the guest target and keeps the other count fields empty", () => {
+    expect(ok({})).toMatchObject({
+      countSource: "guest_target",
+      countEventId: null,
+      countTyped: null,
+    });
+  });
+
+  it("an event source needs an event", () => {
+    const r = parseItemInput({ ...base, countSource: "event_plan", countEvent: "" }, "USD");
+    expect(r).toMatchObject({ ok: false, errors: { countEvent: expect.any(String) } });
+    expect(ok({ countSource: "event_yes", countEvent: "e1" })).toMatchObject({
+      countSource: "event_yes",
+      countEventId: "e1",
+      countTyped: null,
+    });
+  });
+
+  it("a typed source takes a whole number, or blank for not known yet", () => {
+    expect(ok({ countSource: "typed", countTyped: "80" })).toMatchObject({ countTyped: 80 });
+    expect(ok({ countSource: "typed", countTyped: "" })).toMatchObject({ countTyped: null });
+    for (const bad of ["0", "-3", "1.5", "lots"]) {
+      expect(
+        parseItemInput({ ...base, countSource: "typed", countTyped: bad }, "USD"),
+      ).toMatchObject({
+        ok: false,
+        errors: { countTyped: expect.any(String) },
+      });
+    }
+  });
+
+  it("drops stale count fields when the item is not per guest", () => {
+    expect(
+      ok({ costMode: "fixed", countSource: "event_plan", countEvent: "e1", countTyped: "9" }),
+    ).toMatchObject({ countSource: "guest_target", countEventId: null, countTyped: null });
+  });
+
+  it("an unknown source is an error", () => {
+    expect(parseItemInput({ ...base, countSource: "magic" }, "USD")).toMatchObject({
+      ok: false,
+      errors: { countSource: expect.any(String) },
+    });
+  });
+});
+
+describe("newItemDefaults (ADR-031 D1)", () => {
+  it("starts on the reception's planning number, else the first event", () => {
+    expect(
+      newItemDefaults([
+        { id: "c", kind: "ceremony" },
+        { id: "r", kind: "reception" },
+      ]),
+    ).toMatchObject({ countSource: "event_plan", countEvent: "r" });
+    expect(newItemDefaults([{ id: "c", kind: "ceremony" }])).toMatchObject({
+      countSource: "event_plan",
+      countEvent: "c",
+    });
+  });
+  it("uses the guest target when there is no event to follow", () => {
+    expect(newItemDefaults([])).toMatchObject({ countSource: "guest_target", countEvent: "" });
   });
 });

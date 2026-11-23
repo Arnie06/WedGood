@@ -2,26 +2,34 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardTitle } from "@/components/ui/card";
+import { DensityToggle } from "@/components/ui/density-toggle";
 import { TrayButton } from "@/components/ui/tray";
-import { reservePercentText } from "@/domain/budget/input";
-import { summarizeBudget } from "@/domain/budget/summary";
+import { newItemDefaults, reservePercentText } from "@/domain/budget/input";
 import { formatMinor } from "@/domain/money/money";
 import { minorToMajorInput } from "@/domain/wedding/settings";
 import {
   ArchiveCategoryForm,
   ArchiveItemForm,
   CategoryForm,
-  EMPTY_ITEM,
   ItemForm,
   ReserveForm,
   SuggestedCategoriesForm,
 } from "@/features/budget/budget-forms";
-import { itemAmountLabel, itemBasisLabel } from "@/features/budget/format";
+import {
+  itemAmountLabel,
+  itemBasisLabel,
+  itemDriftNote,
+  itemTrackingNote,
+  type CountContext,
+} from "@/features/budget/format";
 import { createCategory, createItem, updateCategory, updateItem } from "@/server/budget/actions";
-import { loadBudget } from "@/server/budget/queries";
-import { loadLedger } from "@/server/ledger/queries";
+import { loadBudgetInputs, summarizeBudgetInputs } from "@/server/budget/view";
+import { loadEventLabels } from "@/server/timeline/queries";
+import { loadDriftRows } from "@/server/events/guarantee";
+import { DriftNote } from "@/features/events/drift-note";
 import { hasCapability, requireWorkspace } from "@/server/auth/workspace-guard";
 import { loadWeddingSettings } from "@/server/workspace/queries";
+import { readDensity } from "@/server/display/density";
 
 export const metadata: Metadata = { title: "Budget" };
 
@@ -31,40 +39,38 @@ export default async function BudgetPage({ params }: { params: Promise<{ w: stri
   const access = await requireWorkspace((await params).w);
   const base = `/app/${access.wedding.id}`;
   const canEdit = hasCapability(access, "budget.manage");
-  const [settings, budget, ledger] = await Promise.all([
+  const density = await readDensity(access.wedding.id, access.membership.role);
+  const [settings, inputs, events] = await Promise.all([
     loadWeddingSettings(access.wedding.id),
-    loadBudget(access.wedding.id),
-    loadLedger(access.wedding.id),
+    loadBudgetInputs(access.wedding.id),
+    loadEventLabels(access.wedding.id),
   ]);
+  const { budget, ledger } = inputs;
+  // Locked caterer counts against replies. Only for members who may read guest totals (ADR-031 D2).
+  const drift = await loadDriftRows(access.wedding.id, {
+    canManageGuests: hasCapability(access, "guests.manage"),
+    shareGuestTotals: access.wedding.shareGuestTotals,
+  });
   const cur = settings.baseCurrency;
   const money = (n: number) => formatMinor(n, cur);
   const guests = settings.targetGuestCount;
-  const s = summarizeBudget({
-    targetMinor: settings.targetBudgetMinor,
-    reserveBp: budget.reserveBp,
-    guestCount: guests,
-    categories: budget.categories,
-    items: budget.items,
-    commitments: ledger.commitments
-      .filter((c) => c.status === "active")
-      .map((c) => ({ id: c.id, amountMinor: c.amountMinor, status: c.status })),
-    allocations: ledger.allocations
-      .filter((a) => a.active)
-      .map((a) => ({
-        commitmentId: a.commitmentId,
-        budgetItemId: a.budgetItemId,
-        amountMinor: a.amountMinor,
-      })),
-    payments: ledger.payments
-      .filter((p) => !p.voided)
-      .map((p) => ({
-        id: p.id,
-        commitmentId: p.commitmentId,
-        budgetItemId: p.budgetItemId,
-        kind: p.kind,
-        amountMinor: p.amountMinor,
-      })),
-  });
+  const s = summarizeBudgetInputs(inputs, settings);
+  // Reply counts follow ADR-031 D2: the number and its arithmetic are for owner and partner, or for
+  // everyone once the owner shares guest totals. The forecast itself follows replies for all.
+  const countCtx: CountContext = {
+    guestTarget: guests,
+    currency: cur,
+    eventNames: new Map(events.map((e) => [e.id, e.name])),
+    showCounts: hasCapability(access, "guests.manage") || access.wedding.shareGuestTotals,
+  };
+  const figures = new Map(s.items.map((f) => [f.itemId, f]));
+  // Plan against replies across reply-based costs, for those who may see counts. Prices as entered.
+  const tracked = s.items.filter((f) => f.planMinor !== null && f.actualMinor !== null);
+  const trackPlan = tracked.reduce((n, f) => n + (f.planMinor ?? 0), 0);
+  const trackActual = tracked.reduce((n, f) => n + (f.actualMinor ?? 0), 0);
+  const usesTarget = budget.items.some(
+    (i) => i.costMode === "per_guest" && (i.countSource ?? "guest_target") === "guest_target",
+  );
   const bookedItems = new Set(
     ledger.allocations.filter((a) => a.active).map((a) => a.budgetItemId),
   );
@@ -102,7 +108,8 @@ export default async function BudgetPage({ params }: { params: Promise<{ w: stri
                   workspaceId={access.wedding.id}
                   currency={cur}
                   categories={catOptions}
-                  defaults={EMPTY_ITEM}
+                  events={events}
+                  defaults={newItemDefaults(events)}
                   submitLabel="Add cost"
                   pendingLabel="Adding…"
                 />
@@ -127,6 +134,31 @@ export default async function BudgetPage({ params }: { params: Promise<{ w: stri
           </div>
         )}
       </header>
+
+      {drift.length > 0 && (
+        <section aria-labelledby="caterer-counts" className="space-y-3" data-testid="budget-drift">
+          <h2 id="caterer-counts" className="font-serif text-headline-sm">
+            Caterer counts
+          </h2>
+          <Card className="space-y-2">
+            <p className="text-body-md text-ink-muted">
+              A locked count doesn&apos;t change when guests reply, so a cost booked from it stays
+              as signed.
+            </p>
+            {drift.map((r) => (
+              <DriftNote
+                key={r.eventId}
+                locked={r.locked}
+                yes={r.yes}
+                waiting={r.waiting}
+                eventName={r.eventName}
+                href={`${base}/plan/events/${r.eventId}#caterer-heading`}
+                testId="budget-drift-note"
+              />
+            ))}
+          </Card>
+        </section>
+      )}
 
       {showSummary && (
         <section aria-labelledby="summary" className="space-y-3">
@@ -176,7 +208,10 @@ export default async function BudgetPage({ params }: { params: Promise<{ w: stri
                 note={
                   hasBookings || s.netPaidMinor > 0 ? (
                     <>
-                      {money(s.outstandingMinor)} still owed on bookings.{" "}
+                      {money(s.outstandingMinor)} still owed on bookings
+                      {s.invoicedUnpaidMinor > 0 &&
+                        `, ${money(s.invoicedUnpaidMinor)} of it invoiced and not yet paid`}
+                      .{" "}
                       <Link href={`${base}/plan/budget/bookings`} className={link}>
                         Bookings and payments
                       </Link>
@@ -213,6 +248,16 @@ export default async function BudgetPage({ params }: { params: Promise<{ w: stri
                   }
                 />
               </dl>
+              {tracked.length > 0 && (
+                <p className="pt-3 text-body-md" data-testid="plan-summary">
+                  Guest-based costs, plan against replies so far: {money(trackPlan)} planned,{" "}
+                  {money(trackActual)} at today&apos;s replies (
+                  {trackActual === trackPlan
+                    ? "on plan"
+                    : `${money(Math.abs(trackActual - trackPlan))} ${trackActual > trackPlan ? "above" : "below"} plan`}
+                  ).
+                </p>
+              )}
               {canEdit && (
                 <div className="pt-2">
                   <TrayButton triggerStyle="link" label="Change the reserve" title="Reserve">
@@ -233,7 +278,7 @@ export default async function BudgetPage({ params }: { params: Promise<{ w: stri
               they can&apos;t all be met.
             </p>
           )}
-          {guests === null && budget.items.some((i) => i.costMode === "per_guest") && (
+          {guests === null && usesTarget && (
             <p role="status" className="text-body-md text-ink-muted">
               Per-guest costs need a guest count. Add one in{" "}
               <Link href={`${base}/settings/event`} className={link}>
@@ -242,9 +287,9 @@ export default async function BudgetPage({ params }: { params: Promise<{ w: stri
               .
             </p>
           )}
-          {guests !== null && (
+          {guests !== null && usesTarget && (
             <p className="text-body-sm text-ink-muted">
-              Per-guest costs use your guest target of {guests}.
+              Per-guest costs that count your guest target use {guests}.
             </p>
           )}
         </section>
@@ -272,15 +317,18 @@ export default async function BudgetPage({ params }: { params: Promise<{ w: stri
         </Card>
       ) : (
         <section aria-labelledby="cats" className="space-y-4">
-          <h2 id="cats" className="font-serif text-headline-sm">
-            Categories
-          </h2>
-          <ul className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+            <h2 id="cats" className="font-serif text-headline-sm">
+              Categories
+            </h2>
+            <DensityToggle workspaceId={access.wedding.id} density={density} />
+          </div>
+          <ul className="space-y-4 compact:space-y-2">
             {s.categories.map((row) => {
               const cat = budget.categories.find((c) => c.id === row.id)!;
               const items = budget.items.filter((i) => i.categoryId === row.id);
               return (
-                <Card as="li" key={row.id} className="space-y-4">
+                <Card as="li" key={row.id} className="space-y-4 compact:space-y-2">
                   <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
                     <h3 className="font-serif text-headline-sm">{row.name}</h3>
                     <p className="text-body-md text-ink-muted">
@@ -303,59 +351,83 @@ export default async function BudgetPage({ params }: { params: Promise<{ w: stri
                     <p className="text-body-md text-ink-muted">No costs in this category yet.</p>
                   ) : (
                     <ul className="divide-y divide-border-hairline">
-                      {items.map((item) => (
-                        <li key={item.id} className="space-y-2 py-3">
-                          <div className="flex flex-wrap items-baseline justify-between gap-x-4">
-                            <p className="text-body-lg">{item.name}</p>
-                            <p className="text-body-lg font-semibold">
-                              {bookedItems.has(item.id)
-                                ? "Booked"
-                                : itemAmountLabel(item, guests, cur)}
+                      {items.map((item) => {
+                        const figure = figures.get(item.id)!;
+                        const drift = itemDriftNote(item, figure, countCtx);
+                        const tracking = itemTrackingNote(item, figure, countCtx);
+                        return (
+                          <li
+                            key={item.id}
+                            className="space-y-2 py-3 compact:space-y-0.5 compact:py-1.5"
+                          >
+                            <div className="flex flex-wrap items-baseline justify-between gap-x-4">
+                              <p className="text-body-lg">{item.name}</p>
+                              <p className="text-body-lg font-semibold">
+                                {bookedItems.has(item.id)
+                                  ? "Booked"
+                                  : itemAmountLabel(item, figure, cur)}
+                              </p>
+                            </div>
+                            <p className="text-body-sm text-ink-muted">
+                              {itemBasisLabel(item, figure, countCtx)}
                             </p>
-                          </div>
-                          <p className="text-body-sm text-ink-muted">
-                            {itemBasisLabel(item, guests, cur)}
-                          </p>
-                          {canEdit && (
-                            <TrayButton
-                              triggerStyle="link"
-                              label="Edit"
-                              ariaLabel={`Edit ${item.name}`}
-                              title="Edit cost"
-                              description={item.name}
-                            >
-                              <ItemForm
-                                action={updateItem}
-                                workspaceId={access.wedding.id}
-                                currency={cur}
-                                categories={catOptions}
-                                idPrefix={`${item.id}-${item.version}`}
-                                extraHidden={{ itemId: item.id, version: item.version }}
-                                defaults={{
-                                  name: item.name,
-                                  category: item.categoryId,
-                                  costMode: item.costMode,
-                                  amount:
-                                    item.amountMinor === null
-                                      ? ""
-                                      : minorToMajorInput(item.amountMinor, cur),
-                                  quantity: item.quantity === null ? "" : String(item.quantity),
-                                  minQty: item.minQty === null ? "" : String(item.minQty),
-                                  notes: item.notes ?? "",
-                                }}
-                                submitLabel="Save changes"
-                                pendingLabel="Saving…"
-                              />
-                              <ArchiveItemForm
-                                workspaceId={access.wedding.id}
-                                itemId={item.id}
-                                version={item.version}
-                                name={item.name}
-                              />
-                            </TrayButton>
-                          )}
-                        </li>
-                      ))}
+                            {tracking && (
+                              <p
+                                className="text-body-sm text-ink-muted"
+                                data-testid="plan-tracking"
+                              >
+                                {tracking}
+                              </p>
+                            )}
+                            {drift && <p className="text-body-sm text-ink-muted">{drift}</p>}
+                            {canEdit && (
+                              <TrayButton
+                                triggerStyle="link"
+                                label="Edit"
+                                ariaLabel={`Edit ${item.name}`}
+                                title="Edit cost"
+                                description={item.name}
+                              >
+                                <ItemForm
+                                  action={updateItem}
+                                  workspaceId={access.wedding.id}
+                                  currency={cur}
+                                  categories={catOptions}
+                                  events={events}
+                                  idPrefix={`${item.id}-${item.version}`}
+                                  extraHidden={{ itemId: item.id, version: item.version }}
+                                  defaults={{
+                                    name: item.name,
+                                    category: item.categoryId,
+                                    costMode: item.costMode,
+                                    amount:
+                                      item.amountMinor === null
+                                        ? ""
+                                        : minorToMajorInput(item.amountMinor, cur),
+                                    quantity: item.quantity === null ? "" : String(item.quantity),
+                                    minQty: item.minQty === null ? "" : String(item.minQty),
+                                    notes: item.notes ?? "",
+                                    countSource: item.countSource ?? "guest_target",
+                                    countEvent: item.countEventId ?? "",
+                                    countTyped:
+                                      item.countTyped === null || item.countTyped === undefined
+                                        ? ""
+                                        : String(item.countTyped),
+                                  }}
+                                  submitLabel="Save changes"
+                                  pendingLabel="Saving…"
+                                />
+                                <ArchiveItemForm
+                                  workspaceId={access.wedding.id}
+                                  itemId={item.id}
+                                  version={item.version}
+                                  name={item.name}
+                                />
+                              </TrayButton>
+                            )}
+                          </li>
+                        );
+                      })}
                     </ul>
                   )}
                   {canEdit && (

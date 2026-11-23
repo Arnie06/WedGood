@@ -1,5 +1,7 @@
 /** Event input rules (docs/06 events). The database re-checks every limit. */
 import { isDateOnly } from "@/domain/dates/date-only";
+import { isValidTimeZone } from "@/domain/timeline/zoned";
+import { isPlanningBasis, type PlanningBasis } from "@/domain/events/demand";
 
 export const EVENT_KINDS = [
   "ceremony",
@@ -26,6 +28,12 @@ export type EventPayload = {
   localDate: string | null;
   targetAttendance: number | null;
   capacity: number | null;
+  planningBasis: PlanningBasis;
+  planOpenPlusOnes: boolean;
+  /** Invitations are complete: costs follow replies alone instead of the larger of plan and replies. */
+  invitationsFinal: boolean;
+  /** The event's own IANA zone, or null to follow the wedding's. */
+  timeZone: string | null;
 };
 
 export type EventErrors = Partial<Record<keyof EventPayload, string>>;
@@ -68,11 +76,39 @@ export function validateEvent(
   const targetAttendance = optional(values.targetAttendance, 0, "targetAttendance");
   const capacity = optional(values.capacity, 1, "capacity");
 
-  if (Object.keys(errors).length > 0 || !kind) return { ok: false, errors };
+  const basisRaw = clean(values.planningBasis) || "auto";
+  const planningBasis = isPlanningBasis(basisRaw) ? basisRaw : null;
+  if (!planningBasis) errors.planningBasis = "Choose one of the listed ways to count.";
+  const planOpenPlusOnes = clean(values.planOpenPlusOnes) === "true";
+  const invitationsFinal = clean(values.invitationsFinal) === "true";
+
+  // Blank means "same as the wedding". Anything else must be a real zone the database also knows.
+  const zoneRaw = clean(values.timeZone);
+  if (zoneRaw !== "" && (zoneRaw.length > 64 || !isValidTimeZone(zoneRaw))) {
+    errors.timeZone = "Choose a time zone from the list.";
+  }
+
+  if (Object.keys(errors).length > 0 || !kind || !planningBasis) return { ok: false, errors };
   return {
     ok: true,
-    event: { name, kind, localDate: dateRaw === "" ? null : dateRaw, targetAttendance, capacity },
+    event: {
+      name,
+      kind,
+      localDate: dateRaw === "" ? null : dateRaw,
+      targetAttendance,
+      capacity,
+      planningBasis,
+      planOpenPlusOnes,
+      invitationsFinal,
+      timeZone: zoneRaw === "" ? null : zoneRaw,
+    },
   };
+}
+
+/** The zone an event's clock times are read in: its own choice, else the wedding's. */
+export function effectiveEventZone(own: string | null | undefined, weddingZone: string): string {
+  const zone = own?.trim();
+  return zone ? zone : weddingZone;
 }
 
 /** Long date for a date-only value, or null when the event has no date. Time zone free. */

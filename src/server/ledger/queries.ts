@@ -28,10 +28,24 @@ export type InstallmentRecord = {
   amountMinor: number;
   label: string | null;
 };
+export type InvoiceEntry = {
+  id: string;
+  commitmentId: string;
+  number: string | null;
+  amountMinor: number;
+  issuedOn: string | null;
+  dueOn: string | null;
+  note: string | null;
+  voided: boolean;
+  voidReason: string | null;
+  createdAt: string;
+};
 export type PaymentRow = {
   id: string;
   commitmentId: string | null;
   budgetItemId: string | null;
+  /** The invoice this payment pays, when it names one. Only charges on a booking can. */
+  invoiceId: string | null;
   kind: "charge" | "refund";
   amountMinor: number;
   paidOn: string;
@@ -47,12 +61,13 @@ export type LedgerData = {
   allocations: AllocationRecord[];
   installments: InstallmentRecord[];
   payments: PaymentRow[];
+  invoices: InvoiceEntry[];
 };
 
 /** RLS limits every read to workspaces the caller belongs to; pages also call requireWorkspace. */
 export async function loadLedger(workspaceId: string): Promise<LedgerData> {
   const supabase = await createUserClient();
-  const [commitments, allocations, installments, payments] = await Promise.all([
+  const [commitments, allocations, installments, payments, invoices] = await Promise.all([
     supabase
       .from("commitments")
       .select(
@@ -75,14 +90,28 @@ export async function loadLedger(workspaceId: string): Promise<LedgerData> {
     supabase
       .from("payments")
       .select(
-        "id, commitment_id, budget_item_id, kind, amount_minor, paid_on, method_label, note, external_ref, voided_at, void_reason, created_at",
+        "id, commitment_id, budget_item_id, invoice_id, kind, amount_minor, paid_on, method_label, note, external_ref, voided_at, void_reason, created_at",
       )
       .eq("wedding_id", workspaceId)
       .order("paid_on")
       .order("created_at")
       .limit(5000),
+    supabase
+      .from("invoices")
+      .select(
+        "id, commitment_id, number, amount_minor, issued_on, due_on, note, voided_at, void_reason, created_at",
+      )
+      .eq("wedding_id", workspaceId)
+      .order("created_at")
+      .limit(2000),
   ]);
-  if (commitments.error || allocations.error || installments.error || payments.error) {
+  if (
+    commitments.error ||
+    allocations.error ||
+    installments.error ||
+    payments.error ||
+    invoices.error
+  ) {
     throw new Error("Could not load bookings and payments");
   }
   return {
@@ -123,6 +152,7 @@ export async function loadLedger(workspaceId: string): Promise<LedgerData> {
       id: p.id,
       commitmentId: p.commitment_id,
       budgetItemId: p.budget_item_id,
+      invoiceId: p.invoice_id,
       kind: p.kind === "refund" ? "refund" : "charge",
       amountMinor: p.amount_minor,
       paidOn: p.paid_on,
@@ -132,6 +162,18 @@ export async function loadLedger(workspaceId: string): Promise<LedgerData> {
       voided: p.voided_at !== null,
       voidReason: p.void_reason,
       createdAt: p.created_at,
+    })),
+    invoices: invoices.data.map((i) => ({
+      id: i.id,
+      commitmentId: i.commitment_id,
+      number: i.number,
+      amountMinor: i.amount_minor,
+      issuedOn: i.issued_on,
+      dueOn: i.due_on,
+      note: i.note,
+      voided: i.voided_at !== null,
+      voidReason: i.void_reason,
+      createdAt: i.created_at,
     })),
   };
 }

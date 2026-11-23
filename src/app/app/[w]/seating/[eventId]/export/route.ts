@@ -14,7 +14,7 @@ export async function GET(
 ) {
   const { w, eventId } = await params;
   const access = await requireWorkspace(w);
-  if (!hasCapability(access, "guests.manage") || !z.uuid().safeParse(eventId).success) {
+  if (!hasCapability(access, "seating.manage") || !z.uuid().safeParse(eventId).success) {
     return new Response("Not found", { status: 404 });
   }
   const view = new URL(request.url).searchParams.get("view") === "meals" ? "meals" : "seating";

@@ -1,5 +1,6 @@
 import "server-only";
 import { createUserClient } from "@/server/supabase/server";
+import { isPlanningBasis, type PlanningBasis } from "@/domain/events/demand";
 import type { EventKind } from "@/domain/events/event";
 import type { RsvpStatus } from "@/domain/guests/rsvp";
 
@@ -10,6 +11,11 @@ export type EventRecord = {
   localDate: string | null;
   targetAttendance: number | null;
   capacity: number | null;
+  planningBasis: PlanningBasis;
+  planOpenPlusOnes: boolean;
+  invitationsFinal: boolean;
+  /** The event's own zone; null follows the wedding's. */
+  timeZone: string | null;
   version: number;
 };
 export type MealOptionRecord = {
@@ -32,6 +38,8 @@ export type InvitationRecord = {
   lastRespondedAt: string | null;
   deliveryStatus: "not_sent" | "shared_manually";
   deliveryMarkedAt: string | null;
+  /** The party link (UX-06) this invitation was grouped into, live or not. */
+  partyId: string | null;
   version: number;
 };
 export type MemberRecord = {
@@ -44,11 +52,40 @@ export type MemberRecord = {
   status: RsvpStatus;
   mealOptionId: string | null;
 };
+/** One guest send (UX-08). Counts and a fingerprint only: never names, answers or note text. */
+export type SubmissionRecord = {
+  id: string;
+  sendId: string;
+  invitationId: string;
+  partyId: string | null;
+  submittedAt: string;
+  formVersion: number;
+  payloadHash: string;
+  acceptedRevision: number;
+  acceptedCount: number;
+  declinedCount: number;
+  plusOneAdded: boolean;
+  plusOnesRemoved: number;
+  detailsCount: number;
+  /** True when the guest answered a published version of the couple's questions (UX-11). */
+  customForm: boolean;
+  /** People whose answers to the couple's questions changed in this send. */
+  answersCount: number;
+};
+export type PartyRecord = {
+  id: string;
+  householdId: string | null;
+  label: string;
+  expiresAt: string;
+  revokedAt: string | null;
+  version: number;
+};
 export type EventData = {
   events: EventRecord[];
   mealOptions: MealOptionRecord[];
   invitations: InvitationRecord[];
   members: MemberRecord[];
+  parties: PartyRecord[];
 };
 
 const KINDS: readonly string[] = [
@@ -59,15 +96,62 @@ const KINDS: readonly string[] = [
   "brunch",
   "other",
 ];
+
+type EventRow = {
+  id: string;
+  name: string;
+  kind: string;
+  local_date: string | null;
+  target_attendance: number | null;
+  capacity: number | null;
+  planning_basis: string;
+  plan_open_plus_ones: boolean;
+  invitations_final: boolean;
+  time_zone: string | null;
+  version: number;
+};
+const EVENT_COLUMNS =
+  "id, name, kind, local_date, target_attendance, capacity, planning_basis, plan_open_plus_ones, invitations_final, time_zone, version";
+
+function mapEvent(e: EventRow): EventRecord {
+  return {
+    id: e.id,
+    name: e.name,
+    kind: (KINDS.includes(e.kind) ? e.kind : "other") as EventKind,
+    localDate: e.local_date,
+    targetAttendance: e.target_attendance,
+    capacity: e.capacity,
+    planningBasis: isPlanningBasis(e.planning_basis) ? e.planning_basis : "auto",
+    planOpenPlusOnes: e.plan_open_plus_ones,
+    invitationsFinal: e.invitations_final,
+    timeZone: e.time_zone,
+    version: e.version,
+  };
+}
+
+/** Events only, for pages that do not need invitations. RLS limits rows to owner and partner. */
+export async function loadEventRecords(workspaceId: string): Promise<EventRecord[]> {
+  const supabase = await createUserClient();
+  const { data, error } = await supabase
+    .from("events")
+    .select(EVENT_COLUMNS)
+    .eq("wedding_id", workspaceId)
+    .order("local_date", { nullsFirst: false })
+    .order("name")
+    .limit(50);
+  if (error) throw new Error("Could not load events");
+  return data.map(mapEvent);
+}
+
 const statusOf = (v: string): RsvpStatus => (v === "accepted" || v === "declined" ? v : "pending");
 
 /** RLS limits these rows to owner and partner. Never selects token_hash. Pages also call requireWorkspace. */
 export async function loadEventData(workspaceId: string): Promise<EventData> {
   const supabase = await createUserClient();
-  const [events, meals, invitations, members] = await Promise.all([
+  const [events, meals, invitations, members, parties] = await Promise.all([
     supabase
       .from("events")
-      .select("id, name, kind, local_date, target_attendance, capacity, version")
+      .select(EVENT_COLUMNS)
       .eq("wedding_id", workspaceId)
       .order("local_date", { nullsFirst: false })
       .order("name")
@@ -81,7 +165,7 @@ export async function loadEventData(workspaceId: string): Promise<EventData> {
     supabase
       .from("invitations")
       .select(
-        "id, event_id, household_id, label, plus_one_quota, plus_ones_used, deadline, expires_at, revoked_at, last_responded_at, delivery_status, delivery_marked_at, version",
+        "id, event_id, household_id, label, plus_one_quota, plus_ones_used, deadline, expires_at, revoked_at, last_responded_at, delivery_status, delivery_marked_at, party_id, version",
       )
       .eq("wedding_id", workspaceId)
       .order("label")
@@ -93,20 +177,18 @@ export async function loadEventData(workspaceId: string): Promise<EventData> {
       )
       .eq("wedding_id", workspaceId)
       .limit(5000),
+    supabase
+      .from("invitation_parties")
+      .select("id, household_id, label, expires_at, revoked_at, version")
+      .eq("wedding_id", workspaceId)
+      .order("created_at")
+      .limit(2500),
   ]);
-  if (events.error || meals.error || invitations.error || members.error) {
+  if (events.error || meals.error || invitations.error || members.error || parties.error) {
     throw new Error("Could not load events");
   }
   return {
-    events: events.data.map((e) => ({
-      id: e.id,
-      name: e.name,
-      kind: (KINDS.includes(e.kind) ? e.kind : "other") as EventKind,
-      localDate: e.local_date,
-      targetAttendance: e.target_attendance,
-      capacity: e.capacity,
-      version: e.version,
-    })),
+    events: events.data.map(mapEvent),
     mealOptions: meals.data.map((m) => ({
       id: m.id,
       eventId: m.event_id,
@@ -127,6 +209,7 @@ export async function loadEventData(workspaceId: string): Promise<EventData> {
       lastRespondedAt: i.last_responded_at,
       deliveryStatus: i.delivery_status === "shared_manually" ? "shared_manually" : "not_sent",
       deliveryMarkedAt: i.delivery_marked_at,
+      partyId: i.party_id,
       version: i.version,
     })),
     members: members.data.map((m) => ({
@@ -139,5 +222,56 @@ export async function loadEventData(workspaceId: string): Promise<EventData> {
       status: statusOf(m.rsvp_status),
       mealOptionId: m.meal_option_id,
     })),
+    parties: parties.data.map((p) => ({
+      id: p.id,
+      householdId: p.household_id,
+      label: p.label,
+      expiresAt: p.expires_at,
+      revokedAt: p.revoked_at,
+      version: p.version,
+    })),
   };
+}
+
+/**
+ * Every recorded guest send, newest first, grouped by invitation. RLS limits the rows to owner and
+ * partner; anyone else gets an empty map. Pages also call requireWorkspace.
+ */
+export async function loadInvitationSubmissions(
+  workspaceId: string,
+): Promise<Map<string, SubmissionRecord[]>> {
+  const supabase = await createUserClient();
+  const { data, error } = await supabase
+    .from("rsvp_submissions")
+    .select(
+      "id, send_id, invitation_id, party_id, submitted_at, form_version, payload_hash, accepted_revision, accepted_count, declined_count, plus_one_added, plus_ones_removed, details_count, form_version_id, answers_count",
+    )
+    .eq("wedding_id", workspaceId)
+    .order("submitted_at", { ascending: false })
+    .order("id", { ascending: false })
+    .limit(2500);
+  if (error) throw new Error("Could not load submissions");
+  const byInvitation = new Map<string, SubmissionRecord[]>();
+  for (const r of data) {
+    const list = byInvitation.get(r.invitation_id) ?? [];
+    list.push({
+      id: r.id,
+      sendId: r.send_id,
+      invitationId: r.invitation_id,
+      partyId: r.party_id,
+      submittedAt: r.submitted_at,
+      formVersion: r.form_version,
+      payloadHash: r.payload_hash,
+      acceptedRevision: r.accepted_revision,
+      acceptedCount: r.accepted_count,
+      declinedCount: r.declined_count,
+      plusOneAdded: r.plus_one_added,
+      plusOnesRemoved: r.plus_ones_removed,
+      detailsCount: r.details_count,
+      customForm: r.form_version_id !== null,
+      answersCount: r.answers_count,
+    });
+    byInvitation.set(r.invitation_id, list);
+  }
+  return byInvitation;
 }

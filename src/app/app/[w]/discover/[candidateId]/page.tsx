@@ -18,11 +18,16 @@ import { displayHost } from "@/domain/candidates/input";
 import { minorToMajorInput } from "@/domain/wedding/settings";
 import { ArchiveCandidateForm } from "@/features/discover/candidate-actions";
 import { CandidateForm } from "@/features/discover/candidate-form";
+import { ArchiveSpaceForm, SpaceForm } from "@/features/discover/space-forms";
 import { priceLabel, sourceLabel } from "@/features/discover/format";
 import { CommentsSection } from "@/features/comments/comments-section";
 import { hasCapability, requireWorkspace } from "@/server/auth/workspace-guard";
 import { updateCandidate } from "@/server/candidates/actions";
 import { loadCandidate } from "@/server/candidates/queries";
+import { loadEventLocations, loadSpacesForVenue } from "@/server/events/location";
+import { loadEventVendorData } from "@/server/events/vendors";
+import { WorksAt } from "@/features/events/works-at";
+import { loadEventLabels } from "@/server/timeline/queries";
 import { loadWeddingSettings } from "@/server/workspace/queries";
 
 export const metadata: Metadata = { title: "Venue or vendor" };
@@ -40,13 +45,19 @@ export default async function CandidatePage({
   if (!UUID.test(candidateId)) notFound();
   const base = `/app/${access.wedding.id}`;
   const canManage = hasCapability(access, "vendors.manage");
-  const [c, settings, quotes, ledger] = await Promise.all([
-    loadCandidate(access.wedding.id, candidateId),
-    loadWeddingSettings(access.wedding.id),
-    loadProposalsForCandidate(access.wedding.id, candidateId),
-    loadLedger(access.wedding.id),
-  ]);
+  const [c, settings, quotes, ledger, spaces, locations, eventLabels, eventVendors] =
+    await Promise.all([
+      loadCandidate(access.wedding.id, candidateId),
+      loadWeddingSettings(access.wedding.id),
+      loadProposalsForCandidate(access.wedding.id, candidateId),
+      loadLedger(access.wedding.id),
+      loadSpacesForVenue(access.wedding.id, candidateId),
+      loadEventLocations(access.wedding.id),
+      loadEventLabels(access.wedding.id),
+      loadEventVendorData(access.wedding.id),
+    ]);
   if (!c) notFound();
+  const heldHere = eventLabels.filter((e) => locations.get(e.id)?.venue.id === candidateId);
   const currency = c.priceCurrency ?? settings.baseCurrency;
   const booking = ledger.commitments.find(
     (x) => x.candidateId === candidateId && x.status === "active",
@@ -115,6 +126,18 @@ export default async function CandidatePage({
         </section>
       )}
 
+      {c.kind === "vendor" && (
+        <WorksAt
+          workspaceId={access.wedding.id}
+          vendorId={c.id}
+          vendorName={c.name}
+          events={eventLabels}
+          linkedEventIds={eventVendors.byVendor.get(c.id) ?? []}
+          canManage={canManage}
+          headingId="works-at-heading"
+        />
+      )}
+
       <section aria-labelledby="quotes-heading" className="space-y-3">
         <h2 id="quotes-heading" className="font-serif text-headline-sm">
           Quotes
@@ -157,6 +180,98 @@ export default async function CandidatePage({
           </TrayButton>
         )}
       </section>
+
+      {c.kind === "venue" && (
+        <section aria-labelledby="spaces-heading" className="space-y-3" data-testid="spaces">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 id="spaces-heading" className="font-serif text-headline-sm">
+              Spaces
+            </h2>
+            {canManage && (
+              <TrayButton
+                label="Add a space"
+                variant="outline"
+                size="sm"
+                title={`Add a space at ${c.name}`}
+                description="A room or area an event could use. Capacities are only what you were told."
+              >
+                <SpaceForm workspaceId={access.wedding.id} venueId={c.id} />
+              </TrayButton>
+            )}
+          </div>
+          {spaces.length === 0 ? (
+            <p className="text-body-md text-ink-muted">
+              No spaces yet. Add the rooms or areas you might use, like a terrace or a hall, so each
+              event can say which one it is in.
+            </p>
+          ) : (
+            <ul className="space-y-3">
+              {spaces.map((sp) => (
+                <li
+                  key={sp.id}
+                  className="flex flex-wrap items-start justify-between gap-3 rounded-card border border-border-hairline p-4"
+                >
+                  <div className="min-w-0 space-y-1">
+                    <p className="font-semibold break-words">{sp.name}</p>
+                    <p className="text-body-md text-ink-muted">
+                      {[
+                        sp.seatedCapacity !== null ? `Seats ${sp.seatedCapacity}` : null,
+                        sp.standingCapacity !== null ? `Standing ${sp.standingCapacity}` : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ") || "Capacity not entered yet"}
+                    </p>
+                    {sp.notes && (
+                      <p className="text-body-md text-ink-muted whitespace-pre-wrap">{sp.notes}</p>
+                    )}
+                  </div>
+                  {canManage && (
+                    <TrayButton
+                      label="Edit"
+                      ariaLabel={`Edit ${sp.name}`}
+                      variant="outline"
+                      size="sm"
+                      title={`Edit ${sp.name}`}
+                    >
+                      <SpaceForm
+                        workspaceId={access.wedding.id}
+                        venueId={c.id}
+                        space={{ id: sp.id, version: sp.version }}
+                        defaults={{
+                          name: sp.name,
+                          seatedCapacity: sp.seatedCapacity?.toString() ?? "",
+                          standingCapacity: sp.standingCapacity?.toString() ?? "",
+                          notes: sp.notes ?? "",
+                        }}
+                      />
+                      <div className="border-t border-border-hairline pt-4">
+                        <ArchiveSpaceForm
+                          workspaceId={access.wedding.id}
+                          spaceId={sp.id}
+                          version={sp.version}
+                        />
+                      </div>
+                    </TrayButton>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+          {heldHere.length > 0 && (
+            <p className="text-body-md text-ink-muted" data-testid="held-here">
+              Held here:{" "}
+              {heldHere.map((e, i) => (
+                <span key={e.id}>
+                  {i > 0 && ", "}
+                  <Link href={`${base}/plan/events/${e.id}`} className={link}>
+                    {e.name}
+                  </Link>
+                </span>
+              ))}
+            </p>
+          )}
+        </section>
+      )}
 
       <section aria-labelledby="details-heading" className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">

@@ -75,6 +75,18 @@ export default defineConfig({
       // Local stack only: uploads need the service role; no scanner exists, so downloads are opted in.
       SUPABASE_SECRET_KEY: supabase?.secret ?? "",
       DOCUMENTS_ALLOW_UNSCANNED_DOWNLOADS: "true",
+      // UX-11 is off by default; the suite runs with it on so the builder and questions are covered.
+      RSVP_FORM_BUILDER: "on",
+      // UX-15: `next start` is a production build, which turns public RSVP links off without a
+      // trusted client-address header. Next's own server appends the socket address to this one.
+      CLIENT_IP_HEADER: "x-forwarded-for",
+      // UX-16 is off by default; the suite turns the guest email outbox on with the labelled
+      // local sink, which reaches no one (production builds need the explicit allow).
+      GUEST_EMAIL: "on",
+      MAIL_PROVIDER: "dev-sink",
+      MAIL_ALLOW_DEV_SINK: "true",
+      // UX-17 is off by default; the suite turns guest shuttles on.
+      GUEST_SHUTTLES: "on",
     },
   },
 });

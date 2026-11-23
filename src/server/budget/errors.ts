@@ -18,6 +18,9 @@ export function friendlyBudgetError(error: { code?: string; message?: string }):
       if (error.message?.includes("category still has costs")) {
         return "Move or remove the costs in this category first, so nothing drops out of your forecast.";
       }
+      if (error.message?.includes("event not available")) {
+        return "That event isn't available. Reload and choose another.";
+      }
       return "Please check the details and try again.";
     default:
       return "We couldn't save this change. Your details are still here. Try again.";

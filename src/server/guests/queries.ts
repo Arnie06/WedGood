@@ -1,4 +1,5 @@
 import "server-only";
+import type { ReplyChange, ReplyStatus } from "@/domain/guests/history";
 import type { AgeGroup } from "@/domain/guests/import";
 import { createUserClient } from "@/server/supabase/server";
 
@@ -24,6 +25,8 @@ export type GuestPrivateDetails = {
   dietary: string | null;
   accessibility: string | null;
   notes: string | null;
+  /** True when the guest answered through their RSVP link (UX-07), so the couple can tell. */
+  guestAnswered: boolean;
 };
 export type GuestData = { guests: GuestRecord[]; households: HouseholdRecord[] };
 
@@ -72,10 +75,66 @@ export async function loadGuestPrivateDetails(
   const supabase = await createUserClient();
   const { data, error } = await supabase
     .from("guest_private_details")
-    .select("dietary, accessibility, notes")
+    .select("dietary, accessibility, notes, guest_answered_at")
     .eq("wedding_id", workspaceId)
     .eq("guest_id", guestId)
     .maybeSingle();
   if (error) throw new Error("Could not load guest details");
-  return data ?? { dietary: null, accessibility: null, notes: null };
+  if (!data) return { dietary: null, accessibility: null, notes: null, guestAnswered: false };
+  const { guest_answered_at, ...rest } = data;
+  return { ...rest, guestAnswered: guest_answered_at !== null };
+}
+
+export type GuestReplyHistory = { eventNames: Record<string, string>; changes: ReplyChange[] };
+
+const statusOf = (v: string): ReplyStatus => (v === "accepted" || v === "declined" ? v : "pending");
+
+/**
+ * Every recorded change of this guest's answers, newest first. RLS limits the rows to owner and
+ * partner; anyone else gets an empty list. Meal names are looked up now, so a renamed meal shows
+ * its current name.
+ */
+export async function loadGuestReplyHistory(
+  workspaceId: string,
+  guestId: string,
+): Promise<GuestReplyHistory> {
+  const supabase = await createUserClient();
+  const changesRes = await supabase
+    .from("rsvp_changes")
+    .select(
+      "id, event_id, from_status, to_status, from_meal_option_id, to_meal_option_id, source, reason, occurred_at",
+    )
+    .eq("wedding_id", workspaceId)
+    .eq("guest_id", guestId)
+    .order("occurred_at", { ascending: false })
+    .order("id", { ascending: false })
+    .limit(200);
+  if (changesRes.error) throw new Error("Could not load reply history");
+  if (changesRes.data.length === 0) return { eventNames: {}, changes: [] };
+  const eventIds = [...new Set(changesRes.data.map((c) => c.event_id))];
+  const [eventRes, mealRes] = await Promise.all([
+    supabase.from("events").select("id, name").eq("wedding_id", workspaceId).in("id", eventIds),
+    supabase
+      .from("meal_options")
+      .select("id, name")
+      .eq("wedding_id", workspaceId)
+      .in("event_id", eventIds)
+      .limit(500),
+  ]);
+  if (eventRes.error || mealRes.error) throw new Error("Could not load reply history");
+  const meals = new Map(mealRes.data.map((m) => [m.id, m.name]));
+  return {
+    eventNames: Object.fromEntries(eventRes.data.map((e) => [e.id, e.name])),
+    changes: changesRes.data.map((c) => ({
+      id: c.id,
+      eventId: c.event_id,
+      fromStatus: statusOf(c.from_status),
+      toStatus: statusOf(c.to_status),
+      fromMeal: c.from_meal_option_id ? (meals.get(c.from_meal_option_id) ?? null) : null,
+      toMeal: c.to_meal_option_id ? (meals.get(c.to_meal_option_id) ?? null) : null,
+      source: c.source === "couple" ? "couple" : "guest",
+      reason: c.reason,
+      occurredAt: c.occurred_at,
+    })),
+  };
 }

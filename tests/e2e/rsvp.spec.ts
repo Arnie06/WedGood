@@ -101,28 +101,52 @@ test("owner creates an event, meals and a link; a guest answers without an accou
   expect(resp?.headers()["cache-control"]).toContain("no-store");
   await expect(guest.getByRole("heading", { level: 1, name: "Reception" })).toBeVisible();
   await expect(guest.getByText("Alex & Morgan (example)")).toBeVisible();
+  await expect(guest.getByRole("heading", { level: 2, name: /Who's coming\?/ })).toBeVisible();
   await guest
     .getByRole("group", { name: "Ada Example" })
     .getByLabel("Attending", { exact: true })
     .check();
-  await guest
-    .getByRole("group", { name: "Ada Example" })
-    .getByLabel("Meal choice (if attending)")
-    .selectOption({ label: "Chicken" });
   await guest.getByRole("group", { name: "Bo Example" }).getByLabel("Not attending").check();
+  await guest.getByRole("button", { name: "Next" }).click();
+  // Meals are asked only of Ada, who is attending.
+  await expect(guest.getByRole("heading", { level: 2, name: /Meal choices/ })).toBeFocused();
+  await expect(guest.getByRole("group", { name: "Bo Example" })).toHaveCount(0);
+  await expect(guest.getByText("Bo Example isn't attending, so no meal is needed.")).toBeVisible();
+  await guest.getByRole("group", { name: "Ada Example" }).getByLabel("Chicken").check();
+  await guest.getByRole("button", { name: "Next" }).click();
+  // Notes for the couple are optional: only Ada (attending) is asked, and Next skips them.
+  await expect(
+    guest.getByRole("heading", { level: 2, name: /Anything we should know/ }),
+  ).toBeFocused();
+  await expect(guest.getByRole("group", { name: "Bo Example" })).toHaveCount(0);
+  await guest.getByRole("button", { name: "Next" }).click();
+  await guest.getByLabel("Yes, I'm bringing a guest").check();
   await guest.getByLabel("Guest's full name").fill("Taylor Example");
   await guest.getByLabel("Their meal choice").selectOption({ label: "Vegetarian plate" });
-  await guest.getByRole("button", { name: "Send my response" }).click();
-  await expect(guest.getByText("Thank you. Your response is saved.")).toBeVisible();
-  await expect(guest.getByRole("group", { name: "Taylor Example (plus-one)" })).toBeVisible();
-
-  // Saved state survives a reload; the plus-one allowance is used up.
-  await guest.reload();
+  await guest.getByRole("button", { name: "Next" }).click();
+  await expect(guest.getByRole("heading", { level: 2, name: /Check your reply/ })).toBeFocused();
+  await expect(guest.getByRole("listitem").filter({ hasText: "Ada Example" })).toContainText(
+    "Attending · Chicken",
+  );
+  await expect(guest.getByRole("listitem").filter({ hasText: "Taylor Example" })).toContainText(
+    "Attending · Vegetarian plate",
+  );
+  await guest.getByRole("button", { name: "Send my reply" }).click();
   await expect(
-    guest.getByRole("group", { name: "Ada Example" }).getByLabel("Attending", { exact: true }),
-  ).toBeChecked();
-  await expect(guest.getByLabel("Guest's full name")).toHaveCount(0);
-  await expect(guest.getByRole("button", { name: "Update my response" })).toBeVisible();
+    guest.getByRole("heading", { level: 2, name: "Thank you. Your reply is saved." }),
+  ).toBeFocused();
+  await expect(
+    guest.getByRole("listitem").filter({ hasText: "Taylor Example (plus-one)" }),
+  ).toBeVisible();
+
+  // A returning guest lands on Review with the saved answers; the plus-one allowance is used up.
+  await guest.reload();
+  await expect(guest.getByRole("heading", { level: 2, name: /Check your reply/ })).toBeVisible();
+  await expect(guest.getByRole("listitem").filter({ hasText: "Bo Example" })).toContainText(
+    "Not attending",
+  );
+  await expect(guest.getByRole("button", { name: "Edit guest" })).toHaveCount(0);
+  await expect(guest.getByRole("button", { name: "Update my reply" })).toBeVisible();
   await guestCtx.close();
 
   await page.reload();

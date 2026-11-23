@@ -9,6 +9,7 @@ import { SetupForm } from "@/features/compare/setup-form";
 import { completenessLabel } from "@/features/quotes/format";
 import { hasCapability, requireWorkspace } from "@/server/auth/workspace-guard";
 import { loadCandidates } from "@/server/candidates/queries";
+import { loadLiveCounts } from "@/server/comparisons/live-count";
 import { loadComparableProposals } from "@/server/proposals/queries";
 import { loadWeddingSettings } from "@/server/workspace/queries";
 
@@ -20,10 +21,11 @@ export default async function NewComparisonPage({ params }: { params: Promise<{ 
   const access = await requireWorkspace((await params).w);
   if (!hasCapability(access, "vendors.manage")) notFound();
   const base = `/app/${access.wedding.id}`;
-  const [settings, proposals, candidates] = await Promise.all([
+  const [settings, proposals, candidates, live] = await Promise.all([
     loadWeddingSettings(access.wedding.id),
     loadComparableProposals(access.wedding.id),
     loadCandidates(access.wedding.id),
+    loadLiveCounts(access),
   ]);
   const names = new Map(candidates.map((c) => [c.id, c.name]));
   const choices = proposals
@@ -58,6 +60,7 @@ export default async function NewComparisonPage({ params }: { params: Promise<{ 
           workspaceId={access.wedding.id}
           idempotencyKey={randomUUID()}
           defaultGuests={settings.targetGuestCount}
+          countChoices={live.events}
           choices={choices}
         />
       )}

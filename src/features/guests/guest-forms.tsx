@@ -228,8 +228,8 @@ export function GuestForm({
               <fieldset className="space-y-4 rounded-card border border-border-hairline p-4">
                 <legend className="px-2 text-label-lg font-semibold">Private details</legend>
                 <p className="text-body-sm text-ink-muted">
-                  Only the owner and partner can see these. They are left out of exports and are
-                  never shown to guests.
+                  Only people with access to private details (the owner and partner by default) can
+                  see these. They are left out of exports and are never shown to guests.
                 </p>
                 <TextAreaField
                   label="Dietary needs or allergies"
@@ -306,8 +306,8 @@ export function GuestForm({
             <fieldset className="space-y-4 rounded-card border border-border-hairline p-4">
               <legend className="px-2 text-label-lg font-semibold">Private details</legend>
               <p className="text-body-sm text-ink-muted">
-                Only the owner and partner can see these. They are left out of exports and are never
-                shown to guests.
+                Only people with access to private details (the owner and partner by default) can
+                see these. They are left out of exports and are never shown to guests.
               </p>
               <TextAreaField
                 label="Dietary needs or allergies"

@@ -17,7 +17,12 @@ import {
   type ImportField,
   type RowStatus,
 } from "@/domain/guests/import";
-import { ForbiddenError, requireCapability } from "@/server/auth/workspace-guard";
+import {
+  ForbiddenError,
+  hasCapability,
+  requireCapability,
+  requireWorkspace,
+} from "@/server/auth/workspace-guard";
 import { createUserClient } from "@/server/supabase/server";
 import { friendlyGuestError } from "./errors";
 
@@ -42,6 +47,14 @@ function fail(
 ): GuestActionState {
   return { status: "error", message, fieldErrors, values };
 }
+
+/** Whether the signed-in member may read and write dietary, access and private notes. */
+async function canWritePrivate(workspaceId: string): Promise<boolean> {
+  return hasCapability(await requireWorkspace(workspaceId), "guests.sensitive.read");
+}
+
+const PRIVATE_IMPORT_MESSAGE =
+  "This file has dietary or access columns, which you don't have access to add. Set those columns to “Don't import”.";
 
 async function authorize(workspaceId: string): Promise<GuestActionState | null> {
   try {
@@ -255,6 +268,20 @@ export async function previewGuestImport(input: {
   const csv = parseCsv(parsed.data.csv);
   if (!csv.ok) return { ok: false, error: csv.error };
   const mapping = parsed.data.mapping ?? guessMapping(csv.headers);
+  const usesPrivate = mapping.dietary !== undefined || mapping.accessibility !== undefined;
+  if (usesPrivate && !(await canWritePrivate(parsed.data.workspaceId))) {
+    const allowed = { ...mapping };
+    delete allowed.dietary;
+    delete allowed.accessibility;
+    return {
+      ok: true,
+      headers: csv.headers,
+      mapping: allowed,
+      mappingError: PRIVATE_IMPORT_MESSAGE,
+      rows: [],
+      counts: { ready: 0, duplicate: 0, invalid: 0 },
+    };
+  }
   const mapped = validateMapping(mapping, csv.headers.length);
   if (!mapped.ok) {
     return {
@@ -331,6 +358,11 @@ export async function commitGuestImport(input: {
   }
   const csv = parseCsv(parsed.data.csv);
   if (!csv.ok) return { ok: false, error: csv.error };
+  const wantsPrivate =
+    parsed.data.mapping.dietary !== undefined || parsed.data.mapping.accessibility !== undefined;
+  if (wantsPrivate && !(await canWritePrivate(workspaceId))) {
+    return { ok: false, error: PRIVATE_IMPORT_MESSAGE };
+  }
   const mapped = validateMapping(parsed.data.mapping, csv.headers.length);
   if (!mapped.ok) return { ok: false, error: mapped.error };
   const existing = await loadExisting(workspaceId);

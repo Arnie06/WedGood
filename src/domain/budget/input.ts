@@ -1,5 +1,5 @@
 import { parseMajorToMinor } from "@/domain/wedding/settings";
-import type { BudgetCostMode } from "./summary";
+import { isCountSource, type BudgetCostMode, type CountSource } from "./summary";
 
 export const MAX_CATEGORY_NAME = 80;
 export const MAX_ITEM_NAME = 160;
@@ -21,6 +21,13 @@ export const BUDGET_COST_MODES: readonly { value: BudgetCostMode; label: string;
     },
     { value: "quantity", label: "Price × quantity", hint: "For example 4 hours at a set rate" },
   ];
+
+export const COUNT_SOURCE_OPTIONS: readonly { value: CountSource; label: string }[] = [
+  { value: "event_plan", label: "An event's planning number" },
+  { value: "event_yes", label: "An event's attending guests" },
+  { value: "guest_target", label: "Your guest target" },
+  { value: "typed", label: "A number I type" },
+];
 
 export const SUGGESTED_CATEGORIES = [
   "Venue",
@@ -69,7 +76,16 @@ export function parseCategoryInput(
 // ---------------------------------------------------------------- item
 
 export type ItemField =
-  "name" | "category" | "costMode" | "amount" | "quantity" | "minQty" | "notes";
+  | "name"
+  | "category"
+  | "costMode"
+  | "amount"
+  | "quantity"
+  | "minQty"
+  | "notes"
+  | "countSource"
+  | "countEvent"
+  | "countTyped";
 export type RawItemInput = Partial<Record<ItemField, string | null | undefined>>;
 export type ItemInput = {
   name: string;
@@ -79,6 +95,10 @@ export type ItemInput = {
   quantity: number | null;
   minQty: number | null;
   notes: string | null;
+  /** Always `guest_target` unless the item is per guest. */
+  countSource: CountSource;
+  countEventId: string | null;
+  countTyped: number | null;
 };
 export type ItemParseResult =
   { ok: true; value: ItemInput } | { ok: false; errors: Partial<Record<ItemField, string>> };
@@ -123,6 +143,25 @@ export function parseItemInput(raw: RawItemInput, currency: string): ItemParseRe
     else minQty = m;
   }
 
+  let countSource: CountSource = "guest_target";
+  let countEventId: string | null = null;
+  let countTyped: number | null = null;
+  if (costMode === "per_guest") {
+    const sourceText = t(raw.countSource) || "guest_target";
+    if (!isCountSource(sourceText)) errors.countSource = "Choose what to count.";
+    else countSource = sourceText;
+    if (countSource === "event_plan" || countSource === "event_yes") {
+      countEventId = t(raw.countEvent);
+      if (countEventId === "") errors.countEvent = "Choose an event.";
+    }
+    if (countSource === "typed") {
+      const n = whole(t(raw.countTyped), MAX_ITEM_QTY, 1);
+      if (n === undefined)
+        errors.countTyped = "Enter a whole number of at least 1, or leave it blank.";
+      else countTyped = n;
+    }
+  }
+
   const notes = t(raw.notes);
   if (notes.length > MAX_ITEM_NOTES)
     errors.notes = `Keep notes under ${MAX_ITEM_NOTES} characters.`;
@@ -138,8 +177,37 @@ export function parseItemInput(raw: RawItemInput, currency: string): ItemParseRe
       quantity,
       minQty,
       notes: notes === "" ? null : notes,
+      countSource,
+      countEventId: countEventId === "" ? null : countEventId,
+      countTyped,
     },
   };
+}
+
+// ---------------------------------------------------------------- form defaults
+
+export const EMPTY_ITEM: Record<ItemField, string> = {
+  name: "",
+  category: "",
+  costMode: "fixed",
+  amount: "",
+  quantity: "",
+  minQty: "",
+  notes: "",
+  countSource: "guest_target",
+  countEvent: "",
+  countTyped: "",
+};
+
+/**
+ * New per-guest costs count an event's planning number (ADR-031 D1), preferring the reception, then
+ * the first event. With no events yet there is nothing to follow, so the guest target is used.
+ */
+export function newItemDefaults(
+  events: readonly { id: string; kind?: string }[],
+): Record<ItemField, string> {
+  const event = events.find((e) => e.kind === "reception") ?? events[0];
+  return event ? { ...EMPTY_ITEM, countSource: "event_plan", countEvent: event.id } : EMPTY_ITEM;
 }
 
 // ---------------------------------------------------------------- reserve

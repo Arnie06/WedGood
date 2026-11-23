@@ -98,3 +98,28 @@ export function localToInstant(date: string, time: string, timeZone: string): Lo
   if (second) return { kind: "ambiguous", earlier: first, later: second };
   return { kind: "ok", instant: first };
 }
+
+/** The calendar day after a valid YYYY-MM-DD date. */
+function nextDate(date: string): string {
+  const [y, m, d] = date.split("-").map(Number) as [number, number, number];
+  return new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10);
+}
+
+/**
+ * The last second of a local calendar day in a zone: one second before the next day begins there.
+ * "Reply by 1 May" in Los Angeles closes at 1 May 23:59:59 Pacific time. Handles 23- and 25-hour
+ * days, and zones where the next day starts after midnight because the clocks jump at 00:00.
+ * Null when the date or zone is not real.
+ */
+export function endOfLocalDay(date: string, timeZone: string): Date | null {
+  if (localToInstant(date, "00:00", timeZone).kind === "invalid") return null;
+  const next = nextDate(date);
+  // A jump at midnight skips 00:00 (and at most a few hours after it); the day starts at the
+  // first local hour that exists.
+  for (let hour = 0; hour < 4; hour += 1) {
+    const start = localToInstant(next, `${String(hour).padStart(2, "0")}:00`, timeZone);
+    if (start.kind === "ok") return new Date(start.instant.getTime() - 1000);
+    if (start.kind === "ambiguous") return new Date(start.earlier.getTime() - 1000);
+  }
+  return null;
+}

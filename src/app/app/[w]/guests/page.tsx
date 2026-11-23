@@ -1,20 +1,45 @@
+import { CircleAlert } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { ButtonLink, buttonClasses } from "@/components/ui/button";
 import { TrayButton } from "@/components/ui/tray";
 import { Card, CardTitle } from "@/components/ui/card";
+import { DensityToggle } from "@/components/ui/density-toggle";
 import { nameKey } from "@/domain/guests/import";
+import {
+  ANSWER_LABELS,
+  answerOf,
+  describeSeat,
+  isReplyFilter,
+  matchesReply,
+  needsMeal,
+  needsSeat,
+  replyTotals,
+  type GuestReplies,
+  type GuestReply,
+} from "@/domain/guests/replies";
 import { GuestFilters } from "@/features/guests/guest-filters";
 import { GuestForm } from "@/features/guests/guest-forms";
 import { hasCapability, requireWorkspace } from "@/server/auth/workspace-guard";
+import { loadEventRecords } from "@/server/events/queries";
 import { loadGuests, type GuestRecord } from "@/server/guests/queries";
+import { loadGuestReplies } from "@/server/guests/replies";
+import { guestEmailEnabled } from "@/server/rsvp/flags";
+import { readDensity } from "@/server/display/density";
 
 export const metadata: Metadata = { title: "Guest list" };
 
 const link = "font-semibold text-action-emphasis underline underline-offset-4";
 
-type Query = { q?: string; age?: string; tag?: string; view?: string };
+type Query = {
+  q?: string;
+  age?: string;
+  tag?: string;
+  view?: string;
+  event?: string;
+  reply?: string;
+};
 
 export default async function GuestsPage({
   params,
@@ -28,6 +53,7 @@ export default async function GuestsPage({
   const access = await requireWorkspace(w);
   const wid = access.wedding.id;
   const base = `/app/${wid}`;
+  const density = await readDensity(wid, access.membership.role);
 
   if (!hasCapability(access, "guests.manage")) {
     return (
@@ -43,8 +69,15 @@ export default async function GuestsPage({
     );
   }
 
-  const data = await loadGuests(wid);
+  const [data, events] = await Promise.all([loadGuests(wid), loadEventRecords(wid)]);
   const showArchived = query.view === "archived";
+  // Replies follow event_demand, which leaves archived guests out, so the archived view has none.
+  const event = showArchived ? undefined : events.find((e) => e.id === query.event);
+  const replies = event ? await loadGuestReplies(wid, event.id) : null;
+  const reply =
+    replies && isReplyFilter(query.reply) && (replies.asksMeal || query.reply !== "no_meal")
+      ? query.reply
+      : "";
   const active = data.guests.filter((g) => !g.archived);
   const archivedCount = data.guests.length - active.length;
   const allTags = [...new Set(active.flatMap((g) => g.tags))].sort((a, b) => a.localeCompare(b));
@@ -53,13 +86,14 @@ export default async function GuestsPage({
   const qKey = nameKey(q);
   const age = query.age === "adult" || query.age === "child" ? query.age : "";
   const tag = allTags.includes(query.tag ?? "") ? (query.tag ?? "") : "";
-  const filtering = q !== "" || age !== "" || tag !== "";
+  const filtering = q !== "" || age !== "" || tag !== "" || reply !== "";
   const matches = (g: GuestRecord) =>
     (qKey === "" ||
       nameKey(g.fullName).includes(qKey) ||
       (g.email ?? "").toLowerCase().includes(q.toLowerCase())) &&
     (age === "" || g.ageGroup === age) &&
-    (tag === "" || g.tags.includes(tag));
+    (tag === "" || g.tags.includes(tag)) &&
+    (replies === null || matchesReply(replies.byGuest.get(g.id), reply));
   const visible = data.guests.filter((g) => g.archived === showArchived).filter(matches);
 
   const households = new Map(data.households.map((h) => [h.id, h]));
@@ -76,6 +110,13 @@ export default async function GuestsPage({
   const adults = active.filter((g) => g.ageGroup === "adult").length;
   const children = active.filter((g) => g.ageGroup === "child").length;
   const canSeePrivate = hasCapability(access, "guests.sensitive.read");
+  const totals = replies
+    ? replyTotals(
+        active.map((g) => g.id),
+        replies,
+      )
+    : null;
+  const replyHref = (f: string) => `${base}/guests?event=${event?.id ?? ""}&reply=${f}`;
 
   return (
     <div className="max-w-3xl space-y-8">
@@ -95,8 +136,10 @@ export default async function GuestsPage({
         )}
         <nav aria-label="Guest tools" className="flex flex-wrap gap-2">
           {[
+            ["Events", `${base}/plan/events`],
             ["Invitations", `${base}/guests/invitations`],
-            ["Seating", `${base}/seating`],
+            ...(guestEmailEnabled() ? [["Guest emails", `${base}/guests/messages`]] : []),
+            ...(hasCapability(access, "seating.manage") ? [["Seating", `${base}/seating`]] : []),
             ["Guest website", `${base}/website`],
           ].map(([label, href]) => (
             <Link
@@ -131,9 +174,12 @@ export default async function GuestsPage({
       </section>
 
       <section aria-labelledby="list" className="space-y-4">
-        <h2 id="list" className="font-serif text-headline-sm">
-          {showArchived ? "Archived guests" : "Your guests"}
-        </h2>
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+          <h2 id="list" className="font-serif text-headline-sm">
+            {showArchived ? "Archived guests" : "Your guests"}
+          </h2>
+          <DensityToggle workspaceId={wid} density={density} />
+        </div>
         {data.guests.length > 0 && (
           <>
             <GuestFilters
@@ -142,9 +188,46 @@ export default async function GuestsPage({
               age={age}
               tag={tag}
               allTags={allTags}
+              events={showArchived ? [] : events.map((e) => ({ id: e.id, name: e.name }))}
+              event={event?.id ?? ""}
+              reply={reply}
+              asksMeal={replies?.asksMeal ?? false}
               showArchived={showArchived}
-              filtering={filtering}
+              filtering={filtering || event !== undefined}
             />
+
+            {event && totals && (
+              <div className="space-y-1 text-body-sm">
+                <p className="text-ink-muted">
+                  {event.name}: {totals.yes} attending · {totals.waiting} waiting · {totals.no} not
+                  attending · {totals.not_invited} not invited
+                </p>
+                {(totals.not_seated > 0 || (replies?.asksMeal && totals.no_meal > 0)) && (
+                  <ul className="flex flex-wrap gap-x-4">
+                    {replies?.asksMeal && totals.no_meal > 0 && reply !== "no_meal" && (
+                      <li>
+                        <Link
+                          href={replyHref("no_meal")}
+                          className={`${link} inline-flex min-h-11 items-center`}
+                        >
+                          {totals.no_meal} attending without a meal
+                        </Link>
+                      </li>
+                    )}
+                    {totals.not_seated > 0 && reply !== "not_seated" && (
+                      <li>
+                        <Link
+                          href={replyHref("not_seated")}
+                          className={`${link} inline-flex min-h-11 items-center`}
+                        >
+                          {totals.not_seated} attending, not seated
+                        </Link>
+                      </li>
+                    )}
+                  </ul>
+                )}
+              </div>
+            )}
 
             <p role="status" className="text-body-sm text-ink-muted">
               Showing {visible.length} {visible.length === 1 ? "guest" : "guests"}
@@ -162,7 +245,7 @@ export default async function GuestsPage({
             </p>
           </Card>
         ) : (
-          <ul className="space-y-4">
+          <ul className="space-y-4 compact:space-y-2">
             {ordered.map(([hid, members]) => {
               const h = households.get(hid);
               return (
@@ -174,30 +257,35 @@ export default async function GuestsPage({
                         {members.length} {members.length === 1 ? "person" : "people"} shown
                       </p>
                     )}
-                    <ul className="mt-2 divide-y divide-border-hairline">
+                    <ul className="mt-2 divide-y divide-border-hairline compact:mt-1">
                       {members.map((g) => (
                         <li
                           key={g.id}
-                          className="flex flex-wrap items-center justify-between gap-2 py-1"
+                          className="py-1 compact:md:grid compact:md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] compact:md:items-center compact:md:gap-4"
                         >
-                          <Link
-                            href={`${base}/guests/${g.id}`}
-                            className={`${link} inline-flex min-h-11 items-center break-words`}
-                          >
-                            {g.fullName}
-                          </Link>
-                          <span className="flex flex-wrap items-center gap-2">
-                            {g.ageGroup && (
-                              <Badge tone="neutral">
-                                {g.ageGroup === "adult" ? "Adult" : "Child"}
-                              </Badge>
-                            )}
-                            {g.tags.map((t) => (
-                              <Badge key={t} tone="ceremony">
-                                {t}
-                              </Badge>
-                            ))}
-                          </span>
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <Link
+                              href={`${base}/guests/${g.id}`}
+                              className={`${link} inline-flex min-h-11 items-center break-words`}
+                            >
+                              {g.fullName}
+                            </Link>
+                            <span className="flex flex-wrap items-center gap-2">
+                              {g.ageGroup && (
+                                <Badge tone="neutral">
+                                  {g.ageGroup === "adult" ? "Adult" : "Child"}
+                                </Badge>
+                              )}
+                              {g.tags.map((t) => (
+                                <Badge key={t} tone="ceremony">
+                                  {t}
+                                </Badge>
+                              ))}
+                            </span>
+                          </div>
+                          {replies && (
+                            <ReplyCells reply={replies.byGuest.get(g.id)} replies={replies} />
+                          )}
                         </li>
                       ))}
                     </ul>
@@ -225,5 +313,49 @@ export default async function GuestsPage({
         </p>
       </section>
     </div>
+  );
+}
+
+function Flag({ children }: { children: string }) {
+  return (
+    <span className="inline-flex items-start gap-1 font-semibold text-status-pending-fg">
+      <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+      {children}
+    </span>
+  );
+}
+
+/** Answer, meal and seat for the chosen event. Labelled cells, so they read well as cards on a phone. */
+function ReplyCells({ reply, replies }: { reply: GuestReply | undefined; replies: GuestReplies }) {
+  const answer = answerOf(reply);
+  const meal = !reply || reply.answer !== "yes" ? "—" : !replies.asksMeal ? "Not asked" : null;
+  const seat = reply?.seat ? describeSeat(reply.seat) : null;
+  return (
+    <dl className="grid grid-cols-3 gap-x-3 pb-2 text-body-sm compact:md:pb-0">
+      <div className="min-w-0">
+        <dt className="text-label-md text-ink-muted">Answer</dt>
+        <dd className="break-words">
+          {ANSWER_LABELS[answer]}
+          {reply?.isPlusOne && " (plus-one)"}
+          {reply?.replyClosed && <span className="block text-ink-muted">Reply date passed</span>}
+        </dd>
+      </div>
+      <div className="min-w-0">
+        <dt className="text-label-md text-ink-muted">Meal</dt>
+        <dd className="break-words">
+          {meal ?? (needsMeal(reply) ? <Flag>Not chosen</Flag> : reply?.meal)}
+        </dd>
+      </div>
+      <div className="min-w-0">
+        <dt className="text-label-md text-ink-muted">Seat</dt>
+        <dd className="break-words">
+          {needsSeat(reply) ? (
+            <Flag>{seat ? `Not confirmed (${seat})` : "Not seated"}</Flag>
+          ) : (
+            (seat ?? "—")
+          )}
+        </dd>
+      </div>
+    </dl>
   );
 }

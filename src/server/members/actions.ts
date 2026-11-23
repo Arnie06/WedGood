@@ -3,7 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { MEMBERSHIP_ROLES, assignableRoles } from "@/domain/permissions";
+import {
+  GRANT_AREAS,
+  MEMBERSHIP_ROLES,
+  assignableRoles,
+  normalizeAreas,
+  type GrantArea,
+} from "@/domain/permissions";
 import { requireCapability, ForbiddenError } from "@/server/auth/workspace-guard";
 import { getSessionUser } from "@/server/auth/session";
 import { createUserClient } from "@/server/supabase/server";
@@ -151,6 +157,72 @@ export async function setPartnerGrant(_: ActionState, form: FormData): Promise<A
     if (error) return fail(friendlyMemberError(error));
     revalidatePath(membersPath(parsed.data.workspaceId));
     return { status: "ok", message: "Permissions updated." } satisfies ActionState;
+  });
+}
+
+const editorGrantInput = z.object({
+  workspaceId: uuid,
+  membershipId: uuid,
+  version: z.coerce.number().int().min(1),
+  areas: z.array(z.enum(GRANT_AREAS)).max(GRANT_AREAS.length),
+});
+
+/**
+ * Owner-only (ADR-031 D7): the areas of the wedding a planner/editor can change. The form lists
+ * every checked area; the server drops any whose dependency is missing (seating needs guests) and
+ * the database refuses a set that breaks it.
+ */
+export async function setEditorGrants(_: ActionState, form: FormData): Promise<ActionState> {
+  const parsed = editorGrantInput.safeParse({
+    workspaceId: form.get("workspaceId"),
+    membershipId: form.get("membershipId"),
+    version: form.get("version"),
+    areas: form.getAll("area"),
+  });
+  if (!parsed.success) return fail("That change couldn't be understood.");
+  return guarded(async () => {
+    await requireCapability(parsed.data.workspaceId, "workspace.manage");
+    const areas: GrantArea[] = normalizeAreas(parsed.data.areas);
+    const supabase = await createUserClient();
+    const { error } = await supabase.rpc("set_editor_grants", {
+      p_membership: parsed.data.membershipId,
+      p_areas: areas,
+      p_expected_version: parsed.data.version,
+    });
+    if (error) return fail(friendlyMemberError(error));
+    revalidatePath(`/app/${parsed.data.workspaceId}`, "layout");
+    return {
+      status: "ok",
+      message: areas.length === 0 ? "Access removed. They can read only." : "Access saved.",
+    } satisfies ActionState;
+  });
+}
+
+const shareTotalsInput = z.object({ workspaceId: uuid, enabled: z.enum(["true", "false"]) });
+
+/** Owner-only (D2): lets editors and viewers read guest totals, never names or private details. */
+export async function setShareGuestTotals(_: ActionState, form: FormData): Promise<ActionState> {
+  const parsed = shareTotalsInput.safeParse({
+    workspaceId: form.get("workspaceId"),
+    enabled: form.get("enabled"),
+  });
+  if (!parsed.success) return fail("That change couldn't be understood.");
+  return guarded(async () => {
+    await requireCapability(parsed.data.workspaceId, "workspace.manage");
+    const supabase = await createUserClient();
+    const enabled = parsed.data.enabled === "true";
+    const { error } = await supabase.rpc("set_share_guest_totals", {
+      p_wedding: parsed.data.workspaceId,
+      p_enabled: enabled,
+    });
+    if (error) return fail(friendlyMemberError(error));
+    revalidatePath(`/app/${parsed.data.workspaceId}`, "layout");
+    return {
+      status: "ok",
+      message: enabled
+        ? "Collaborators can now see guest totals."
+        : "Guest totals are back to owner and partner only.",
+    } satisfies ActionState;
   });
 }
 

@@ -9,7 +9,8 @@ import { instantToLocal } from "@/domain/timeline/zoned";
 import { AgendaItemForm, DeleteAgendaItemForm } from "@/features/timeline/agenda-forms";
 import { dayLabel, kindLabel, rangeLabel, zoneName } from "@/features/timeline/format";
 import { hasCapability, requireWorkspace } from "@/server/auth/workspace-guard";
-import { loadCandidates } from "@/server/candidates/queries";
+import { vendorLabel } from "@/domain/events/vendors";
+import { loadAgendaVendorOptions, loadEventVendorData } from "@/server/events/vendors";
 import { loadAssigneeOptions } from "@/server/plan/queries";
 import { loadEventLabels, loadTimeline } from "@/server/timeline/queries";
 import { loadWeddingSettings } from "@/server/workspace/queries";
@@ -30,21 +31,31 @@ export default async function AgendaPage({
   const wid = access.wedding.id;
   const base = `/app/${wid}`;
   const canEdit = hasCapability(access, "plan.edit");
-  const [events, items, members, candidates, settings] = await Promise.all([
+  const [events, items, members, settings, vendorData] = await Promise.all([
     loadEventLabels(wid),
     loadTimeline(wid, eventId),
     loadAssigneeOptions(wid),
-    loadCandidates(wid),
     loadWeddingSettings(wid),
+    loadEventVendorData(wid),
   ]);
+  const agendaVendors = await loadAgendaVendorOptions(
+    wid,
+    eventId,
+    items.flatMap((i) => (i.vendorId ? [i.vendorId] : [])),
+  );
   const event = events.find((e) => e.id === eventId);
   if (!event) notFound();
 
-  const tz = settings.timezone;
+  const tz = event.effectiveTimeZone;
+  // Abbreviations such as EDT depend on the date, so name the zone as it is on the agenda's first day.
+  const zoneAt = items[0] ? new Date(items[0].startsAt) : undefined;
   const memberName = new Map(members.map((m) => [m.userId, m.label]));
-  const vendorName = new Map(candidates.map((c) => [c.id, c.name]));
+  const vendorName = agendaVendors.names;
   const memberOptions = members.map((m) => ({ id: m.userId, label: m.label }));
-  const vendorOptions = candidates.map((c) => ({ id: c.id, label: c.name }));
+  const vendorOptions = { atEvent: agendaVendors.atEvent, others: agendaVendors.others };
+  const atThisEvent = vendorData.vendors.filter((v) =>
+    (vendorData.byEvent.get(eventId) ?? []).includes(v.id),
+  );
   const conflicts = findResourceConflicts(items);
   const conflictFor = (id: string) =>
     conflicts
@@ -72,7 +83,8 @@ export default async function AgendaPage({
       <header className="space-y-2">
         <h1 className="font-serif text-headline-mobile md:text-headline-lg">{event.name}</h1>
         <p className="text-body-lg text-ink-muted">
-          {kindLabel(event.kind)} agenda · times are local to {tz} ({zoneName(tz)}).
+          {kindLabel(event.kind)} agenda · times are local to {tz.replaceAll("_", " ")} (
+          {zoneName(tz, zoneAt)}){event.timeZone ? ", this event's own zone" : ""}.
         </p>
         <p className="flex flex-wrap gap-x-6">
           <Link
@@ -88,6 +100,21 @@ export default async function AgendaPage({
             Printable coordinator handoff
           </Link>
         </p>
+        {atThisEvent.length > 0 && (
+          <p className="text-body-md text-ink-muted" data-testid="agenda-vendors">
+            Vendors at this event:{" "}
+            {atThisEvent.map((v, i) => (
+              <span key={v.id}>
+                {i > 0 && ", "}
+                {vendorLabel(v)}
+              </span>
+            ))}
+            .{" "}
+            <Link href={`${base}/plan/events/${eventId}`} className={link}>
+              Change on the event page
+            </Link>
+          </p>
+        )}
       </header>
 
       {items.length === 0 && (
@@ -165,13 +192,12 @@ export default async function AgendaPage({
                             mode="edit"
                             members={memberOptions}
                             vendors={vendorOptions}
-                            timezoneLabel={zoneName(item.timezone)}
+                            timezoneLabel={zoneName(item.timezone, new Date(item.startsAt))}
                             defaults={itemToFormValues(item)}
                             hidden={{
                               workspaceId: wid,
                               itemId: item.id,
                               version: String(item.version),
-                              timezone: item.timezone,
                             }}
                           />
                           <DeleteAgendaItemForm
@@ -198,7 +224,7 @@ export default async function AgendaPage({
               mode="create"
               members={memberOptions}
               vendors={vendorOptions}
-              timezoneLabel={zoneName(tz)}
+              timezoneLabel={zoneName(tz, zoneAt)}
               defaults={{
                 title: "",
                 date: defaultDate,

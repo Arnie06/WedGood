@@ -18,6 +18,22 @@ export function friendlyEventError(error: { code?: string; message?: string }): 
   }
 }
 
+/** Errors specific to the guarantee, then the shared event wording. */
+export function friendlyGuaranteeError(error: { code?: string }): string {
+  switch (error.code) {
+    case "CG409":
+      return "A count is already locked for this event. Reload to see it, then revise it if it needs to change.";
+    case "CG412":
+      return "Replies changed while you were looking. Reload to see the latest numbers, then lock again.";
+    case "55000":
+      return "Someone revised this count first. Reload to see the latest.";
+    case "22023":
+      return "Check the count, the caterer and the date, then try again. The caterer must be a vendor assigned to this event.";
+    default:
+      return friendlyEventError(error);
+  }
+}
+
 /** Public RSVP errors. Wording never says why a link failed. */
 export function friendlyRsvpError(error: { code?: string }): string {
   switch (error.code) {
@@ -27,6 +43,8 @@ export function friendlyRsvpError(error: { code?: string }): string {
       return "The response deadline has passed. Please contact the couple to change an answer.";
     case "RS422":
       return "This invitation has no plus-one left to add.";
+    case "RF422":
+      return "One of the couple's questions still needs an answer. Please check your answers and send again.";
     case "RS429":
       return "Too many attempts. Please wait a few minutes and try again.";
     case "54000":

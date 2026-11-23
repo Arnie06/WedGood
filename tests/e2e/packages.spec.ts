@@ -269,6 +269,8 @@ test("collaborators without export rights see nothing and cannot download", asyn
 });
 
 test("package pages pass axe and reflow at 320px and 1280px", async ({ page }) => {
+  // Two widths of axe over four pages: about 37 s on this machine, over the 30 s default.
+  test.setTimeout(90_000);
   const { owner, wedding } = await seed("pk-a11y", 12);
   await signInViaUi(page, owner);
   await startPreview(page, wedding, "master", /Start with wedding book/i);

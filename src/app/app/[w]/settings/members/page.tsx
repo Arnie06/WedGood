@@ -4,16 +4,20 @@ import { Card } from "@/components/ui/card";
 import {
   ROLE_LABELS,
   assignableRoles,
+  GRANT_LABELS,
   canAdministerMember,
+  grantedAreas,
   isMembershipRole,
   parseGrants,
 } from "@/domain/permissions";
 import {
+  EditorGrantsForm,
   GrantForm,
   InviteForm,
   RemoveForm,
   RevokeInviteButton,
   RoleForm,
+  ShareTotalsForm,
 } from "@/features/members/member-controls";
 import { hasCapability, requireWorkspace } from "@/server/auth/workspace-guard";
 import { listPendingInvites } from "@/server/members/queries";
@@ -98,6 +102,24 @@ export default async function MembersPage({ params }: { params: Promise<{ w: str
                       memberLabel={name}
                     />
                   )}
+                  {m.role === "editor" && isOwner && (
+                    <EditorGrantsForm
+                      workspaceId={workspaceId}
+                      membershipId={m.membership_id}
+                      version={m.version}
+                      granted={grantedAreas(grants)}
+                      memberLabel={name}
+                    />
+                  )}
+                  {m.role === "editor" && !isOwner && (
+                    <p className="text-body-sm text-ink-muted" data-testid="editor-access-summary">
+                      {grantedAreas(grants).length === 0
+                        ? "Can read only. An owner can let them change parts of the plan."
+                        : `Can change: ${grantedAreas(grants)
+                            .map((a) => GRANT_LABELS[a].label)
+                            .join(", ")}.`}
+                    </p>
+                  )}
                   {(administrable || self) && (
                     <RemoveForm
                       workspaceId={workspaceId}
@@ -112,6 +134,28 @@ export default async function MembersPage({ params }: { params: Promise<{ w: str
             );
           })}
         </ul>
+      </section>
+
+      <section aria-labelledby="totals-heading" className="space-y-3">
+        <h2 id="totals-heading" className="font-serif text-headline-sm">
+          Guest totals
+        </h2>
+        <Card className="space-y-3" data-testid="share-totals">
+          <p className="text-body-md">
+            {access.wedding.shareGuestTotals
+              ? "Planners and family you have invited can see how many guests are attending, waiting and not attending for each event, and meal and seating totals."
+              : "Only you and your partner see how many guests are attending. Everyone else sees budget amounts but not the guest counts behind them."}
+          </p>
+          <p className="text-body-sm text-ink-muted">
+            Totals only: never names, addresses, dietary or access notes. Someone who can see an
+            item&apos;s price per guest and its total could still work out the count.
+          </p>
+          {isOwner ? (
+            <ShareTotalsForm workspaceId={workspaceId} enabled={access.wedding.shareGuestTotals} />
+          ) : (
+            <p className="text-body-sm text-ink-muted">Only an owner can change this.</p>
+          )}
+        </Card>
       </section>
 
       {canManage ? (

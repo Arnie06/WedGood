@@ -69,6 +69,15 @@ export type RsvpIn = {
   acceptedWithoutMeal: number;
   meals: { name: string; accepted: number }[];
 };
+/** The caterer count locked for an event (REL-08). Dates are date-only strings in the wedding's zone. */
+export type GuaranteeIn = {
+  eventId: string;
+  count: number;
+  lockedOn: string;
+  dueOn: string | null;
+  /** How many times the count has been revised since it was first locked. */
+  revisions: number;
+};
 export type SeatingIn = {
   eventId: string;
   hasLayout: boolean;
@@ -107,6 +116,7 @@ export type ProjectionInput = {
   budget: BudgetSummary | null;
   payments: PaymentsIn | null;
   rsvp: RsvpIn[];
+  guarantees: GuaranteeIn[];
   seating: SeatingIn[];
   boards: BoardIn[];
   documents: DocumentIn[];
@@ -436,33 +446,61 @@ function rsvp(i: ProjectionInput): Block[] {
     const r = i.rsvp.find((x) => x.eventId === e.id);
     return r ? [{ e, r }] : [];
   });
-  if (rows.length === 0) return empty("No guests have been invited to an event yet.");
+  const locked = byEvent(i.events).flatMap((e) => {
+    const g = i.guarantees.find((x) => x.eventId === e.id);
+    return g ? [{ e, g }] : [];
+  });
+  if (rows.length === 0 && locked.length === 0) {
+    return empty("No guests have been invited to an event yet.");
+  }
   const meals = rows.flatMap(({ e, r }) => [
     ...r.meals.map((x) => [clip(e.name), clip(x.name), String(x.accepted)]),
     ...(r.acceptedWithoutMeal > 0
       ? [[clip(e.name), "No choice yet", String(r.acceptedWithoutMeal)]]
       : []),
   ]);
-  const blocks: Block[] = [
-    table(
-      "Responses by event",
-      ["Event", "Invited", "Accepted", "Pending", "Declined"],
-      rows.map(({ e, r }) => [
-        clip(e.name),
-        String(r.invited),
-        String(r.accepted),
-        String(r.pending),
-        String(r.declined),
-      ]),
-      [1, 2, 3, 4],
-    ),
-  ];
+  const blocks: Block[] = [];
+  if (locked.length > 0) {
+    // What the couple has told the caterer. It does not follow later replies.
+    blocks.push(
+      table(
+        "Count for the caterer",
+        ["Event", "Count", "Locked on", "Needed by", "Revisions"],
+        locked.map(({ e, g }) => [
+          clip(e.name),
+          String(g.count),
+          day(g.lockedOn),
+          g.dueOn ? day(g.dueOn) : "—",
+          String(g.revisions),
+        ]),
+        [1, 4],
+      ),
+    );
+  }
+  if (rows.length > 0) {
+    blocks.push(
+      table(
+        "Responses by event",
+        ["Event", "Invited", "Accepted", "Pending", "Declined"],
+        rows.map(({ e, r }) => [
+          clip(e.name),
+          String(r.invited),
+          String(r.accepted),
+          String(r.pending),
+          String(r.declined),
+        ]),
+        [1, 2, 3, 4],
+      ),
+    );
+  }
   if (meals.length > 0) {
     blocks.push(table("Meal choices of accepted guests", ["Event", "Meal", "Guests"], meals, [2]));
   }
   blocks.push(
     note(
-      "Only accepted guests are counted in meal totals. Pending guests may still change the count. Guest names, contacts and dietary details are not included.",
+      locked.length > 0
+        ? "The count for the caterer is the number the couple confirmed and is not changed by later replies. Responses and meal totals show replies as of this brief. Guest names, contacts and dietary details are not included."
+        : "Only accepted guests are counted in meal totals. Pending guests may still change the count. Guest names, contacts and dietary details are not included.",
     ),
   );
   return blocks;

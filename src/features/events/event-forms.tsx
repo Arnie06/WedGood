@@ -1,16 +1,20 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { startTransition, useActionState, useRef, useState } from "react";
 import { useToast } from "@/components/ui/toast";
 import { useTrayActionState, useTrayClose } from "@/components/ui/tray";
 import { Button } from "@/components/ui/button";
+import { ImpactPreview } from "@/components/ui/impact-preview";
 import { SelectField } from "@/components/ui/select-field";
 import { TextField } from "@/components/ui/text-field";
-import { EVENT_KINDS, EVENT_KIND_LABELS } from "@/domain/events/event";
+import { PLANNING_BASES, PLANNING_BASIS_LABELS } from "@/domain/events/demand";
+import { EVENT_KINDS, EVENT_KIND_LABELS, effectiveEventZone } from "@/domain/events/event";
+import { timeLabel, zoneName } from "@/features/timeline/format";
 import {
   addMealOption,
   createInvitations,
   overrideResponse,
+  previewOverride,
   reissueInvitation,
   setInvitationDelivery,
   revokeInvitation,
@@ -18,7 +22,9 @@ import {
   setMealOptionActive,
   type EventActionState,
   type IssuedLink,
+  type OverrideActionState,
 } from "@/server/events/actions";
+import type { OverridePreview } from "@/server/events/override-preview-read";
 
 const idle: EventActionState = { status: "idle" };
 
@@ -100,6 +106,13 @@ export type EventFormValues = {
   localDate: string;
   targetAttendance: string;
   capacity: string;
+  planningBasis: string;
+  /** "true" when the event opts in to counting unnamed plus-ones. */
+  planOpenPlusOnes: string;
+  /** "true" once all invitations are out and replies should drive costs. */
+  invitationsFinal: string;
+  /** The event's own IANA zone, or "" to follow the wedding's. */
+  timeZone: string;
 };
 export const emptyEvent: EventFormValues = {
   name: "",
@@ -107,23 +120,38 @@ export const emptyEvent: EventFormValues = {
   localDate: "",
   targetAttendance: "",
   capacity: "",
+  planningBasis: "auto",
+  planOpenPlusOnes: "",
+  invitationsFinal: "",
+  timeZone: "",
 };
+
+/** The first scheduled agenda item, used to show what a zone change does to the clock. */
+export type ZonePreviewItem = { count: number; title: string; startsAt: string };
 
 export function EventForm({
   workspaceId,
-  initial = emptyEvent,
+  initial: initialValues,
   event,
   submitLabel,
+  weddingZone,
+  timeZones,
+  agenda = null,
 }: {
   workspaceId: string;
-  initial?: EventFormValues;
+  initial?: Partial<EventFormValues>;
   event?: { id: string; version: number };
   submitLabel: string;
+  weddingZone: string;
+  timeZones: readonly string[];
+  agenda?: ZonePreviewItem | null;
 }) {
+  const initial: EventFormValues = { ...emptyEvent, ...initialValues };
   const [created, setCreated] = useState(0);
   const [keyBase] = useState(() => crypto.randomUUID());
   const closeTray = useTrayClose();
   const { toast } = useToast();
+  const [zone, setZone] = useState(initial.timeZone);
   const [state, formAction, pending] = useActionState(
     async (prev: EventActionState, form: FormData) => {
       const next = await saveEvent(prev, form);
@@ -131,7 +159,10 @@ export function EventForm({
         closeTray();
         toast({ message: next.message });
       }
-      if (next.status === "ok" && !event) setCreated((n) => n + 1);
+      if (next.status === "ok" && !event) {
+        setCreated((n) => n + 1);
+        setZone("");
+      }
       return next;
     },
     idle,
@@ -139,6 +170,14 @@ export function EventForm({
   const echoed = state.status === "error" ? state.values : undefined;
   const errors = state.status === "error" ? state.fieldErrors : {};
   const v = (k: keyof EventFormValues) => echoed?.[k] ?? initial[k];
+  // A zone the wedding or event already uses must be selectable even if the runtime's list lacks it.
+  const zoneChoices = [...timeZones];
+  for (const z of [weddingZone, initial.timeZone]) {
+    if (z && !zoneChoices.includes(z)) zoneChoices.push(z);
+  }
+  const from = effectiveEventZone(initial.timeZone, weddingZone);
+  const to = effectiveEventZone(zone, weddingZone);
+  const showShift = Boolean(event) && agenda !== null && agenda.count > 0 && from !== to;
   return (
     <form action={formAction} className="space-y-4" noValidate key={event ? "edit" : created}>
       <Hidden
@@ -176,7 +215,7 @@ export function EventForm({
         />
         <TextField
           label="Planned attendance"
-          hint="Your target, separate from RSVPs."
+          hint="Your plan. It stays as your baseline: replies are tracked against it, never replace it."
           name="targetAttendance"
           inputMode="numeric"
           autoComplete="off"
@@ -193,6 +232,82 @@ export function EventForm({
           error={errors.capacity}
         />
       </div>
+      <div className="space-y-2">
+        <SelectField
+          label="Time zone"
+          hint="Agenda times for this event are read in this zone. Change it only if this event is somewhere else."
+          name="timeZone"
+          value={zone}
+          onChange={(e) => setZone(e.target.value)}
+          error={errors.timeZone}
+        >
+          <option value="">Same as the wedding ({weddingZone.replaceAll("_", " ")})</option>
+          {zoneChoices.map((z) => (
+            <option key={z} value={z}>
+              {z.replaceAll("_", " ")}
+            </option>
+          ))}
+        </SelectField>
+        {showShift && agenda && (
+          <p className="rounded-control bg-surface-sunken p-3 text-body-sm" role="status">
+            {agenda.count === 1
+              ? "The 1 agenda item keeps"
+              : `The ${agenda.count} agenda items keep`}{" "}
+            the same moment; only the clock they are read on changes. “{agenda.title}” now shows as{" "}
+            {timeLabel(agenda.startsAt, from)} {zoneName(from, new Date(agenda.startsAt))}, and
+            would show as {timeLabel(agenda.startsAt, to)} {zoneName(to, new Date(agenda.startsAt))}
+            .
+          </p>
+        )}
+      </div>
+      <fieldset className="space-y-3 rounded-card border border-border-hairline p-4">
+        <legend className="px-1 text-label-lg font-semibold">How we count guests</legend>
+        <SelectField
+          label="Planning number"
+          name="planningBasis"
+          defaultValue={v("planningBasis")}
+          error={errors.planningBasis}
+          hint="The number seats, food and per-guest costs are planned around."
+        >
+          {PLANNING_BASES.map((b) => (
+            <option key={b} value={b}>
+              {PLANNING_BASIS_LABELS[b]}
+            </option>
+          ))}
+        </SelectField>
+        <label className="flex min-h-11 items-start gap-3">
+          <input
+            type="checkbox"
+            name="planOpenPlusOnes"
+            value="true"
+            defaultChecked={v("planOpenPlusOnes") === "true"}
+            className="mt-1 size-5"
+          />
+          <span className="text-body-md">
+            Also plan for plus-one places that aren&apos;t named yet
+            <span className="block text-body-sm text-ink-muted">
+              Off by default. Unused plus-one places are shown on their own either way.
+            </span>
+          </span>
+        </label>
+        <label className="flex min-h-11 items-start gap-3">
+          <input
+            type="checkbox"
+            name="invitationsFinal"
+            value="true"
+            defaultChecked={v("invitationsFinal") === "true"}
+            className="mt-1 size-5"
+          />
+          <span className="text-body-md">
+            All invitations for this event are out
+            <span className="block text-body-sm text-ink-muted">
+              Until then, per-guest costs use whichever is larger: your planned attendance or the
+              replies so far. Once this is on, they follow the replies alone. Your plan is kept
+              either way, for comparison.
+            </span>
+          </span>
+        </label>
+      </fieldset>
       <Feedback state={state} />
       <Button type="submit" disabled={pending}>
         {pending ? "Saving…" : submitLabel}
@@ -269,12 +384,15 @@ export function InviteForm({
   households,
   guests,
   defaultExpires,
+  zoneLabel,
 }: {
   workspaceId: string;
   eventId: string;
   households: PickHousehold[];
   guests: PickGuest[];
   defaultExpires: string;
+  /** The event's zone, named so the planner knows whose midnight the dates mean. */
+  zoneLabel: string;
 }) {
   const [keyBase, setKeyBase] = useState(() => crypto.randomUUID());
   const [state, formAction, pending] = useActionState(
@@ -353,7 +471,7 @@ export function InviteForm({
           </SelectField>
           <TextField
             label="Reply by"
-            hint="Optional. After this date only you can change answers."
+            hint={`Optional. Closes at the end of that day, ${zoneLabel}. After that only you can change answers.`}
             name="deadline"
             type="date"
             defaultValue={echoed?.deadline ?? ""}
@@ -446,20 +564,111 @@ export function OverrideForm({
   member: { id: string; name: string; status: string; mealOptionId: string | null };
   meals: { id: string; name: string }[];
 }) {
-  const [state, formAction, pending] = useTrayActionState(overrideResponse, idle, {
-    keepOpen: true,
-  });
+  const [status, setStatus] = useState(member.status);
+  const [meal, setMeal] = useState(member.mealOptionId ?? "");
+  const [touched, setTouched] = useState(false);
+  const [preview, setPreview] = useState<OverridePreview | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  // Answers can arrive out of order when the choice changes quickly; only the latest one counts.
+  const request = useRef(0);
+
+  const [state, formAction, pending] = useTrayActionState<OverrideActionState>(
+    async (prev, form) => {
+      const next = await overrideResponse(prev, form);
+      if (next.status === "stale") {
+        request.current += 1;
+        setChecking(false);
+        setPreviewError(null);
+        setPreview(next.preview);
+      }
+      return next;
+    },
+    idle,
+    { keepOpen: true },
+  );
+
+  async function check(nextStatus: string, nextMeal: string) {
+    const id = ++request.current;
+    setTouched(true);
+    setChecking(true);
+    setPreviewError(null);
+    const r = await previewOverride({
+      workspaceId,
+      memberId: member.id,
+      status: nextStatus,
+      meal: nextStatus === "accepted" ? nextMeal : "",
+    });
+    if (id !== request.current) return;
+    setChecking(false);
+    if (r.status === "ok") {
+      setPreview(r.preview);
+    } else {
+      // Without a preview, saving shows it first rather than saving blind.
+      setPreview(null);
+      setPreviewError(r.message);
+    }
+  }
+
+  const saved = preview?.current ?? { status: member.status, mealOptionId: member.mealOptionId };
+  const chosen = { status, mealOptionId: status === "accepted" && meal !== "" ? meal : null };
+  const differs = chosen.status !== saved.status || chosen.mealOptionId !== saved.mealOptionId;
+  const fresh =
+    preview !== null &&
+    preview.to.status === chosen.status &&
+    preview.to.mealOptionId === chosen.mealOptionId;
+  const movedSincePageLoad =
+    preview !== null &&
+    (preview.current.status !== member.status ||
+      preview.current.mealOptionId !== member.mealOptionId);
+  const answerWords = (a: { status: string; mealOptionId: string | null }) =>
+    `${OVERRIDE_STATUS_LABEL[a.status] ?? a.status}${
+      a.mealOptionId ? ` · ${meals.find((m) => m.id === a.mealOptionId)?.name ?? "a meal"}` : ""
+    }`;
+
   const errors = state.status === "error" ? state.fieldErrors : {};
+  const echoed =
+    state.status === "error" || state.status === "stale" ? state.values.reason : undefined;
   return (
-    <form action={formAction} className="space-y-3" noValidate>
-      <Hidden values={{ workspaceId, memberId: member.id }} />
+    <form
+      action={formAction}
+      // Dispatch by hand so React does not reset the form afterwards: a reset puts the controlled
+      // selects back to their first option while state keeps the choice, and the next press would
+      // send the wrong answer. Without script the plain form action still works.
+      onSubmit={(e) => {
+        e.preventDefault();
+        const data = new FormData(e.currentTarget);
+        startTransition(() => formAction(data));
+      }}
+      className="space-y-3"
+      noValidate
+    >
+      <Hidden values={{ workspaceId, memberId: member.id, basis: fresh ? preview.basis : "" }} />
       <div className="grid gap-3 sm:grid-cols-2">
-        <SelectField label={`Answer for ${member.name}`} name="status" defaultValue={member.status}>
+        <SelectField
+          label={`Answer for ${member.name}`}
+          name="status"
+          value={status}
+          onChange={(e) => {
+            setStatus(e.target.value);
+            void check(e.target.value, meal);
+          }}
+        >
           <option value="pending">Not answered</option>
           <option value="accepted">Attending</option>
           <option value="declined">Not attending</option>
         </SelectField>
-        <SelectField label="Meal" name="meal" defaultValue={member.mealOptionId ?? ""}>
+        <SelectField
+          label="Meal"
+          name="meal"
+          value={status === "accepted" ? meal : ""}
+          disabled={status !== "accepted"}
+          hint={status !== "accepted" ? "Only for guests who are attending." : undefined}
+          onChange={(e) => {
+            setMeal(e.target.value);
+            void check(status, e.target.value);
+          }}
+        >
           <option value="">Not chosen</option>
           {meals.map((m) => (
             <option key={m.id} value={m.id}>
@@ -468,18 +677,55 @@ export function OverrideForm({
           ))}
         </SelectField>
       </div>
+      {movedSincePageLoad && (
+        <p className="text-body-md">
+          Saved answer now: <span className="font-semibold">{answerWords(saved)}</span> (changed
+          since this page loaded).
+        </p>
+      )}
+      {(touched || state.status === "stale") && (
+        <ImpactPreview
+          testId={`override-impact-${member.id}`}
+          busy={checking}
+          items={fresh && differs ? preview.items : []}
+          emptyText={
+            checking || (differs && !fresh && previewError === null)
+              ? "Checking what this would change…"
+              : !differs
+                ? "This is the saved answer, so nothing would change."
+                : (previewError ?? "Nothing else is affected.")
+          }
+        />
+      )}
       <TextField
         label="Reason for the change"
         hint="Recorded in the history. Needed even if the reply date has passed."
         name="reason"
         maxLength={200}
         autoComplete="off"
+        defaultValue={echoed ?? ""}
         error={errors.reason}
       />
-      <Feedback state={state} />
-      <Button type="submit" variant="secondary" disabled={pending}>
+      <div aria-live="polite" className="min-h-6">
+        {state.status === "stale" && <p className="text-body-md text-danger">{state.message}</p>}
+        {state.status === "error" && (
+          <p role="alert" className="text-body-md text-danger">
+            {state.message}
+          </p>
+        )}
+        {state.status === "ok" && (
+          <p className="text-body-md text-action-secondary">{state.message}</p>
+        )}
+      </div>
+      <Button type="submit" variant="secondary" disabled={pending || checking || !differs}>
         {pending ? "Saving…" : "Record change"}
       </Button>
     </form>
   );
 }
+
+const OVERRIDE_STATUS_LABEL: Record<string, string> = {
+  pending: "Not answered",
+  accepted: "Attending",
+  declined: "Not attending",
+};

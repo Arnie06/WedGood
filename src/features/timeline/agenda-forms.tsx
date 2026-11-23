@@ -17,6 +17,8 @@ import {
 const idle: TimelineActionState = { status: "idle" };
 
 export type Option = { id: string; label: string };
+/** The vendor picker: this event's vendors first (when there are any), then everyone else. */
+export type VendorChoices = { atEvent: readonly Option[]; others: readonly Option[] };
 
 function Status({ state }: { state: TimelineActionState }) {
   return (
@@ -61,7 +63,7 @@ export function AgendaItemForm({
   hidden: Record<string, string>;
   defaults?: TimelineFormValues;
   members: readonly Option[];
-  vendors: readonly Option[];
+  vendors: VendorChoices;
   timezoneLabel: string;
 }) {
   const [created, setCreated] = useState(0);
@@ -159,11 +161,30 @@ export function AgendaItemForm({
         </SelectField>
         <SelectField label="Venue or vendor" name="vendor" defaultValue={v("vendor")}>
           <option value="">None</option>
-          {vendors.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.label}
-            </option>
-          ))}
+          {vendors.atEvent.length > 0 ? (
+            <>
+              <optgroup label="At this event">
+                {vendors.atEvent.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.label}
+                  </option>
+                ))}
+              </optgroup>
+              <optgroup label="Other venues and vendors">
+                {vendors.others.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.label}
+                  </option>
+                ))}
+              </optgroup>
+            </>
+          ) : (
+            vendors.others.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.label}
+              </option>
+            ))
+          )}
         </SelectField>
         <TextField
           label="Someone else in charge"

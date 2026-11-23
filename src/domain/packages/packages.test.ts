@@ -82,6 +82,7 @@ const input = (over: Partial<ProjectionInput> = {}): ProjectionInput => ({
       meals: [{ name: "Chicken", accepted: 5 }],
     },
   ],
+  guarantees: [],
   seating: [],
   boards: [],
   documents: [],
@@ -194,6 +195,31 @@ describe("buildDocument", () => {
     const text = all(buildDocument(request(), input()));
     expect(text).toContain("Chicken");
     expect(text).toContain("No choice yet");
+    expect(text).toContain("Pending guests may still change the count");
+  });
+
+  it("includes the locked caterer count with its dates and does not let replies change it", () => {
+    const doc = buildDocument(
+      request({ preset: "caterer", sections: ["overview", "events", "rsvp"] }),
+      input({
+        guarantees: [
+          { eventId: "e1", count: 118, lockedOn: "2027-05-01", dueOn: "2027-05-20", revisions: 1 },
+        ],
+      }),
+    );
+    const text = all(doc);
+    expect(text).toContain("Count for the caterer");
+    expect(text).toContain("118");
+    expect(text).toContain("May 1, 2027");
+    expect(text).toContain("May 20, 2027");
+    // The replies table still shows today's 6 accepted; the locked count is a separate row.
+    expect(text).toContain("Responses by event");
+    expect(text).toContain("not changed by later replies");
+  });
+
+  it("shows no caterer count section when none is locked", () => {
+    const text = all(buildDocument(request({ sections: ["rsvp"] }), input()));
+    expect(text).not.toContain("Count for the caterer");
     expect(text).toContain("Pending guests may still change the count");
   });
 

@@ -6,7 +6,7 @@ export function friendlyTimelineError(error: { code?: string }): string {
     case "28000":
       return "Please sign in again to continue.";
     case "55000":
-      return "Someone changed this item while you were looking. Reload to see the latest, then try again.";
+      return "Someone changed this item, or the event's time zone, while you were looking. Reload to see the latest, then try again.";
     case "23503":
       return "That vendor or person is no longer available. Reload and choose again.";
     case "23505":

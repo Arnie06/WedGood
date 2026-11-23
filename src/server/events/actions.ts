@@ -2,13 +2,15 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { validateEvent } from "@/domain/events/event";
+import { effectiveEventZone, validateEvent } from "@/domain/events/event";
 import { buildInvitationGroups } from "@/domain/events/invitation";
+import { endOfLocalDay } from "@/domain/timeline/zoned";
 import { parsePublicEnv } from "@/lib/env";
 import { ForbiddenError, requireCapability } from "@/server/auth/workspace-guard";
 import { generateInviteToken } from "@/server/members/invite-token";
 import { createUserClient } from "@/server/supabase/server";
 import { friendlyEventError } from "./errors";
+import { readOverridePreview, type OverridePreview } from "./override-preview-read";
 
 export type IssuedLink = { invitationId: string; label: string; url: string | null };
 
@@ -63,7 +65,17 @@ function linkFor(raw: string): string | null {
   }
 }
 
-const EVENT_FIELDS = ["name", "kind", "localDate", "targetAttendance", "capacity"] as const;
+const EVENT_FIELDS = [
+  "name",
+  "kind",
+  "localDate",
+  "targetAttendance",
+  "capacity",
+  "planningBasis",
+  "planOpenPlusOnes",
+  "invitationsFinal",
+  "timeZone",
+] as const;
 
 export async function saveEvent(_: EventActionState, form: FormData): Promise<EventActionState> {
   const values = readValues(form, EVENT_FIELDS);
@@ -190,14 +202,31 @@ export async function setMealOptionActive(
   };
 }
 
-/** Parses a `datetime-local`-style or date value as end of that day in UTC. Null when blank. */
-function endOfDay(raw: string): string | null | "invalid" {
+/**
+ * Parses a date picked in the form as the end of that day in the event's zone (UX-04): "1 May"
+ * closes at 1 May 23:59:59 where the event happens. Null when blank.
+ */
+function endOfDay(raw: string, timeZone: string): string | null | "invalid" {
   if (raw === "") return null;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return "invalid";
-  const d = new Date(`${raw}T23:59:59Z`);
-  return Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== raw
-    ? "invalid"
-    : d.toISOString();
+  return endOfLocalDay(raw, timeZone)?.toISOString() ?? "invalid";
+}
+
+/** The event's own zone, else the wedding's. Null when the event is not in this workspace. */
+async function loadEventZone(workspaceId: string, eventId: string): Promise<string | null> {
+  const supabase = await createUserClient();
+  const [event, wedding] = await Promise.all([
+    supabase
+      .from("events")
+      .select("time_zone")
+      .eq("wedding_id", workspaceId)
+      .eq("id", eventId)
+      .maybeSingle(),
+    supabase.from("weddings").select("timezone").eq("id", workspaceId).maybeSingle(),
+  ]);
+  if (event.error || wedding.error) throw new Error("Could not load the event's time zone");
+  if (!event.data || !wedding.data) return null;
+  return effectiveEventZone(event.data.time_zone, wedding.data.timezone);
 }
 
 export async function createInvitations(
@@ -214,13 +243,16 @@ export async function createInvitations(
   const denied = await authorize(ids.data.workspaceId);
   if (denied) return denied;
 
+  const zone = await loadEventZone(ids.data.workspaceId, ids.data.eventId);
+  if (zone === null) return fail("This event no longer exists. Reload the page.", {}, values);
+
   const errors: Record<string, string> = {};
   const quota = /^[0-5]$/.test(values.plusOnes ?? "") ? Number(values.plusOnes) : null;
   if (quota === null) errors.plusOnes = "Choose 0 to 5.";
-  const deadline = endOfDay((values.deadline ?? "").trim());
+  const deadline = endOfDay((values.deadline ?? "").trim(), zone);
   if (deadline === "invalid") errors.deadline = "Use a real date.";
   const expiresRaw = (values.expires ?? "").trim();
-  const expires = endOfDay(expiresRaw);
+  const expires = endOfDay(expiresRaw, zone);
   if (expires === "invalid" || expires === null)
     errors.expires = "Choose when the link stops working.";
   const now = Date.now();
@@ -405,23 +437,61 @@ export async function setInvitationDelivery(
   };
 }
 
+const overrideInput = z.object({
+  workspaceId: uuid,
+  memberId: uuid,
+  status: z.enum(["pending", "accepted", "declined"]),
+  meal: z.union([uuid, z.literal("")]),
+});
+
+export type OverridePreviewState =
+  { status: "ok"; preview: OverridePreview } | { status: "error"; message: string };
+
+/**
+ * Read-only: what "Change an answer" would touch (UX-02). Same permission as saving it. Nothing is
+ * written; saving still goes through overrideResponse and override_rsvp_response.
+ */
+export async function previewOverride(input: {
+  workspaceId: string;
+  memberId: string;
+  status: string;
+  meal: string;
+}): Promise<OverridePreviewState> {
+  const ids = overrideInput.safeParse(input);
+  if (!ids.success) return { status: "error", message: "Reload the page and try again." };
+  const denied = await authorize(ids.data.workspaceId);
+  if (denied) return { status: "error", message: friendlyEventError({ code: "42501" }) };
+  try {
+    const preview = await readOverridePreview(
+      await createUserClient(),
+      ids.data.workspaceId,
+      ids.data.memberId,
+      { status: ids.data.status, mealOptionId: ids.data.meal === "" ? null : ids.data.meal },
+    );
+    if (!preview) return { status: "error", message: "This guest is no longer on the invitation." };
+    return { status: "ok", preview };
+  } catch {
+    return {
+      status: "error",
+      message: "We couldn't check what this would change. Try again in a moment.",
+    };
+  }
+}
+
+export type OverrideActionState =
+  | EventActionState
+  | { status: "stale"; message: string; preview: OverridePreview; values: Record<string, string> };
+
 export async function overrideResponse(
-  _: EventActionState,
+  _: OverrideActionState,
   form: FormData,
-): Promise<EventActionState> {
-  const ids = z
-    .object({
-      workspaceId: uuid,
-      memberId: uuid,
-      status: z.enum(["pending", "accepted", "declined"]),
-      meal: z.union([uuid, z.literal("")]),
-    })
-    .safeParse({
-      workspaceId: form.get("workspaceId"),
-      memberId: form.get("memberId"),
-      status: form.get("status"),
-      meal: form.get("meal") ?? "",
-    });
+): Promise<OverrideActionState> {
+  const ids = overrideInput.safeParse({
+    workspaceId: form.get("workspaceId"),
+    memberId: form.get("memberId"),
+    status: form.get("status"),
+    meal: form.get("meal") ?? "",
+  });
   const values = readValues(form, ["reason"]);
   if (!ids.success) return fail("Reload the page and try again.", {}, values);
   const denied = await authorize(ids.data.workspaceId);
@@ -436,6 +506,33 @@ export async function overrideResponse(
       values,
     );
   const supabase = await createUserClient();
+  // Recompute what the person was shown. If replies moved since (the guest answered, a seat or
+  // count changed), show the new picture instead of saving. Without a preview (no script), the
+  // first press shows it. The window between this read and the RPC remains (see the ledger).
+  let preview: OverridePreview | null;
+  try {
+    preview = await readOverridePreview(supabase, ids.data.workspaceId, ids.data.memberId, {
+      status: ids.data.status,
+      mealOptionId: ids.data.meal === "" ? null : ids.data.meal,
+    });
+  } catch {
+    return fail("We couldn't check what this would change. Try again in a moment.", {}, values);
+  }
+  if (!preview) return fail("This guest is no longer on the invitation. Reload the page.");
+  const seen = form.get("basis");
+  if (typeof seen !== "string" || seen !== preview.basis) {
+    return {
+      status: "stale",
+      message:
+        typeof seen === "string" && seen !== ""
+          ? "Replies changed since you opened this. Check what it would change now, then record the change again."
+          : "Check what this would change, then record the change again.",
+      preview,
+      values,
+    };
+  }
+  if (!preview.changed)
+    return { status: "ok", message: "Nothing to change: that is the saved answer." };
   const { error } = await supabase.rpc("override_rsvp_response", {
     p_wedding: ids.data.workspaceId,
     p_member_id: ids.data.memberId,

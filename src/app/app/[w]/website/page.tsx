@@ -25,14 +25,15 @@ export default async function WebsitePage({ params }: { params: Promise<{ w: str
   const wid = access.wedding.id;
   const base = `/app/${wid}`;
 
-  if (!hasCapability(access, "plan.edit")) {
+  if (!hasCapability(access, "plan.edit") || !hasCapability(access, "guests.manage")) {
     return (
       <div className="max-w-3xl space-y-4">
         <h1 className="font-serif text-headline-mobile md:text-headline-lg">Guest website</h1>
         <Card>
           <p className="text-body-md">
-            The guest website is managed by the workspace owner and partner. You can ask them to
-            share the link once it is published.
+            The guest website is managed by the workspace owner and partner, and by planners they
+            have given both Guests and Plan access. You can ask them to share the link once it is
+            published.
           </p>
         </Card>
       </div>
@@ -108,13 +109,20 @@ export default async function WebsitePage({ params }: { params: Promise<{ w: str
                 your latest saved draft.
               </p>
             )}
-            <PublishForm
-              workspaceId={wid}
-              version={version}
-              suggestedSlug={suggestSlug(draft.title)}
-              currentSlug={site.slug}
-              republish={site.published}
-            />
+            {hasCapability(access, "site.publish") ? (
+              <PublishForm
+                workspaceId={wid}
+                version={version}
+                suggestedSlug={suggestSlug(draft.title)}
+                currentSlug={site.slug}
+                republish={site.published}
+              />
+            ) : (
+              <p className="text-body-md text-ink-muted" data-testid="publish-reserved">
+                Only the owner and partner can publish the website. Save your draft and ask them to
+                publish it.
+              </p>
+            )}
             {site.published && <UnpublishForm workspaceId={wid} version={version} />}
           </Card>
         </>

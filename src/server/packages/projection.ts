@@ -1,5 +1,5 @@
 import "server-only";
-import { summarizeBudget } from "@/domain/budget/summary";
+import { summarizeBudget, type ItemCounts } from "@/domain/budget/summary";
 import { summarizeResponses } from "@/domain/guests/rsvp";
 import type { SectionId } from "@/domain/packages/catalog";
 import type {
@@ -8,20 +8,23 @@ import type {
   DecisionIn,
   DocumentIn,
   EventIn,
+  GuaranteeIn,
   PaymentsIn,
   ProjectionInput,
   RsvpIn,
   SeatingIn,
   VendorIn,
 } from "@/domain/packages/sections";
+import { todayInZone } from "@/domain/dates/date-only";
 import { staleReasons } from "@/domain/comparison/staleness";
 import { buildSeatingPlan, snapshotState } from "@/domain/seating/plan";
-import { loadBudget } from "@/server/budget/queries";
+import { loadBudget, loadItemCounts } from "@/server/budget/queries";
 import { loadCandidates } from "@/server/candidates/queries";
 import { loadComparison, loadComparisons } from "@/server/comparisons/queries";
 import { loadBoard, loadBoards } from "@/server/design/queries";
 import { loadDocuments } from "@/server/documents/queries";
 import { loadEventData } from "@/server/events/queries";
+import { loadGuarantees } from "@/server/events/guarantee";
 import { loadLedger } from "@/server/ledger/queries";
 import { loadSeating } from "@/server/seating/queries";
 import { createUserClient } from "@/server/supabase/server";
@@ -61,6 +64,10 @@ export async function loadProjection(
       want.has("design") ? loadBoards(workspaceId) : null,
       want.has("decisions") ? loadComparisons(workspaceId) : null,
     ]);
+
+  const eventCounts: ReadonlyMap<string, ItemCounts> = budgetData
+    ? await loadItemCounts(workspaceId, budgetData.items)
+    : new Map();
 
   const events: EventIn[] = (eventData?.events ?? []).map((e) => ({
     id: e.id,
@@ -105,6 +112,7 @@ export async function loadProjection(
           targetMinor: settings.targetBudgetMinor,
           reserveBp: budgetData.reserveBp,
           guestCount: settings.targetGuestCount,
+          eventCounts,
           categories: budgetData.categories,
           items: budgetData.items,
           commitments: ledger.commitments
@@ -179,6 +187,21 @@ export async function loadProjection(
           .filter((m) => m.eventId === e.id)
           .map((m) => ({ name: m.name, accepted: s.mealCounts.get(m.id) ?? 0 }))
           .filter((m) => m.accepted > 0),
+      });
+    }
+  }
+
+  // Locked caterer counts (REL-08). Packages are owner and partner only, so RLS returns them.
+  const guarantees: GuaranteeIn[] = [];
+  if (want.has("rsvp")) {
+    for (const [eventId, g] of await loadGuarantees(workspaceId)) {
+      if (!g.current) continue;
+      guarantees.push({
+        eventId,
+        count: g.current.count,
+        lockedOn: todayInZone(settings.timezone, new Date(g.current.lockedAt)),
+        dueOn: g.current.dueOn,
+        revisions: g.history.length,
       });
     }
   }
@@ -272,6 +295,7 @@ export async function loadProjection(
     budget,
     payments,
     rsvp,
+    guarantees,
     seating,
     boards: boardsIn,
     documents: documentsIn,

@@ -7,9 +7,20 @@ import { SelectField } from "@/components/ui/select-field";
 import { TextAreaField } from "@/components/ui/text-area-field";
 import { TextField } from "@/components/ui/text-field";
 import { ALLOCATION_ROWS, INSTALLMENT_ROWS } from "@/domain/ledger/input";
-import { recordPayment, voidPayment, type LedgerActionState } from "@/server/ledger/actions";
+import {
+  createInvoice,
+  recordPayment,
+  voidInvoice,
+  voidPayment,
+  type LedgerActionState,
+} from "@/server/ledger/actions";
 
 const idle: LedgerActionState = { status: "idle" };
+/**
+ * A form that clears after a save. The count of saves travels with the result, so the fresh form and
+ * the "saved" message arrive in the same render and never pick up the values of an earlier refused try.
+ */
+type FormRun = { state: LedgerActionState; created: number };
 type Action = (state: LedgerActionState, form: FormData) => Promise<LedgerActionState>;
 
 function Feedback({ state }: { state: LedgerActionState }) {
@@ -230,6 +241,7 @@ export function PaymentForm({
   workspaceId,
   commitmentId,
   costs,
+  invoices,
   currency,
   today,
   idPrefix,
@@ -237,19 +249,19 @@ export function PaymentForm({
   workspaceId: string;
   commitmentId?: string;
   costs?: readonly CostOption[];
+  /** Invoices on this booking a payment can name. Only offered on a booking. */
+  invoices?: readonly CostOption[];
   currency: string;
   today: string;
   idPrefix: string;
 }) {
-  const [created, setCreated] = useState(0);
   const [keyBase] = useState(() => crypto.randomUUID());
-  const [state, formAction, pending] = useActionState(
-    async (prev: LedgerActionState, form: FormData) => {
-      const next = await recordPayment(prev, form);
-      if (next.status === "ok") setCreated((n) => n + 1);
-      return next;
+  const [{ state, created }, formAction, pending] = useActionState(
+    async (prev: FormRun, form: FormData): Promise<FormRun> => {
+      const next = await recordPayment(prev.state, form);
+      return { state: next, created: next.status === "ok" ? prev.created + 1 : prev.created };
     },
-    idle,
+    { state: idle, created: 0 },
   );
   const echoed = state.status === "error" ? state.values : undefined;
   const errors = state.status === "error" ? state.fieldErrors : {};
@@ -286,6 +298,23 @@ export function PaymentForm({
         <option value="charge">I paid money</option>
         <option value="refund">I got money back (refund)</option>
       </SelectField>
+      {commitmentId && invoices && invoices.length > 0 && (
+        <SelectField
+          key={`invoice:${v("invoiceId")}`}
+          label="Which invoice is this paying?"
+          hint="Optional. Only for money you paid, not for a refund."
+          name="invoiceId"
+          defaultValue={v("invoiceId")}
+          error={errors.invoiceId}
+        >
+          <option value="">Not for a specific invoice</option>
+          {invoices.map((i) => (
+            <option key={i.id} value={i.id}>
+              {i.label}
+            </option>
+          ))}
+        </SelectField>
+      )}
       <TextField
         label={`Amount (${currency})`}
         name="amount"
@@ -355,6 +384,122 @@ export function VoidPaymentForm({
       <TextField
         label="Why was this a mistake?"
         hint="It stays in the history, marked as entered by mistake, and no longer counts."
+        name="reason"
+        required
+        maxLength={200}
+        autoComplete="off"
+        defaultValue={echoed ?? ""}
+        error={state.status === "error" ? state.fieldErrors.reason : undefined}
+      />
+      <Button type="submit" variant="outline" size="sm" disabled={pending}>
+        {pending ? "Saving…" : "Mark as entered by mistake"}
+      </Button>
+      <Feedback state={state} />
+    </form>
+  );
+}
+
+// ---------------------------------------------------------------- invoices
+
+/** Records an invoice the vendor sent. It does not change the contract or the budget forecast. */
+export function InvoiceForm({
+  workspaceId,
+  commitmentId,
+  currency,
+  idPrefix,
+}: {
+  workspaceId: string;
+  commitmentId: string;
+  currency: string;
+  idPrefix: string;
+}) {
+  const [keyBase] = useState(() => crypto.randomUUID());
+  const [{ state, created }, formAction, pending] = useActionState(
+    async (prev: FormRun, form: FormData): Promise<FormRun> => {
+      const next = await createInvoice(prev.state, form);
+      return { state: next, created: next.status === "ok" ? prev.created + 1 : prev.created };
+    },
+    { state: idle, created: 0 },
+  );
+  const echoed = state.status === "error" ? state.values : undefined;
+  const errors = state.status === "error" ? state.fieldErrors : {};
+  const v = (k: string) => echoed?.[k] ?? "";
+  return (
+    <form action={formAction} className="space-y-4" noValidate key={`${idPrefix}-${created}`}>
+      <Hidden values={{ workspaceId, commitmentId }} />
+      <input type="hidden" name="idempotencyKey" value={`${keyBase}-${created}`} />
+      <TextField
+        label={`Amount on the invoice (${currency})`}
+        name="amount"
+        required
+        inputMode="decimal"
+        autoComplete="off"
+        placeholder="e.g. 6000"
+        defaultValue={v("amount")}
+        error={errors.amount}
+      />
+      <TextField
+        label="Invoice number"
+        hint="Optional. The same number twice on one booking is refused, which protects against double entry."
+        name="number"
+        autoComplete="off"
+        maxLength={60}
+        defaultValue={v("number")}
+        error={errors.number}
+      />
+      <div className="grid gap-4 sm:grid-cols-2">
+        <TextField
+          label="Date issued"
+          hint="Optional."
+          name="issuedOn"
+          type="date"
+          defaultValue={v("issuedOn")}
+          error={errors.issuedOn}
+        />
+        <TextField
+          label="Due date"
+          hint="Optional."
+          name="dueOn"
+          type="date"
+          defaultValue={v("dueOn")}
+          error={errors.dueOn}
+        />
+      </div>
+      <TextAreaField
+        label="Note"
+        name="note"
+        rows={2}
+        maxLength={500}
+        defaultValue={v("note")}
+        error={errors.note}
+      />
+      <p className="text-body-sm text-ink-muted">
+        An invoice is a request for money. It doesn&apos;t change what you&apos;ve committed to, and
+        it isn&apos;t a payment.
+      </p>
+      <Button type="submit" variant="secondary" disabled={pending}>
+        {pending ? "Adding…" : "Add this invoice"}
+      </Button>
+      <Feedback state={state} />
+    </form>
+  );
+}
+
+export function VoidInvoiceForm({
+  workspaceId,
+  invoiceId,
+}: {
+  workspaceId: string;
+  invoiceId: string;
+}) {
+  const [state, formAction, pending] = useTrayActionState(voidInvoice, idle);
+  const echoed = state.status === "error" ? state.values.reason : undefined;
+  return (
+    <form action={formAction} className="space-y-3" noValidate>
+      <Hidden values={{ workspaceId, invoiceId }} />
+      <TextField
+        label="Why was this a mistake?"
+        hint="It stays in the history, marked as entered by mistake, and no longer counts. Payments that named it stay as payments on the booking."
         name="reason"
         required
         maxLength={200}

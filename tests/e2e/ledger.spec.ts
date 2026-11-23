@@ -125,9 +125,9 @@ test("book, pay, refund: T03/T04 figures, forecast counts the booking once", asy
 
   // Lands on the booking.
   await expect(page.getByRole("heading", { level: 1, name: "Garden House" })).toBeVisible();
-  await expect(figure(page, "Committed")).toHaveText("$10,000.00");
+  await expect(figure(page, "Contract")).toHaveText("$10,000.00");
   await expect(figure(page, "Paid so far")).toHaveText("$0.00");
-  await expect(figure(page, "Still owed")).toHaveText("$10,000.00");
+  await expect(figure(page, "Still to pay")).toHaveText("$10,000.00");
   await expect(page.getByText("Deposit · January 15, 2027")).toBeVisible();
 
   // Pay $2,500, then a $500 refund.
@@ -144,7 +144,7 @@ test("book, pay, refund: T03/T04 figures, forecast counts the booking once", asy
   await form.getByRole("button", { name: "Record this" }).click();
   await expect(page.getByText("Refund recorded.")).toBeVisible();
   await expect(figure(page, "Paid so far")).toHaveText("$2,000.00");
-  await expect(figure(page, "Still owed")).toHaveText("$8,000.00");
+  await expect(figure(page, "Still to pay")).toHaveText("$8,000.00");
 
   // The vendor shows as booked, and the budget counts the booking once.
   await page.goto(`${base}/discover/${candidate}`);
@@ -240,7 +240,7 @@ test("amending keeps the old version and the payments; voiding a mistake stops i
     .fill("11000");
   await page.getByLabel(/signed or explicitly agreed/).check();
   await page.getByRole("button", { name: "Save the amended booking" }).click();
-  await expect(figure(page, "Committed")).toHaveText("$11,000.00");
+  await expect(figure(page, "Contract")).toHaveText("$11,000.00");
   await expect(figure(page, "Paid so far")).toHaveText("$2,500.00");
   await expect(page.getByRole("heading", { name: "Earlier versions" })).toBeVisible();
   expect(

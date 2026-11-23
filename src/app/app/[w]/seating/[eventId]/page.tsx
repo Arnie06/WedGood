@@ -32,7 +32,11 @@ import {
   TablePanel,
 } from "@/features/seating/seating-panels";
 import { hasCapability, requireWorkspace } from "@/server/auth/workspace-guard";
-import { loadSeating } from "@/server/seating/queries";
+import { effectiveCapacity } from "@/domain/events/location";
+import { loadEventLocations } from "@/server/events/location";
+import { loadDriftRows } from "@/server/events/guarantee";
+import { DriftNote } from "@/features/events/drift-note";
+import { loadSeating, loadSeatingVersions } from "@/server/seating/queries";
 
 export const metadata: Metadata = { title: "Seating plan" };
 
@@ -60,7 +64,7 @@ export default async function SeatingPage({
   const base = `/app/${wid}`;
   if (!z.uuid().safeParse(eventId).success) notFound();
 
-  if (!hasCapability(access, "guests.manage")) {
+  if (!hasCapability(access, "seating.manage")) {
     return (
       <div className="max-w-3xl space-y-4">
         <h1 className="font-serif text-headline-mobile md:text-headline-lg">Seating plan</h1>
@@ -77,6 +81,39 @@ export default async function SeatingPage({
   const data = await loadSeating(wid, eventId);
   if (!data) notFound();
   const { event, layout } = data;
+  const versions = layout ? await loadSeatingVersions(wid, eventId) : [];
+  // The caterer count locked for this event, against today's replies. Seating is manager-only, so the
+  // reply counts are always readable here.
+  const drift = (
+    await loadDriftRows(wid, {
+      canManageGuests: true,
+      shareGuestTotals: access.wedding.shareGuestTotals,
+    })
+  ).find((r) => r.eventId === eventId);
+  // The room the event is held in. The event's own capacity wins over the space and the venue.
+  const place = (await loadEventLocations(wid)).get(eventId) ?? null;
+  const roomCapacity = effectiveCapacity({
+    eventCapacity: event.capacity,
+    eventKind: data.event.kind,
+    venue: place
+      ? {
+          seatedCapacity: place.venue.seatedCapacity,
+          ceremonyCapacity: place.venue.ceremonyCapacity,
+          archived: place.venue.archived,
+        }
+      : null,
+    space: place?.space
+      ? { seatedCapacity: place.space.seatedCapacity, archived: place.space.archived }
+      : null,
+  });
+  const roomName =
+    roomCapacity === null
+      ? null
+      : roomCapacity.source === "event"
+        ? event.name
+        : roomCapacity.source === "space"
+          ? (place?.space?.name ?? null)
+          : (place?.venue.name ?? null);
 
   const header = (
     <header className="space-y-2">
@@ -86,12 +123,27 @@ export default async function SeatingPage({
           All events
         </Link>
         <Link
+          href={`${base}/plan/events/${eventId}`}
+          className={`${link} inline-flex min-h-11 items-center`}
+        >
+          Event page
+        </Link>
+        <Link
           href={`${base}/guests/invitations`}
           className={`${link} inline-flex min-h-11 items-center`}
         >
           Events and invitations
         </Link>
       </p>
+      {drift && (
+        <DriftNote
+          locked={drift.locked}
+          yes={drift.yes}
+          waiting={drift.waiting}
+          href={`${base}/plan/events/${eventId}#caterer-heading`}
+          testId="seating-drift-note"
+        />
+      )}
     </header>
   );
 
@@ -397,10 +449,16 @@ export default async function SeatingPage({
               Tentative (waiting for an answer, not counted as seated): {t.tentativeSeated}
             </p>
           )}
-          {event.capacity !== null && t.capacity > event.capacity && (
+          {roomCapacity !== null && (
+            <p className="text-body-md text-ink-muted" data-testid="room-capacity">
+              Tables seat {t.capacity} · {roomName}{" "}
+              {roomCapacity.source === "event" ? "is set up for" : "seats"} {roomCapacity.value}
+            </p>
+          )}
+          {roomCapacity !== null && t.capacity > roomCapacity.value && (
             <p role="status" className="text-body-md text-danger">
-              Your tables have {t.capacity} seats, which is more than the {event.capacity} this
-              event is set up for.
+              Your tables have {t.capacity} seats, which is more than the {roomCapacity.value}{" "}
+              {roomCapacity.source === "event" ? "this event is set up for" : `${roomName} holds`}.
             </p>
           )}
           {shortBy > 0 && (
@@ -460,6 +518,43 @@ export default async function SeatingPage({
           )}
         </Card>
       </section>
+
+      {versions.length > 0 && (
+        <section aria-labelledby="versions" className="space-y-3">
+          <h2 id="versions" className="font-serif text-headline-sm">
+            Finalized versions ({versions.length})
+          </h2>
+          <p className="text-body-sm text-ink-muted">
+            Each time you finalize, a copy is kept as it was. Older copies are never changed.
+          </p>
+          <ul className="space-y-2">
+            {versions.map((v, i) => (
+              <li key={v.id}>
+                <Card className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                  <div className="min-w-0 space-y-1">
+                    <p className="text-body-md font-semibold">{when(v.finalizedAt)}</p>
+                    <p className="text-body-sm text-ink-muted">
+                      {v.accepted} attending, {v.confirmedSeated} seated
+                      {v.tentativeSeated > 0
+                        ? `, ${v.tentativeSeated} held for guests yet to answer`
+                        : ""}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {i === 0 && <Badge tone="neutral">Latest</Badge>}
+                    <Link
+                      href={`${base}/seating/${eventId}/versions/${v.id}`}
+                      className={`${link} inline-flex min-h-11 items-center`}
+                    >
+                      View
+                    </Link>
+                  </div>
+                </Card>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section aria-labelledby="queue" className="space-y-3">
         <h2 id="queue" className="font-serif text-headline-sm">

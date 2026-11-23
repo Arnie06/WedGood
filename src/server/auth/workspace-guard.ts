@@ -7,7 +7,7 @@ import {
   parseGrants,
   type Capability,
   type MembershipRole,
-  type PartnerGrants,
+  type MemberGrants,
 } from "@/domain/permissions";
 import { createUserClient } from "@/server/supabase/server";
 import { requireSessionUser, type SessionUser } from "./session";
@@ -16,8 +16,15 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export type WorkspaceAccess = {
   user: SessionUser;
-  wedding: { id: string; name: string; date: string | null; timezone: string };
-  membership: { id: string; role: MembershipRole; grants: PartnerGrants; version: number };
+  wedding: {
+    id: string;
+    name: string;
+    date: string | null;
+    timezone: string;
+    /** Owner setting: editors and viewers may see guest totals (never names). */
+    shareGuestTotals: boolean;
+  };
+  membership: { id: string; role: MembershipRole; grants: MemberGrants; version: number };
 };
 
 /**
@@ -33,7 +40,9 @@ export const requireWorkspace = cache(async (workspaceId: string): Promise<Works
   const supabase = await createUserClient();
   const { data, error } = await supabase
     .from("memberships")
-    .select("id, role, permissions, version, weddings!inner(id, name, date, timezone)")
+    .select(
+      "id, role, permissions, version, weddings!inner(id, name, date, timezone, share_guest_totals)",
+    )
     .eq("wedding_id", workspaceId)
     .eq("user_id", user.id)
     .eq("status", "active")
@@ -51,6 +60,7 @@ export const requireWorkspace = cache(async (workspaceId: string): Promise<Works
       name: wedding.name,
       date: wedding.date,
       timezone: wedding.timezone,
+      shareGuestTotals: wedding.share_guest_totals,
     },
     membership: {
       id: data.id,

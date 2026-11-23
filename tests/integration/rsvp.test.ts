@@ -236,13 +236,45 @@ describe("accountless response", () => {
     await invite(owner, s.w, s.e, [other]);
     expect(s.v.members.map((m) => m.name)).toEqual(["Ada Example", "Bo Example"]);
     expect(JSON.stringify(s.v)).not.toContain("Zed");
+    // UX-07 added a "saved" flag and an opaque person key; UX-11 the keys of answered questions.
+    // No text, no answers, no real ids.
     expect(Object.keys(s.v.members[0]!).sort()).toEqual([
+      "answered",
+      "detailsSaved",
       "id",
       "isPlusOne",
       "mealOptionId",
       "name",
+      "personKey",
       "status",
     ]);
+  });
+
+  it("UX-04: names the event's own zone, else the wedding's, and keeps the stored instant", async () => {
+    const w = await createWedding(owner);
+    const e = await mkEvent(owner, w);
+    const g = await mkGuest(owner, w, "Zed Example");
+    // End of a picked day in Tokyo, as the invite action computes it.
+    const deadline = new Date(Date.now() + 10 * 86_400_000);
+    deadline.setUTCHours(14, 59, 59, 0);
+    const inv = await invite(owner, w, e, [g], { deadline: deadline.toISOString() });
+    expect(inv.error).toBeNull();
+    const weddingZone = await withSuperuser(
+      async (db) =>
+        (await db.query("select timezone from public.weddings where id = $1", [w])).rows[0]
+          .timezone as string,
+    );
+    type Zoned = { deadline: string; event: { timezone: string } };
+    const before = (await view(inv.token.raw)).data as Zoned;
+    expect(before.event.timezone).toBe(weddingZone);
+    await withSuperuser((db) =>
+      db.query("update public.events set time_zone = 'Asia/Tokyo' where id = $1", [e]),
+    );
+    const after = (await view(inv.token.raw)).data as Zoned;
+    expect(after.event.timezone).toBe("Asia/Tokyo");
+    // The zone is presentation only: the deadline instant is never rewritten.
+    expect(Date.parse(after.deadline)).toBe(deadline.getTime());
+    expect(Date.parse(before.deadline)).toBe(deadline.getTime());
   });
 
   it("records per-person answers and meal; counts follow", async () => {

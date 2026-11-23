@@ -5,8 +5,8 @@ import { z } from "zod";
 import { parseTimelineInput, type TimelineFormValues } from "@/domain/timeline/timeline";
 import { ForbiddenError, requireCapability } from "@/server/auth/workspace-guard";
 import { createUserClient } from "@/server/supabase/server";
-import { loadWeddingSettings } from "@/server/workspace/queries";
 import { friendlyTimelineError } from "./errors";
+import { loadEventLabels } from "./queries";
 
 export type TimelineActionState =
   | { status: "idle" }
@@ -81,9 +81,14 @@ export async function createTimelineItem(
   if (denied) return denied;
 
   const values = read(form);
-  // The zone comes from the workspace, never from the browser.
-  const settings = await loadWeddingSettings(ids.data.workspaceId);
-  const parsed = parseTimelineInput(values, settings.timezone);
+  // The zone is the event's (its own, else the wedding's), read here, never taken from the browser.
+  // The database is told which zone the clock time was typed in and refuses the write if it changed.
+  const label = (await loadEventLabels(ids.data.workspaceId)).find(
+    (e) => e.id === ids.data.eventId,
+  );
+  if (!label) return reload;
+  const zone = label.effectiveTimeZone;
+  const parsed = parseTimelineInput(values, zone);
   if (!parsed.ok) return fail("Please fix the highlighted fields.", parsed.fieldErrors, values);
   const v = parsed.value;
 
@@ -102,6 +107,7 @@ export async function createTimelineItem(
     ...(v.vendor ? { p_vendor: v.vendor } : {}),
     p_status: v.status,
     p_idempotency_key: ids.data.idempotencyKey,
+    p_expected_zone: zone,
   });
   if (error) return fail(friendlyTimelineError(error), {}, values);
   refresh(ids.data.workspaceId);
@@ -122,15 +128,21 @@ export async function updateTimelineItem(
   if (denied) return denied;
 
   const values = read(form);
-  const timezone = z.string().min(1).max(64).safeParse(form.get("timezone"));
-  if (!timezone.success) return reload;
-  const parsed = parseTimelineInput(values, timezone.data);
+  const supabase = await createUserClient();
+  // The item's stored zone is authoritative (the database keeps it equal to its event's zone), so it
+  // is read here and never taken from the browser. If the zone changed after the form was opened, the
+  // item's version changed with it and the save below is refused as a conflict, not misread.
+  const stored = await supabase
+    .from("timeline_items")
+    .select("timezone")
+    .eq("id", ids.data.itemId)
+    .eq("wedding_id", ids.data.workspaceId)
+    .maybeSingle();
+  if (stored.error || !stored.data) return reload;
+  const parsed = parseTimelineInput(values, stored.data.timezone);
   if (!parsed.ok) return fail("Please fix the highlighted fields.", parsed.fieldErrors, values);
   const v = parsed.value;
 
-  const supabase = await createUserClient();
-  // The item's stored zone is authoritative: a tampered zone field can only misread the
-  // wall-clock the person typed, and the RPC never accepts a zone.
   const { error } = await supabase.rpc("update_timeline_item", {
     p_wedding: ids.data.workspaceId,
     p_item: ids.data.itemId,

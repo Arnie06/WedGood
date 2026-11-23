@@ -1,4 +1,5 @@
 import type { DateOnly } from "@/domain/dates/date-only";
+import { bookingLadder, invoiceRows, type InvoiceRow, type Ladder } from "@/domain/ledger/invoices";
 import { reconcileSchedule, type ScheduleSummary } from "@/domain/ledger/schedule";
 import type {
   AllocationRecord,
@@ -17,6 +18,9 @@ export type CommitmentView = {
   overpaidMinor: number;
   schedule: ScheduleSummary;
   installments: InstallmentRecord[];
+  /** This booking's invoices, oldest first, with what each has been paid. Voided ones included. */
+  invoices: InvoiceRow[];
+  ladder: Ladder;
 };
 
 /** Net paid counts recorded charges minus refunds, ignoring payments marked as mistakes. */
@@ -34,6 +38,11 @@ export function viewCommitment(
   const payments = ledger.payments.filter((p) => p.commitmentId === commitment.id);
   const installments = ledger.installments.filter((i) => i.commitmentId === commitment.id);
   const net = netPaid(payments);
+  const invoices = invoiceRows(
+    ledger.invoices.filter((i) => i.commitmentId === commitment.id),
+    payments,
+    today,
+  );
   return {
     commitment,
     allocations: ledger.allocations.filter((a) => a.commitmentId === commitment.id),
@@ -43,6 +52,8 @@ export function viewCommitment(
     overpaidMinor: Math.max(net - commitment.amountMinor, 0),
     schedule: reconcileSchedule(commitment.amountMinor, installments, net, today),
     installments,
+    invoices,
+    ladder: bookingLadder(commitment.amountMinor, net, invoices),
   };
 }
 

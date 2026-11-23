@@ -35,6 +35,8 @@ export type ComparisonRecord = {
   id: string;
   title: string;
   guestCount: number;
+  /** The event whose planning number this count was taken from, if it still is that number. */
+  countEventId: string | null;
   currency: string;
   criteria: Criterion[];
   acceptsUnknowns: boolean;
@@ -105,7 +107,7 @@ export async function loadComparison(
   const { data: c, error } = await supabase
     .from("comparisons")
     .select(
-      "id, title, scenario_guest_count, currency, criteria, accepts_unknowns, version, archived_at",
+      "id, title, scenario_guest_count, count_event_id, currency, criteria, accepts_unknowns, version, archived_at",
     )
     .eq("wedding_id", workspaceId)
     .eq("id", comparisonId)
@@ -149,6 +151,7 @@ export async function loadComparison(
     id: c.id,
     title: c.title,
     guestCount: c.scenario_guest_count,
+    countEventId: c.count_event_id,
     currency: c.currency,
     criteria: toCriteria(c.criteria),
     acceptsUnknowns: c.accepts_unknowns,

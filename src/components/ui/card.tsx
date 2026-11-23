@@ -12,7 +12,7 @@ export function Card({
   return (
     <Component
       className={cn(
-        "rounded-card border border-border-hairline bg-surface p-5 shadow-ambient-sm sm:p-6",
+        "rounded-card border border-border-hairline bg-surface p-5 shadow-ambient-sm sm:p-6 compact:p-4",
         className,
       )}
       {...props}

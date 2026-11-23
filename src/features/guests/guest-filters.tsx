@@ -5,6 +5,7 @@ import { useEffect, useRef, useTransition } from "react";
 import { buttonClasses } from "@/components/ui/button";
 import { SelectField } from "@/components/ui/select-field";
 import { TextField } from "@/components/ui/text-field";
+import { REPLY_FILTERS, REPLY_FILTER_LABELS, type ReplyFilter } from "@/domain/guests/replies";
 
 /**
  * Search and filters that apply as you type or choose, with no "Apply" step. It is still a
@@ -16,6 +17,10 @@ export function GuestFilters({
   age,
   tag,
   allTags,
+  events,
+  event,
+  reply,
+  asksMeal,
   showArchived,
   filtering,
 }: {
@@ -24,6 +29,12 @@ export function GuestFilters({
   age: string;
   tag: string;
   allTags: readonly string[];
+  /** Events the replies can be shown for. Empty hides the selector. */
+  events: readonly { id: string; name: string }[];
+  event: string;
+  reply: ReplyFilter | "";
+  /** The chosen event offers meal choices; otherwise "without a meal" is not offered. */
+  asksMeal: boolean;
   showArchived: boolean;
   filtering: boolean;
 }) {
@@ -34,6 +45,22 @@ export function GuestFilters({
 
   useEffect(() => () => window.clearTimeout(timer.current), []);
 
+  // The selects are uncontrolled so they work without JavaScript. When a link or Back changes the
+  // address, show the filter that now applies, without remounting (which would drop focus).
+  useEffect(() => {
+    const form = formRef.current;
+    if (!form) return;
+    for (const [name, value] of [
+      ["event", event],
+      ["reply", reply],
+      ["age", age],
+      ["tag", tag],
+    ] as const) {
+      const el = form.elements.namedItem(name);
+      if (el instanceof HTMLSelectElement && el.value !== value) el.value = value;
+    }
+  }, [event, reply, age, tag]);
+
   function apply() {
     const form = formRef.current;
     if (!form) return;
@@ -41,6 +68,8 @@ export function GuestFilters({
     for (const [key, value] of new FormData(form)) {
       if (typeof value === "string" && value !== "") params.set(key, value);
     }
+    // A reply filter means nothing without an event.
+    if (!params.has("event")) params.delete("reply");
     const query = params.toString();
     startTransition(() => {
       router.replace(query ? `${base}/guests?${query}` : `${base}/guests`, { scroll: false });
@@ -85,6 +114,34 @@ export function GuestFilters({
           timer.current = window.setTimeout(apply, 300);
         }}
       />
+      {events.length > 0 && (
+        <div className="grid gap-3 sm:grid-cols-2 sm:items-end">
+          <SelectField
+            label="Show replies for"
+            name="event"
+            defaultValue={event}
+            onChange={apply}
+            hint="Adds each guest's answer, meal and seat for that event."
+          >
+            <option value="">No event</option>
+            {events.map((e) => (
+              <option key={e.id} value={e.id}>
+                {e.name}
+              </option>
+            ))}
+          </SelectField>
+          {event !== "" && (
+            <SelectField label="Reply" name="reply" defaultValue={reply} onChange={apply}>
+              <option value="">Any reply</option>
+              {REPLY_FILTERS.filter((f) => asksMeal || f !== "no_meal").map((f) => (
+                <option key={f} value={f}>
+                  {REPLY_FILTER_LABELS[f]}
+                </option>
+              ))}
+            </SelectField>
+          )}
+        </div>
+      )}
       <div className="grid gap-3 sm:grid-cols-2">
         <SelectField label="Adult or child" name="age" defaultValue={age} onChange={apply}>
           <option value="">Everyone</option>

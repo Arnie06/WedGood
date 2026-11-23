@@ -77,9 +77,11 @@ export const SECTIONS: readonly SectionDef[] = [
   {
     id: "rsvp",
     label: "Guest counts and meals",
-    description: "Invited, accepted, pending and declined, with meal totals.",
+    description:
+      "Invited, accepted, pending and declined, with meal totals and any locked caterer count.",
     capability: "guests.manage",
-    shares: "Counts only. No guest names, contacts or dietary details.",
+    shares:
+      "Counts only, including the caterer count you locked. No guest names, contacts or dietary details.",
   },
   {
     id: "seating",
@@ -178,7 +180,8 @@ export const PRESETS: readonly PresetDef[] = [
     id: "caterer",
     label: "Caterer brief",
     recipient: "Caterer",
-    summary: "Events, headcount and meal totals. No names or dietary details.",
+    summary:
+      "Events, headcount, meal totals and your locked caterer count. No names or dietary details.",
     sections: ["overview", "events", "timeline", "rsvp"],
   },
   {

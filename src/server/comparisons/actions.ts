@@ -14,10 +14,12 @@ import {
   parseSetup,
   type ComparisonField,
 } from "@/domain/comparison/input";
+import { followsEvent, repriceSuggestion } from "@/domain/comparison/reprice";
 import { toOptionInputs } from "@/features/compare/mappers";
-import { ForbiddenError, requireCapability } from "@/server/auth/workspace-guard";
+import { ForbiddenError, requireCapability, requireWorkspace } from "@/server/auth/workspace-guard";
 import { createUserClient } from "@/server/supabase/server";
 import { friendlyComparisonError } from "./errors";
+import { loadLiveCounts } from "./live-count";
 import { loadComparison } from "./queries";
 
 export type ComparisonActionState =
@@ -72,6 +74,7 @@ export async function createComparison(
     title: str(form, "title"),
     guestCount: str(form, "guestCount"),
     proposalIds: strs(form, "proposalIds"),
+    countEventId: str(form, "countEventId"),
   };
   const ids = z.object({ workspaceId: uuid, key: idemKey }).safeParse({
     workspaceId: form.get("workspaceId"),
@@ -80,9 +83,22 @@ export async function createComparison(
   if (!ids.success) return fail("Reload the page and try again.", {}, values);
   const denied = await authorize(ids.data.workspaceId);
   if (denied) return denied;
+  const access = await requireWorkspace(ids.data.workspaceId);
 
   const parsed = parseSetup(values);
   if (!parsed.ok) return fail("Please check the highlighted details.", parsed.errors, values);
+
+  // The count may have been prefilled from an event's planning number. Keep that link only when the
+  // saved number is still exactly what the replies give now; a number the couple changed is theirs.
+  const eventId = uuid.safeParse(form.get("countEventId"));
+  let countEvent: string | null = null;
+  if (eventId.success) {
+    const live = await loadLiveCounts(access);
+    const match = live.events.find((e) => e.eventId === eventId.data);
+    if (match && followsEvent(parsed.value.guestCount, match.planningNumber)) {
+      countEvent = match.eventId;
+    }
+  }
 
   const supabase = await createUserClient();
   const { data, error } = await supabase.rpc("create_comparison", {
@@ -92,6 +108,7 @@ export async function createComparison(
     p_proposals: parsed.value.proposalIds,
     p_criteria: DEFAULT_CRITERIA.map((c) => ({ id: randomUUID(), ...c })),
     p_idempotency_key: ids.data.key,
+    ...(countEvent !== null && { p_count_event: countEvent }),
   });
   if (error || !data) return fail(friendlyComparisonError(error ?? {}), {}, values);
   refresh(ids.data.workspaceId);
@@ -276,4 +293,49 @@ export async function archiveComparison(
   if (error) return fail(friendlyComparisonError(error));
   refresh(ids.data.workspaceId);
   redirect(`/app/${ids.data.workspaceId}/discover/compare`);
+}
+
+/**
+ * Makes a COPY of a comparison at the event's planning number now. The original and any decision on
+ * it are untouched. The number comes from the replies on the server; the posted number only says
+ * which one the person was shown, so a reply that arrived in between is reported, not silently used.
+ */
+export async function repriceComparison(
+  _: ComparisonActionState,
+  form: FormData,
+): Promise<ComparisonActionState> {
+  const ids = z
+    .object({ workspaceId: uuid, comparisonId: uuid, shown: z.coerce.number().int(), key: idemKey })
+    .safeParse({
+      workspaceId: form.get("workspaceId"),
+      comparisonId: form.get("comparisonId"),
+      shown: form.get("guestCount"),
+      key: form.get("idempotencyKey"),
+    });
+  if (!ids.success) return fail("Reload the page and try again.");
+  const denied = await authorize(ids.data.workspaceId);
+  if (denied) return denied;
+  const access = await requireWorkspace(ids.data.workspaceId);
+
+  const cmp = await loadComparison(ids.data.workspaceId, ids.data.comparisonId);
+  if (!cmp) return fail(friendlyComparisonError({ code: "55000" }));
+  const live = await loadLiveCounts(access);
+  const now = live.events.find((e) => e.eventId === cmp.countEventId)?.planningNumber;
+  const suggestion = repriceSuggestion(cmp.guestCount, now);
+  if (suggestion === null || suggestion !== ids.data.shown) {
+    return fail(
+      "Replies changed since this page loaded, so the suggested number is different now. Reload to see it.",
+    );
+  }
+
+  const supabase = await createUserClient();
+  const { data, error } = await supabase.rpc("reprice_comparison", {
+    p_wedding: ids.data.workspaceId,
+    p_comparison: ids.data.comparisonId,
+    p_guest_count: suggestion,
+    p_idempotency_key: ids.data.key,
+  });
+  if (error || !data) return fail(friendlyComparisonError(error ?? {}));
+  refresh(ids.data.workspaceId);
+  redirect(`/app/${ids.data.workspaceId}/discover/compare/${data}`);
 }

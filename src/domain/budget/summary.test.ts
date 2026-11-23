@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   estimateItem,
+  type ItemCounts,
   percentOfBp,
   summarizeBudget,
   type BudgetCategory,
@@ -261,5 +262,110 @@ describe("percentOfBp", () => {
     expect(percentOfBp(3_000_000_000_000_000, 10_000)).toBe(3_000_000_000_000_000);
     expect(() => percentOfBp(1, 10_001)).toThrow(RangeError);
     expect(() => percentOfBp(1, 0.5)).toThrow(RangeError);
+  });
+});
+
+/** Replies only, no plan: what REL-03 first shipped. */
+const replies = (n: number | null): ItemCounts => ({
+  count: n,
+  plan: null,
+  actual: n,
+  final: false,
+});
+
+describe("REL-03 count sources (ADR-031 D1)", () => {
+  const perGuest = (over: Partial<BudgetItem> & Pick<BudgetItem, "id">) =>
+    item({ costMode: "per_guest", amountMinor: 9_500, ...over });
+  const run = (items: BudgetItem[], eventCounts: Map<string, ItemCounts>, guestCount = 100) =>
+    summarizeBudget({
+      targetMinor: null,
+      reserveBp: null,
+      guestCount,
+      eventCounts,
+      categories: [cat("c")],
+      items,
+    });
+
+  it("an item without a source counts the guest target, as every item did before", () => {
+    const s = run([perGuest({ id: "a" })], new Map());
+    expect(s.forecastMinor).toBe(950_000);
+    expect(s.items[0]).toMatchObject({ count: 100, committedMinor: null });
+  });
+
+  it("an event source prices by the resolved count, not the guest target", () => {
+    const s = run(
+      [perGuest({ id: "a", countSource: "event_plan", countEventId: "e" })],
+      new Map([["a", replies(132)]]),
+    );
+    expect(s.forecastMinor).toBe(9_500 * 132);
+    expect(s.items[0]).toMatchObject({ count: 132 });
+  });
+
+  it("a typed source prices by the typed number and ignores the target", () => {
+    const s = run([perGuest({ id: "a", countSource: "typed", countTyped: 80 })], new Map());
+    expect(s.forecastMinor).toBe(9_500 * 80);
+  });
+
+  it("a missing count is unknown, never zero, for every source", () => {
+    const s = run(
+      [
+        perGuest({ id: "plan", countSource: "event_plan", countEventId: "e" }),
+        perGuest({ id: "yes", countSource: "event_yes", countEventId: "e" }),
+        perGuest({ id: "typed", countSource: "typed", countTyped: null }),
+      ],
+      new Map([
+        ["plan", replies(null)],
+        // "yes" is absent from the map entirely
+      ]),
+    );
+    expect(s.unknownItemCount).toBe(3);
+    expect(s.incomplete).toBe(true);
+    expect(s.forecastMinor).toBe(0);
+    expect(s.items.every((f) => f.estimate.state === "unknown")).toBe(true);
+  });
+
+  it("a contractual minimum still applies to a reply-based count", () => {
+    const s = run(
+      [perGuest({ id: "a", minQty: 120, countSource: "event_plan", countEventId: "e" })],
+      new Map([["a", replies(90)]]),
+    );
+    expect(s.forecastMinor).toBe(9_500 * 120);
+    expect(s.items[0]?.estimate).toMatchObject({ state: "known", billedQuantity: 120 });
+  });
+
+  it("a known zero is a known zero (everyone declined), not unknown", () => {
+    const s = run(
+      [perGuest({ id: "a", countSource: "event_yes", countEventId: "e" })],
+      new Map([["a", replies(0)]]),
+    );
+    expect(s.incomplete).toBe(false);
+    expect(s.forecastMinor).toBe(0);
+  });
+
+  it("only per-guest items read a count; fixed items ignore any source", () => {
+    const s = run(
+      [item({ id: "f", amountMinor: 5_000, countSource: "event_plan", countEventId: "e" })],
+      new Map([["f", replies(999)]]),
+    );
+    expect(s.forecastMinor).toBe(5_000);
+    expect(s.items[0]?.count).toBeNull();
+  });
+
+  it("a booked item keeps its commitment when replies move, and reports it as committed", () => {
+    const base = {
+      targetMinor: null,
+      reserveBp: null,
+      guestCount: 100,
+      categories: [cat("c")],
+      items: [perGuest({ id: "a", countSource: "event_plan", countEventId: "e" })],
+      commitments: [{ id: "k", amountMinor: 1_100_000, status: "active" as const }],
+      allocations: [{ commitmentId: "k", budgetItemId: "a", amountMinor: 1_100_000 }],
+    };
+    const before = summarizeBudget({ ...base, eventCounts: new Map([["a", replies(116)]]) });
+    const after = summarizeBudget({ ...base, eventCounts: new Map([["a", replies(150)]]) });
+    expect(after.forecastMinor).toBe(before.forecastMinor);
+    expect(after.forecastMinor).toBe(1_100_000);
+    expect(after.items[0]).toMatchObject({ committedMinor: 1_100_000, count: 150 });
+    expect(after.items[0]?.estimate).toMatchObject({ amountMinor: 9_500 * 150 });
   });
 });

@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { CalendarX } from "lucide-react";
 import Link from "next/link";
 import { Card, CardTitle } from "@/components/ui/card";
+import { DensityToggle } from "@/components/ui/density-toggle";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { TrayButton } from "@/components/ui/tray";
 import { todayInZone } from "@/domain/dates/date-only";
@@ -18,6 +19,7 @@ import { createTask, updateTask } from "@/server/plan/actions";
 import { loadAssigneeOptions, loadTasks, type TaskRecord } from "@/server/plan/queries";
 import { hasCapability, requireWorkspace } from "@/server/auth/workspace-guard";
 import { loadWeddingSettings } from "@/server/workspace/queries";
+import { readDensity } from "@/server/display/density";
 
 export const metadata: Metadata = { title: "Checklist" };
 
@@ -27,6 +29,7 @@ export default async function PlanPage({ params }: { params: Promise<{ w: string
   const access = await requireWorkspace((await params).w);
   const base = `/app/${access.wedding.id}`;
   const canEdit = hasCapability(access, "plan.edit");
+  const density = await readDensity(access.wedding.id, access.membership.role);
   const [settings, tasks, assignees] = await Promise.all([
     loadWeddingSettings(access.wedding.id),
     loadTasks(access.wedding.id),
@@ -69,6 +72,10 @@ export default async function PlanPage({ params }: { params: Promise<{ w: string
         {" · "}
         <Link href={`${base}/plan/packages`} className={link}>
           Packages
+        </Link>
+        {" · "}
+        <Link href={`${base}/plan/events`} className={link}>
+          Events
         </Link>
         {" · "}
         <Link href={`${base}/plan/day-of`} className={link}>
@@ -149,6 +156,7 @@ export default async function PlanPage({ params }: { params: Promise<{ w: string
         </Card>
       ) : (
         <>
+          <DensityToggle workspaceId={access.wedding.id} density={density} />
           {sections.map(({ key, title }) =>
             groups[key].length === 0 ? null : (
               <section key={key} aria-labelledby={`h-${key}`} className="space-y-3">
@@ -175,14 +183,14 @@ export default async function PlanPage({ params }: { params: Promise<{ w: string
                     ));
                   return (
                     <>
-                      <ul className="space-y-3">{items(head)}</ul>
+                      <ul className="space-y-3 compact:space-y-1.5">{items(head)}</ul>
                       {rest.length > 0 && (
                         <details className="group">
                           <summary className="flex min-h-11 cursor-pointer items-center text-label-lg font-semibold text-action-emphasis underline underline-offset-4">
                             <span className="group-open:hidden">Show {rest.length} more</span>
                             <span className="hidden group-open:inline">Show fewer</span>
                           </summary>
-                          <ul className="mt-3 space-y-3">{items(rest)}</ul>
+                          <ul className="mt-3 space-y-3 compact:space-y-1.5">{items(rest)}</ul>
                         </details>
                       )}
                     </>
@@ -196,7 +204,7 @@ export default async function PlanPage({ params }: { params: Promise<{ w: string
               <summary className="min-h-11 cursor-pointer py-2 font-serif text-headline-sm">
                 Done ({groups.done.length})
               </summary>
-              <ul className="mt-3 space-y-3">
+              <ul className="mt-3 space-y-3 compact:space-y-1.5">
                 {groups.done.map((s) => (
                   <TaskItem
                     key={s.id}
@@ -253,7 +261,10 @@ function TaskItem({
     <Card
       as="li"
       id={`task-${task.id}`}
-      className={cn("flex items-start gap-3 p-4 sm:p-4", overdue && "border-l-4 border-l-danger")}
+      className={cn(
+        "flex items-start gap-3 p-4 sm:p-4 compact:px-4 compact:py-2",
+        overdue && "border-l-4 border-l-danger",
+      )}
     >
       <TaskToggle
         workspaceId={workspaceId}

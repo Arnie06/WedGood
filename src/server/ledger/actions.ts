@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { todayInZone } from "@/domain/dates/date-only";
+import { parseInvoiceInput } from "@/domain/ledger/invoices";
 import {
   bookingFieldNames,
   parseBookingInput,
@@ -176,6 +177,7 @@ export async function amendCommitment(
 
 const PAYMENT_FIELDS = [
   "itemId",
+  "invoiceId",
   "kind",
   "amount",
   "paidOn",
@@ -195,12 +197,14 @@ export async function recordPayment(
       workspaceId: uuid,
       commitmentId: z.union([uuid, z.literal("")]),
       itemId: z.union([uuid, z.literal("")]),
+      invoiceId: z.union([uuid, z.literal("")]),
       key: idemKey,
     })
     .safeParse({
       workspaceId: form.get("workspaceId"),
       commitmentId: form.get("commitmentId") ?? "",
       itemId: form.get("itemId") ?? "",
+      invoiceId: form.get("invoiceId") ?? "",
       key: form.get("idempotencyKey"),
     });
   if (!ids.success || (ids.data.commitmentId === "") === (ids.data.itemId === "")) {
@@ -212,6 +216,14 @@ export async function recordPayment(
   }
   const denied = await authorize(ids.data.workspaceId);
   if (denied) return denied;
+  // An invoice is paid by a payment on a booking, never by a refund or a payment on a loose cost.
+  if (ids.data.invoiceId !== "" && (ids.data.commitmentId === "" || values.kind === "refund")) {
+    return fail(
+      "Please check the highlighted details.",
+      { invoiceId: "Only a payment on a booking can pay an invoice." },
+      values,
+    );
+  }
 
   const settings = await loadWeddingSettings(ids.data.workspaceId);
   const today = todayInZone(settings.timezone);
@@ -239,6 +251,7 @@ export async function recordPayment(
     p_idempotency_key: ids.data.key,
     ...(ids.data.commitmentId !== "" && { p_commitment: ids.data.commitmentId }),
     ...(ids.data.itemId !== "" && { p_item: ids.data.itemId }),
+    ...(ids.data.invoiceId !== "" && { p_invoice: ids.data.invoiceId }),
     ...(p.method !== null && { p_method: p.method }),
     ...(p.note !== null && { p_note: p.note }),
     ...(p.externalRef !== null && { p_external_ref: p.externalRef }),
@@ -275,6 +288,77 @@ export async function voidPayment(
   const { error } = await supabase.rpc("void_payment", {
     p_wedding: ids.data.workspaceId,
     p_payment: ids.data.paymentId,
+    p_reason: reason,
+  });
+  if (error) return fail(friendlyLedgerError(error), {}, values);
+  refresh(ids.data.workspaceId);
+  return { status: "ok", message: "Marked as entered by mistake." };
+}
+
+// ---------------------------------------------------------------- invoices
+
+const INVOICE_FIELDS = ["number", "amount", "issuedOn", "dueOn", "note"] as const;
+
+/** Records an invoice a vendor sent on a booking. It changes neither the contract nor the forecast. */
+export async function createInvoice(
+  _: LedgerActionState,
+  form: FormData,
+): Promise<LedgerActionState> {
+  const values = readValues(form, INVOICE_FIELDS);
+  const ids = z.object({ workspaceId: uuid, commitmentId: uuid, key: idemKey }).safeParse({
+    workspaceId: form.get("workspaceId"),
+    commitmentId: form.get("commitmentId"),
+    key: form.get("idempotencyKey"),
+  });
+  if (!ids.success) return fail("Reload the page and try again.", {}, values);
+  const denied = await authorize(ids.data.workspaceId);
+  if (denied) return denied;
+
+  const settings = await loadWeddingSettings(ids.data.workspaceId);
+  const parsed = parseInvoiceInput(values, settings.baseCurrency);
+  if (!parsed.ok) return fail("Please check the highlighted details.", parsed.errors, values);
+
+  const supabase = await createUserClient();
+  const i = parsed.value;
+  const { error } = await supabase.rpc("create_invoice", {
+    p_wedding: ids.data.workspaceId,
+    p_commitment: ids.data.commitmentId,
+    p_amount_minor: i.amountMinor,
+    p_idempotency_key: ids.data.key,
+    ...(i.number !== null && { p_number: i.number }),
+    ...(i.issuedOn !== null && { p_issued_on: i.issuedOn }),
+    ...(i.dueOn !== null && { p_due_on: i.dueOn }),
+    ...(i.note !== null && { p_note: i.note }),
+  });
+  if (error) return fail(friendlyLedgerError(error), {}, values);
+  refresh(ids.data.workspaceId);
+  return { status: "ok", message: "Invoice recorded." };
+}
+
+export async function voidInvoice(
+  _: LedgerActionState,
+  form: FormData,
+): Promise<LedgerActionState> {
+  const values = readValues(form, ["reason"]);
+  const ids = z.object({ workspaceId: uuid, invoiceId: uuid }).safeParse({
+    workspaceId: form.get("workspaceId"),
+    invoiceId: form.get("invoiceId"),
+  });
+  if (!ids.success) return fail("Reload the page and try again.", {}, values);
+  const denied = await authorize(ids.data.workspaceId);
+  if (denied) return denied;
+  const reason = (values.reason ?? "").trim();
+  if (reason === "" || reason.length > 200) {
+    return fail(
+      "Please check the highlighted details.",
+      { reason: "Say briefly why (up to 200 characters). It stays in the history." },
+      values,
+    );
+  }
+  const supabase = await createUserClient();
+  const { error } = await supabase.rpc("void_invoice", {
+    p_wedding: ids.data.workspaceId,
+    p_invoice: ids.data.invoiceId,
     p_reason: reason,
   });
   if (error) return fail(friendlyLedgerError(error), {}, values);

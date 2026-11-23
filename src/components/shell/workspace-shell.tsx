@@ -15,6 +15,7 @@ export function WorkspaceShell({
   headerAction,
   notice,
   sidebarFooter,
+  density = "comfortable",
   children,
 }: {
   basePath: string;
@@ -24,10 +25,12 @@ export function WorkspaceShell({
   headerAction?: ReactNode;
   notice?: ReactNode;
   sidebarFooter?: ReactNode;
+  /** List spacing for everything inside the workspace (UX-18). */
+  density?: "comfortable" | "compact";
   children: ReactNode;
 }) {
   return (
-    <div className="min-h-dvh lg:grid lg:grid-cols-[16rem_minmax(0,1fr)]">
+    <div data-density={density} className="min-h-dvh lg:grid lg:grid-cols-[16rem_minmax(0,1fr)]">
       <aside className="sticky top-0 hidden h-dvh flex-col border-r border-border-hairline bg-canvas px-5 py-6 lg:flex">
         <Hallmark />
         <SidebarNav basePath={basePath} />

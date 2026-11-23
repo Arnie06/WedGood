@@ -2,7 +2,7 @@
 export function friendlyGuestError(error: { code?: string; message?: string }): string {
   switch (error.code) {
     case "42501":
-      return "Guests can only be managed by the workspace owner or a partner.";
+      return "You don't have access to manage guests in this wedding.";
     case "28000":
       return "Please sign in again to continue.";
     case "55000":

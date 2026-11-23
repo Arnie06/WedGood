@@ -12,7 +12,15 @@ import { toScheduled, toSummary } from "@/features/plan/mappers";
 import { loadTasks } from "@/server/plan/queries";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { hasCapability, requireWorkspace } from "@/server/auth/workspace-guard";
+import { loadEventLabels } from "@/server/timeline/queries";
 import { loadHomeCounts, loadWeddingSettings } from "@/server/workspace/queries";
+import { loadAttention } from "@/server/attention/queries";
+import { AttentionList, SeeAllLink } from "@/features/attention/attention-list";
+import { attentionSummary } from "@/domain/attention/attention";
+import { buildReplyStrip } from "@/domain/home/reply-strip";
+import { ReplyStripCard } from "@/features/home/reply-strip-card";
+import { loadEventDemand } from "@/server/events/demand";
+import { loadReplyDeadlines } from "@/server/events/reply-dates";
 
 const linkClass = "font-semibold text-action-emphasis underline underline-offset-4";
 
@@ -25,11 +33,33 @@ function countdown(days: number): string {
 
 export default async function WorkspaceHomePage({ params }: { params: Promise<{ w: string }> }) {
   const access = await requireWorkspace((await params).w);
-  const [s, tasks, counts] = await Promise.all([
+  const canManageGuests = hasCapability(access, "guests.manage");
+  const [s, tasks, counts, events, attention, demand, deadlines] = await Promise.all([
     loadWeddingSettings(access.wedding.id),
     loadTasks(access.wedding.id),
     loadHomeCounts(access.wedding.id),
+    loadEventLabels(access.wedding.id),
+    loadAttention(access, access.wedding.timezone),
+    // Counts only through event_demand's gate: owner/partner, or anyone once totals are shared.
+    loadEventDemand(access.wedding.id, {
+      canManageGuests,
+      shareGuestTotals: access.wedding.shareGuestTotals,
+    }),
+    // Invitations are owner/partner only; collaborators see counts without reply dates.
+    canManageGuests ? loadReplyDeadlines(access.wedding.id) : new Map<string, string[]>(),
   ]);
+  const ATTENTION_SHOWN = 3;
+  const replyStrip = buildReplyStrip(
+    events.map((e) => ({
+      id: e.id,
+      name: e.name,
+      localDate: e.localDate,
+      timeZone: e.effectiveTimeZone,
+    })),
+    demand.byEvent,
+    deadlines,
+    new Date(),
+  );
   const base = `/app/${access.wedding.id}`;
 
   const date = s.date ? parseDateOnly(s.date) : null;
@@ -55,7 +85,7 @@ export default async function WorkspaceHomePage({ params }: { params: Promise<{ 
     can: {
       settings: hasCapability(access, "settings.edit"),
       plan: canEditPlan,
-      guests: hasCapability(access, "guests.manage"),
+      guests: canManageGuests,
       vendors: hasCapability(access, "vendors.manage"),
     },
   });
@@ -79,11 +109,42 @@ export default async function WorkspaceHomePage({ params }: { params: Promise<{ 
     { label: "Location", value: s.location ?? "Not set yet" },
   ];
 
+  const attentionCard = (
+    <Card as="section" aria-labelledby="home-attention" data-testid="home-attention">
+      <CardTitle>
+        <span id="home-attention">Needs attention</span>
+      </CardTitle>
+      <p className="mt-1 text-body-md text-ink-muted">
+        {attentionSummary(attention.visible.length)}
+      </p>
+      {attention.visible.length > 0 && (
+        <div className="mt-3">
+          <AttentionList
+            items={attention.visible.slice(0, ATTENTION_SHOWN)}
+            base={base}
+            workspaceId={access.wedding.id}
+            canAct={attention.canAct}
+          />
+        </div>
+      )}
+      <SeeAllLink
+        base={base}
+        total={attention.visible.length}
+        shown={ATTENTION_SHOWN}
+        hidden={attention.canAct ? attention.dismissed.length : 0}
+      />
+    </Card>
+  );
+
   return (
     <div className="space-y-6">
       <header className="space-y-1">
         <h1 className="font-serif text-headline-mobile md:text-headline-lg">{s.name}</h1>
       </header>
+      {replyStrip.rows.length > 0 && (
+        <ReplyStripCard strip={replyStrip} base={base} canManageGuests={canManageGuests} />
+      )}
+      {attention.visible.length > 0 && attentionCard}
       {primary && (
         <Card as="section" aria-labelledby="next-up" className="space-y-4">
           <p id="next-up" className="text-label-lg font-semibold text-ink-muted uppercase">
@@ -101,6 +162,7 @@ export default async function WorkspaceHomePage({ params }: { params: Promise<{ 
           )}
         </Card>
       )}
+      {attention.visible.length === 0 && attentionCard}
       <Card>
         <CardTitle>Event details</CardTitle>
         <dl className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -115,6 +177,37 @@ export default async function WorkspaceHomePage({ params }: { params: Promise<{ 
         <p className="mt-4">
           <Link href={`${base}/settings/event`} className={linkClass}>
             {hasCapability(access, "settings.edit") ? "Edit event details" : "View event details"}
+          </Link>
+        </p>
+      </Card>
+      <Card as="section" aria-labelledby="home-events">
+        <CardTitle>
+          <span id="home-events">Your events</span>
+        </CardTitle>
+        {events.length === 0 ? (
+          <p className="mt-2 text-body-md text-ink-muted">
+            No events yet, such as a ceremony or reception.
+          </p>
+        ) : (
+          <ul className="mt-2 space-y-1">
+            {events.slice(0, 4).map((e) => (
+              <li key={e.id}>
+                <Link
+                  href={`${base}/plan/events/${e.id}`}
+                  className={`${linkClass} inline-flex min-h-11 items-center`}
+                >
+                  {e.name}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+        <p className="mt-2">
+          <Link
+            href={`${base}/plan/events`}
+            className={`${linkClass} inline-flex min-h-11 items-center`}
+          >
+            {events.length > 4 ? "See all events" : "Open events"}
           </Link>
         </p>
       </Card>

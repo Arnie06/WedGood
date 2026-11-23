@@ -64,14 +64,31 @@ export async function loadTimelineCounts(workspaceId: string): Promise<Map<strin
   return counts;
 }
 
-export type EventLabel = { id: string; name: string; kind: string; localDate: string | null };
+export type EventLabel = {
+  id: string;
+  name: string;
+  kind: string;
+  localDate: string | null;
+  /** The event's own zone; null follows the wedding's. */
+  timeZone: string | null;
+  /** The zone the agenda is read in: the event's own, else the wedding's. */
+  effectiveTimeZone: string;
+};
 
 /** Event names for agenda pages. Works for every member, unlike the manager-only events table. */
 export async function loadEventLabels(workspaceId: string): Promise<EventLabel[]> {
   const supabase = await createUserClient();
   const { data, error } = await supabase.rpc("list_event_labels", { p_wedding: workspaceId });
   if (error) throw new Error("Could not load events");
-  return data.map((e) => ({ id: e.id, name: e.name, kind: e.kind, localDate: e.local_date }));
+  return data.map((e) => ({
+    id: e.id,
+    name: e.name,
+    kind: e.kind,
+    localDate: e.local_date,
+    // The generated type says string; the column is null when the event follows the wedding.
+    timeZone: (e.time_zone as string | null) ?? null,
+    effectiveTimeZone: e.effective_time_zone,
+  }));
 }
 
 export type CalendarItem = {

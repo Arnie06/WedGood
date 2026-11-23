@@ -28,9 +28,19 @@ function fail(
   return { status: "error", message, fieldErrors, values };
 }
 
-async function authorize(workspaceId: string): Promise<WebsiteActionState | null> {
+/**
+ * The draft names events, which need guest access to read, so editing it takes both areas; saving
+ * from a view that cannot list events would drop the events already chosen. Publishing is not a
+ * grantable area (site.publish).
+ */
+async function authorize(
+  workspaceId: string,
+  publishing = false,
+): Promise<WebsiteActionState | null> {
   try {
     await requireCapability(workspaceId, "plan.edit");
+    await requireCapability(workspaceId, "guests.manage");
+    if (publishing) await requireCapability(workspaceId, "site.publish");
     return null;
   } catch (e) {
     if (e instanceof ForbiddenError) return fail(friendlyWebsiteError({ code: "42501" }));
@@ -94,7 +104,7 @@ export async function publishSite(
     .object({ workspaceId: uuid, version })
     .safeParse({ workspaceId: form.get("workspaceId"), version: form.get("version") });
   if (!ids.success) return fail(RELOAD, {}, values);
-  const denied = await authorize(ids.data.workspaceId);
+  const denied = await authorize(ids.data.workspaceId, true);
   if (denied) return denied;
   if (form.get("confirm") !== "yes") {
     return fail(

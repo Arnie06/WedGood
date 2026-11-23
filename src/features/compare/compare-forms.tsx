@@ -8,6 +8,7 @@ import { MAX_CRITERIA, MAX_WEIGHT, type Criterion } from "@/domain/comparison/ev
 import {
   archiveComparison,
   decideComparison,
+  repriceComparison,
   saveRatings,
   updateComparison,
   type ComparisonActionState,
@@ -225,6 +226,35 @@ export function ArchiveForm({ hidden }: { hidden: Hidden }) {
       </Button>
       <p className="text-body-sm text-ink-muted">
         Your quotes and any recorded decision history stay as they are.
+      </p>
+      <Feedback state={state} />
+    </form>
+  );
+}
+
+/** Offers a repriced COPY at the event's planning number now. Nothing on this comparison changes. */
+export function RepriceForm({
+  hidden,
+  suggested,
+  idempotencyKey,
+}: {
+  hidden: Omit<Hidden, "version">;
+  suggested: number;
+  idempotencyKey: string;
+}) {
+  const [state, action, pending] = useTrayActionState(repriceComparison, idle);
+  return (
+    <form action={action} className="space-y-2">
+      <input type="hidden" name="workspaceId" value={hidden.workspaceId} />
+      <input type="hidden" name="comparisonId" value={hidden.comparisonId} />
+      <input type="hidden" name="guestCount" value={suggested} />
+      <input type="hidden" name="idempotencyKey" value={idempotencyKey} />
+      <Button type="submit" variant="outline" disabled={pending}>
+        {pending ? "Copying…" : `Reprice for ${suggested} guests`}
+      </Button>
+      <p className="text-body-sm text-ink-muted">
+        This makes a copy with the same quotes, ratings and weights. This comparison and any
+        decision on it stay as they are.
       </p>
       <Feedback state={state} />
     </form>
