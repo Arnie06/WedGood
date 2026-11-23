@@ -5,7 +5,14 @@ import { z } from "zod";
 import { friendlyRsvpError } from "@/server/events/errors";
 import { createAdminClient } from "@/server/supabase/admin";
 import { formBuilderEnabled, guestDetailsEnabled } from "./flags";
-import { clientKey, rsvpViewSchema, toPublicView, tokenDigest, type RsvpView } from "./public";
+import {
+  FORM_CHANGED,
+  clientKey,
+  rsvpViewSchema,
+  toPublicView,
+  tokenDigest,
+  type RsvpView,
+} from "./public";
 
 export type RsvpActionState =
   | { status: "idle" }
@@ -153,6 +160,16 @@ export async function submitRsvp(_: RsvpActionState, form: FormData): Promise<Rs
       status: "error",
       message: "Responses aren't available right now. Please try again later.",
     };
+  }
+  // With the couple's questions switched on, a reply that names no form version while the event has
+  // one published would skip its required questions (review finding 3). This server is the only
+  // caller of rsvp_submit, so the check here is authoritative: show the current questions instead.
+  if (formBuilderEnabled() && formVersionId === null) {
+    const current = await admin.rpc("rsvp_view", { p_token_hash: digest, p_client: client });
+    const parsed = rsvpViewSchema.safeParse(current.data);
+    if (parsed.success && parsed.data.form !== null) {
+      return { status: "error", message: FORM_CHANGED, view: toPublicView(parsed.data) };
+    }
   }
   const { data, error } = await admin.rpc("rsvp_submit", {
     p_token_hash: digest,

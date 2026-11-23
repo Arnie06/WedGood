@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { ForbiddenError, requireCapability } from "@/server/auth/workspace-guard";
+import { draftMatchesPlan } from "@/domain/guests/guest-mail";
 import { getMailProvider, type MailOutcome } from "@/server/mail/provider";
 import { guestEmailEnabled } from "@/server/rsvp/flags";
 import { createUserClient } from "@/server/supabase/server";
@@ -198,6 +199,44 @@ export async function sendGuestMessage(
   }
 
   const supabase = await createUserClient();
+  // Only text the app's own composer would write now is sent (review finding 2): the stored draft
+  // is compared with a fresh composition from the current replies before anything is marked.
+  const access = await requireCapability(workspaceId, "external.send");
+  const stored = await supabase
+    .from("guest_messages")
+    .select("event_id, kind, invitation_id, guest_id, subject, body")
+    .eq("wedding_id", workspaceId)
+    .eq("id", messageId)
+    .maybeSingle();
+  if (stored.error || !stored.data) return { status: "error", message: RELOAD };
+  const kind = stored.data.kind;
+  if (kind !== "rsvp_confirmation" && kind !== "reply_reminder") {
+    return { status: "error", message: RELOAD };
+  }
+  const planned = await planEventMessages(
+    workspaceId,
+    stored.data.event_id,
+    kind,
+    access.wedding,
+    new Date(),
+  );
+  const check = draftMatchesPlan(
+    {
+      kind,
+      invitationId: stored.data.invitation_id,
+      guestId: stored.data.guest_id,
+      subject: stored.data.subject,
+      body: stored.data.body,
+    },
+    planned ?? [],
+  );
+  if (check !== "match") {
+    return {
+      status: "error",
+      message:
+        "This email no longer matches what we would write today (a reply, the event details or the reply date changed). Nothing was sent. Discard it and prepare a new one.",
+    };
+  }
   const start = await supabase.rpc("begin_guest_message_send", {
     p_wedding: workspaceId,
     p_message: messageId,

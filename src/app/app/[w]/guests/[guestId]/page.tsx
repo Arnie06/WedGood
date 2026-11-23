@@ -4,11 +4,13 @@ import { notFound } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardTitle } from "@/components/ui/card";
 import { TrayButton } from "@/components/ui/tray";
+import { ZonedDate } from "@/features/events/zoned-date";
 import { ConsequencesPanel } from "@/features/guests/consequences-panel";
 import { ArchiveGuestForm, GuestForm, HouseholdForm } from "@/features/guests/guest-forms";
 import { hasCapability, requireWorkspace } from "@/server/auth/workspace-guard";
 import { loadGuestConsequences } from "@/server/guests/consequences";
 import {
+  NO_PRIVATE_DETAILS,
   loadGuestPrivateDetails,
   loadGuestReplyHistory,
   loadGuests,
@@ -45,9 +47,7 @@ export default async function GuestPage({
   const guest = data.guests.find((g) => g.id === guestId);
   if (!guest) notFound();
   const canSeePrivate = hasCapability(access, "guests.sensitive.read");
-  const details = canSeePrivate
-    ? await loadGuestPrivateDetails(wid, guestId)
-    : { dietary: null, accessibility: null, notes: null, guestAnswered: false };
+  const details = canSeePrivate ? await loadGuestPrivateDetails(wid, guestId) : NO_PRIVATE_DETAILS;
   const [history, consequences] = await Promise.all([
     loadGuestReplyHistory(wid, guestId),
     loadGuestConsequences(wid, guestId, access.wedding.timezone),
@@ -127,8 +127,14 @@ export default async function GuestPage({
                   ["Tags", guest.tags.length > 0 ? guest.tags.join(", ") : "None"],
                   ...(canSeePrivate
                     ? [
-                        ["Dietary needs", details.dietary ?? "None noted"],
-                        ["Accessibility needs", details.accessibility ?? "None noted"],
+                        ["Dietary needs (your notes)", details.dietary ?? "None noted"],
+                        ...(details.guestDietary
+                          ? [["Dietary needs (from the guest)", details.guestDietary]]
+                          : []),
+                        ["Accessibility needs (your notes)", details.accessibility ?? "None noted"],
+                        ...(details.guestAccessibility
+                          ? [["Accessibility needs (from the guest)", details.guestAccessibility]]
+                          : []),
                         ["Private notes", details.notes ?? "None"],
                       ]
                     : []),
@@ -139,10 +145,11 @@ export default async function GuestPage({
                   </div>
                 ))}
               </dl>
-              {canSeePrivate && details.guestAnswered && (
+              {canSeePrivate && details.guestAnsweredAt && (
                 <p className="text-body-sm text-ink-muted">
-                  The guest added dietary or accessibility notes through their RSVP link. Editing
-                  replaces them.
+                  The guest last added notes through their RSVP link on{" "}
+                  <ZonedDate iso={details.guestAnsweredAt} timeZone={access.wedding.timezone} />.
+                  Their words are kept as they wrote them; editing your notes never changes them.
                 </p>
               )}
             </div>

@@ -264,3 +264,28 @@ export function planReminders(input: PlanInput): PlannedMessage[] {
   }
   return out;
 }
+
+export type StoredDraft = {
+  kind: GuestMessageKind;
+  invitationId: string;
+  guestId: string;
+  subject: string;
+  body: string;
+};
+
+/**
+ * Before an approved draft goes out, the app writes it again from the current replies and compares.
+ * Only text this composer would write now is sent: a draft stored by any other route, or one whose
+ * event, meals, names or reply date changed since it was prepared, does not match.
+ */
+export function draftMatchesPlan(
+  draft: StoredDraft,
+  planned: readonly PlannedMessage[],
+): "match" | "missing" | "different" {
+  const p = planned.find(
+    (m) =>
+      m.kind === draft.kind && m.invitationId === draft.invitationId && m.guestId === draft.guestId,
+  );
+  if (!p) return "missing";
+  return p.subject === draft.subject && p.body === draft.body ? "match" : "different";
+}

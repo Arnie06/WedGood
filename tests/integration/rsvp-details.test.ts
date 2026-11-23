@@ -79,14 +79,23 @@ function submit(raw: string, version: number, responses: unknown[], plusOne?: un
     ...(plusOne ? { p_plus_one: plusOne } : {}),
   });
 }
+/**
+ * The guest's words (`dietary`, `accessibility` here) live in their own columns; the couple's text
+ * is returned as `couple_*` so tests can check it is never touched by a guest.
+ */
 const details = (guestId: string) =>
   q<{
     dietary: string | null;
     accessibility: string | null;
+    couple_dietary: string | null;
+    couple_accessibility: string | null;
     notes: string | null;
     guest_answered_at: string | null;
   }>(
-    "select dietary, accessibility, notes, guest_answered_at from public.guest_private_details where guest_id=$1",
+    `select guest_dietary as dietary, guest_accessibility as accessibility,
+            dietary as couple_dietary, accessibility as couple_accessibility,
+            notes, guest_answered_at
+       from public.guest_private_details where guest_id=$1`,
     [guestId],
   );
 
@@ -216,31 +225,68 @@ describe("saving a guest's notes", () => {
     expect((await details(s.ada))[0]?.dietary).toBe(DIET);
   });
 
-  it("keeps what the couple wrote in fields the guest did not fill in", async () => {
+  it("never replaces what the couple wrote: the guest's words are kept beside it", async () => {
     const w = await createWedding(owner);
     const e = await mkEvent(w, "Reception");
     const ada = await mkGuest(w, "Ada Example", {
+      dietary: "COUPLE-diet",
       accessibility: "COUPLE-access",
       notes: "COUPLE-private note",
     });
     const inv = await invite(w, e, [ada]);
     const v = await view(inv.token.raw);
+    // The couple's own note alone is not "saved by the guest".
+    expect(v.members[0]!.detailsSaved).toBe(false);
     const res = await submit(inv.token.raw, v.version, [
       { memberId: v.members[0]!.id, status: "accepted", dietary: DIET },
     ]);
     expect(res.error).toBeNull();
-    const [row] = await details(ada);
-    expect(row).toMatchObject({
+    expect((await details(ada))[0]).toMatchObject({
       dietary: DIET,
-      accessibility: "COUPLE-access",
+      accessibility: null,
+      couple_dietary: "COUPLE-diet",
+      couple_accessibility: "COUPLE-access",
       notes: "COUPLE-private note",
     });
-    // The guest's text replaces the same field.
+    // A later answer replaces only the guest's own earlier words.
     const v2 = await view(inv.token.raw);
     await submit(inv.token.raw, v2.version, [
       { memberId: v2.members[0]!.id, status: "accepted", accessibility: ACCESS },
     ]);
-    expect((await details(ada))[0]).toMatchObject({ dietary: DIET, accessibility: ACCESS });
+    expect((await details(ada))[0]).toMatchObject({
+      dietary: DIET,
+      accessibility: ACCESS,
+      couple_dietary: "COUPLE-diet",
+      couple_accessibility: "COUPLE-access",
+    });
+  });
+
+  it("the couple clearing their own notes keeps the guest's words", async () => {
+    const w = await createWedding(owner);
+    const e = await mkEvent(w, "Reception");
+    const ada = await mkGuest(w, "Ada Example", { dietary: "COUPLE-diet" });
+    const inv = await invite(w, e, [ada]);
+    const v = await view(inv.token.raw);
+    await submit(inv.token.raw, v.version, [
+      { memberId: v.members[0]!.id, status: "accepted", dietary: DIET },
+    ]);
+    const version = (
+      await q<{ version: number }>("select version from public.guests where id=$1", [ada])
+    )[0]!.version;
+    await ok(
+      owner.client.rpc("update_guest", {
+        p_wedding: w,
+        p_guest_id: ada,
+        p_expected_version: version,
+        p_guest: { name: "Ada Example" },
+      }),
+    );
+    expect((await details(ada))[0]).toMatchObject({
+      dietary: DIET,
+      couple_dietary: null,
+      couple_accessibility: null,
+      notes: null,
+    });
   });
 
   it("stores nothing for a decline, and blank text counts as nothing", async () => {
@@ -364,13 +410,13 @@ describe("who can read the answers", () => {
     ]);
     const mine = await owner.client
       .from("guest_private_details")
-      .select("dietary, guest_answered_at")
+      .select("guest_dietary, guest_answered_at")
       .eq("guest_id", s.ada);
     expect(mine.data).toHaveLength(1);
-    expect(mine.data?.[0]?.dietary).toBe(DIET);
+    expect(mine.data?.[0]?.guest_dietary).toBe(DIET);
     const theirs = await stranger.client
       .from("guest_private_details")
-      .select("dietary")
+      .select("dietary, guest_dietary")
       .eq("guest_id", s.ada);
     expect(theirs.data).toEqual([]);
   });

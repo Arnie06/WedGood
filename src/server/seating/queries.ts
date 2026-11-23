@@ -1,5 +1,6 @@
 import "server-only";
 import { parseFrozenPlan, type FrozenPlan } from "@/domain/seating/versions";
+import { combineNote } from "@/domain/guests/notes";
 import { isElementKind, type FloorElement } from "@/domain/seating/floor";
 import type {
   GuestInfo,
@@ -124,7 +125,7 @@ export async function loadSeating(
       ? { data: [], error: null }
       : supabase
           .from("guest_private_details")
-          .select("guest_id, dietary, accessibility")
+          .select("guest_id, dietary, accessibility, guest_dietary, guest_accessibility")
           .eq("wedding_id", workspaceId)
           .limit(5000),
   ]);
@@ -212,8 +213,14 @@ export async function loadSeating(
         hostNames: m.is_plus_one ? (invitedNames.get(m.invitation_id) ?? []) : [],
         tags: g.tags,
         ageGroup: g.age_group === "child" ? "child" : g.age_group === "adult" ? "adult" : null,
-        dietary: detail?.dietary ?? null,
-        accessibility: detail?.accessibility ?? null,
+        dietary: combineNote({
+          couple: detail?.dietary ?? null,
+          guest: detail?.guest_dietary ?? null,
+        }),
+        accessibility: combineNote({
+          couple: detail?.accessibility ?? null,
+          guest: detail?.guest_accessibility ?? null,
+        }),
       };
     });
 

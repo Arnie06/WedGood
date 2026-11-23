@@ -25,8 +25,20 @@ export type GuestPrivateDetails = {
   dietary: string | null;
   accessibility: string | null;
   notes: string | null;
-  /** True when the guest answered through their RSVP link (UX-07), so the couple can tell. */
-  guestAnswered: boolean;
+  /** What the guest typed on their RSVP link, kept apart from the couple's own text. */
+  guestDietary: string | null;
+  guestAccessibility: string | null;
+  /** When the guest last saved notes through their RSVP link, if ever. */
+  guestAnsweredAt: string | null;
+};
+
+export const NO_PRIVATE_DETAILS: GuestPrivateDetails = {
+  dietary: null,
+  accessibility: null,
+  notes: null,
+  guestDietary: null,
+  guestAccessibility: null,
+  guestAnsweredAt: null,
 };
 export type GuestData = { guests: GuestRecord[]; households: HouseholdRecord[] };
 
@@ -75,14 +87,20 @@ export async function loadGuestPrivateDetails(
   const supabase = await createUserClient();
   const { data, error } = await supabase
     .from("guest_private_details")
-    .select("dietary, accessibility, notes, guest_answered_at")
+    .select("dietary, accessibility, notes, guest_dietary, guest_accessibility, guest_answered_at")
     .eq("wedding_id", workspaceId)
     .eq("guest_id", guestId)
     .maybeSingle();
   if (error) throw new Error("Could not load guest details");
-  if (!data) return { dietary: null, accessibility: null, notes: null, guestAnswered: false };
-  const { guest_answered_at, ...rest } = data;
-  return { ...rest, guestAnswered: guest_answered_at !== null };
+  if (!data) return NO_PRIVATE_DETAILS;
+  return {
+    dietary: data.dietary,
+    accessibility: data.accessibility,
+    notes: data.notes,
+    guestDietary: data.guest_dietary,
+    guestAccessibility: data.guest_accessibility,
+    guestAnsweredAt: data.guest_answered_at,
+  };
 }
 
 export type GuestReplyHistory = { eventNames: Record<string, string>; changes: ReplyChange[] };

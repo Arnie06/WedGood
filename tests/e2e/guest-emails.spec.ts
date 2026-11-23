@@ -233,3 +233,38 @@ test("a partner can prepare and read emails but cannot approve sending", async (
   await expect(page.getByRole("button", { name: /Approve and send/ })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /Discard the email/ })).toHaveCount(3);
 });
+
+test("a draft whose text the app did not write is refused at approval and nothing is sent", async ({
+  page,
+}) => {
+  const { owner, wedding } = await setup("mail-tamper");
+  await signIn(page, owner);
+  await page.goto(`/app/${wedding}/guests/messages`);
+  await page.getByRole("button", { name: "Prepare reminders for Reception" }).click();
+  await expect(page.getByText(/Prepared 3 reminders to review/)).toBeVisible();
+  // Stands in for a draft written straight through the database API, not by the app's composer.
+  await withSuperuser((db) =>
+    db.query(
+      `update public.guest_messages set body = body || E'\\n\\nSENTINEL https://example.invalid'
+        where wedding_id = $1 and recipient_email like 'ada@%'`,
+      [wedding],
+    ),
+  );
+  await page.reload();
+  await page
+    .getByRole("listitem")
+    .filter({ hasText: "Reply reminder to Ada Example" })
+    .getByRole("button", { name: "Approve and send to Ada Example" })
+    .click();
+  await expect(page.getByText(/no longer matches what we would write today/)).toBeVisible();
+  const rows = await withSuperuser(
+    async (db) =>
+      (
+        await db.query(
+          "select status, count(*)::int n from public.guest_messages where wedding_id=$1 group by status",
+          [wedding],
+        )
+      ).rows,
+  );
+  expect(rows).toEqual([{ status: "draft", n: 3 }]);
+});

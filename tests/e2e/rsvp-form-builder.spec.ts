@@ -232,3 +232,63 @@ test("the couple builds and publishes questions, a guest answers them, and the c
   await page.setViewportSize({ width: 1280, height: 900 });
   await checkPage(page, "form-builder@1280");
 });
+
+test("a reply that leaves out the published form is refused and shows the current questions", async ({
+  page,
+}) => {
+  const { owner, wedding, eventId, path } = await seed("rf-noform");
+  const draftVersion = (await ok(
+    owner.client.rpc("save_rsvp_form_draft", {
+      p_wedding: wedding,
+      p_event_id: eventId,
+      p_expected_version: 0,
+      p_draft: {
+        questions: [
+          {
+            key: "q_shuttle1",
+            type: "yes_no",
+            label: "Need the shuttle?",
+            help: null,
+            required: true,
+            options: [],
+          },
+        ],
+      },
+    }),
+  )) as number;
+  await ok(
+    owner.client.rpc("publish_rsvp_form", {
+      p_wedding: wedding,
+      p_event_id: eventId,
+      p_expected_version: draftVersion,
+    }),
+  );
+
+  await page.goto(path);
+  await page
+    .getByRole("group", { name: "Ada Example" })
+    .getByLabel("Attending", { exact: true })
+    .check();
+  await page.getByRole("group", { name: "Bo Example" }).getByLabel("Not attending").check();
+  await page.getByRole("button", { name: "Next" }).click();
+  await page.getByRole("button", { name: "Next" }).click();
+  await page.getByRole("radio", { name: "Yes" }).check();
+  await page.getByRole("button", { name: "Next" }).click();
+  // Stands in for a hand-made request that drops the form version to skip required questions.
+  await page.evaluate(() => {
+    document.querySelectorAll('input[name="formVersionId"]').forEach((el) => el.remove());
+  });
+  await page.getByRole("button", { name: "Send my reply" }).click();
+  await expect(page.getByText(/The couple's questions have been updated/)).toBeVisible();
+  const saved = await withSuperuser(
+    async (db) =>
+      (
+        await db.query(
+          `select count(*)::int n from public.invitation_members
+            where wedding_id = $1 and rsvp_status <> 'pending'`,
+          [wedding],
+        )
+      ).rows[0].n as number,
+  );
+  expect(saved).toBe(0);
+});

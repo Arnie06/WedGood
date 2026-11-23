@@ -103,6 +103,10 @@ export async function clientKey(): Promise<string | null> {
   return createHash("sha256").update(`rsvp|${subject}`).digest("hex").slice(0, 32);
 }
 
+/** Shown when a reply named no form version although the event's questions are published. */
+export const FORM_CHANGED =
+  "The couple's questions have been updated. We've loaded them. Please check your answers and send again.";
+
 export function tokenDigest(raw: string): string | null {
   return isWellFormedInviteToken(raw) ? hashInviteToken(raw) : null;
 }

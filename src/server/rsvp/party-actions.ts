@@ -6,6 +6,7 @@ import { friendlyRsvpError } from "@/server/events/errors";
 import { createAdminClient } from "@/server/supabase/admin";
 import { formBuilderEnabled, guestDetailsEnabled, partyLinksEnabled } from "./flags";
 import {
+  FORM_CHANGED,
   clientKey,
   rsvpPartyViewSchema,
   toPublicPartyView,
@@ -119,6 +120,24 @@ export async function submitPartyRsvp(
       status: "error",
       message: "Responses aren't available right now. Please try again later.",
     };
+  }
+  // Same rule as the single link (review finding 3): an event whose questions are published must be
+  // answered against that form; otherwise the current questions are shown and nothing is saved.
+  if (forms && payload.some((p) => p.formVersionId === null)) {
+    const current = await admin.rpc("rsvp_party_view", { p_token_hash: digest, p_client: client });
+    const parsed = rsvpPartyViewSchema.safeParse(current.data);
+    if (parsed.success) {
+      const publishedFor = new Set(
+        parsed.data.events.filter((e) => e.form !== null).map((e) => e.invitationId),
+      );
+      if (payload.some((p) => p.formVersionId === null && publishedFor.has(p.invitationId))) {
+        return {
+          status: "error",
+          message: FORM_CHANGED,
+          view: toPublicPartyView(parsed.data),
+        };
+      }
+    }
   }
   const { data, error } = await admin.rpc("rsvp_party_submit", {
     p_token_hash: digest,

@@ -619,14 +619,14 @@ isOneToOne: false
                   ]
                 },"guest_private_details": {
                   Row: {
-                    "accessibility": string | null,"dietary": string | null,"guest_answered_at": string | null,"guest_id": string,"notes": string | null,"updated_at": string,"wedding_id": string
+                    "accessibility": string | null,"dietary": string | null,"guest_accessibility": string | null,"guest_answered_at": string | null,"guest_dietary": string | null,"guest_id": string,"notes": string | null,"updated_at": string,"wedding_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "accessibility"?: string | null,"dietary"?: string | null,"guest_answered_at"?: string | null,"guest_id": string,"notes"?: string | null,"updated_at"?: string,"wedding_id": string
+                    "accessibility"?: string | null,"dietary"?: string | null,"guest_accessibility"?: string | null,"guest_answered_at"?: string | null,"guest_dietary"?: string | null,"guest_id": string,"notes"?: string | null,"updated_at"?: string,"wedding_id": string
                   }
                   Update: {
-                    "accessibility"?: string | null,"dietary"?: string | null,"guest_answered_at"?: string | null,"guest_id"?: string,"notes"?: string | null,"updated_at"?: string,"wedding_id"?: string
+                    "accessibility"?: string | null,"dietary"?: string | null,"guest_accessibility"?: string | null,"guest_answered_at"?: string | null,"guest_dietary"?: string | null,"guest_id"?: string,"notes"?: string | null,"updated_at"?: string,"wedding_id"?: string
                   }
                   Relationships: [
                     {

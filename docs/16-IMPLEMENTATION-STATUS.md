@@ -89,6 +89,16 @@ This ledger is for Claude Code, Codex and human maintainers. Keep it factual; do
 
 ## Session log
 
+### 2026-11-23 · Claude Code · Commits, independent review (REL-09 to REL-12, UX-06 to UX-17) and its fixes · branch `main`
+
+- **Commits (local, not pushed):** `f6d4036` audit outputs, `ce60ce3` REL-01 to REL-12 and UX-01 to UX-18 code/migrations/tests (one commit: shared files were edited by several tickets), `fef20d4` docs.
+- **Review:** see the ADR-031 review addendum. Live ACL sweep: public RSVP/site functions service-role only; no anon-executable definer functions except a trigger; RLS on every public table; no anon table grants; no client writes on new tables. No high-severity findings; three fixed (guest notes kept beside the couple's; email re-composed and compared before send; required questions cannot be skipped).
+- **Migration:** `20270102090000_guest_note_columns.sql`, applied locally with `db:migrate`. Its later edits (wider row check, `update_guest` guard) were applied to the local DB as a delta, and the `update_guest` block was proven in a rolled-back transaction to rebuild the live function exactly from the original. No reset; demo logins untouched. Types regenerated.
+- **Files:** new `src/domain/guests/notes.ts` (+ test); edited `src/server/guests/{queries,message-actions}.ts`, `src/server/seating/queries.ts`, `src/server/rsvp/{actions,party-actions,public}.ts`, `src/domain/guests/guest-mail.ts` (+ test), guest page, `tests/integration/rsvp-details.test.ts`, `tests/e2e/{rsvp-details,guest-emails,rsvp-form-builder}.spec.ts`, docs 06/15/16.
+- **Commands (2026-11-23):** typecheck, lint, format clean; `test:integration` 853/853 before the fixes and 854/854 after (40 files); `test:unit` 1011; Playwright chromium on rsvp-details, guest-emails, rsvp-form-builder, guests, party-rsvp, seating: 26 of 27, with `seating.spec.ts:120` timing out under parallel load and passing alone (28.4 s, near the 30 s limit). Guest page screenshot at 390 inspected; axe and overflow clean.
+- **Not verified:** full e2e, Firefox/WebKit, VoiceOver; a fresh `db:reset` of the whole migration chain (not run, to keep demo logins).
+- **Next:** UX-17 lodging slice (owner decisions 2026-11-23: room blocks shown on the guest website, a guest "Where are you staying?" answer on the RSVP, blocks linkable to the budget for attrition exposure, behind `GUEST_LODGING=on`), then day-of check-in (guests and vendors, existing roles only, `DAY_OF_CHECKIN=on`). Lodging adds a public write path and money rules, so plan first and review after.
+
 ### 2026-11-23 · Claude Code · UX-18 planner vs couple list spacing (UX/RSVP audit) · branch `main` (uncommitted)
 
 - **Scope:** UX-18 from `wedding_ux_rsvp_audit_output/GAP_BACKLOG.md` (UXR-11; S). No migration, no owner decision, no new data path. Details in the ADR-031 UX-18 addendum.

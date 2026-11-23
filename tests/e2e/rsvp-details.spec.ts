@@ -146,7 +146,7 @@ const stored = (guestId: string) =>
     async (db) =>
       (
         await db.query(
-          "select dietary, accessibility, guest_answered_at is not null as by_guest from public.guest_private_details where guest_id=$1",
+          "select guest_dietary as dietary, guest_accessibility as accessibility, guest_answered_at is not null as by_guest from public.guest_private_details where guest_id=$1",
           [guestId],
         )
       ).rows,
@@ -268,9 +268,13 @@ test("a guest tells the couple about food and access; it is saved, never shown a
   await checkPage(page, "submissions-tray@390");
   await page.keyboard.press("Escape");
   await page.goto(`/app/${wedding}/guests/${ada}`);
+  // The guest's words are shown under their own labels, apart from the couple's notes.
+  await expect(page.getByText("Dietary needs (from the guest)")).toBeVisible();
   await expect(page.getByText("SENTINEL-diet only vegan now")).toBeVisible();
+  await expect(page.getByText("Accessibility needs (from the guest)")).toBeVisible();
   await expect(page.getByText(ACCESS)).toBeVisible();
-  await expect(page.getByText(/The guest added dietary or accessibility notes/)).toBeVisible();
+  await expect(page.getByText(/The guest last added notes through their RSVP link/)).toBeVisible();
+  await checkPage(page, "guest-notes-both@390");
   await ctx.close();
 });
 

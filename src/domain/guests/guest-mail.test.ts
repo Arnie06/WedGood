@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   cleanSubject,
   confirmationText,
+  draftMatchesPlan,
   planConfirmations,
   planReminders,
   replyStateText,
@@ -10,6 +11,7 @@ import {
   type MailGuest,
   type MailInvitation,
   type MailMember,
+  type PlannedMessage,
 } from "./guest-mail";
 
 const now = new Date("2027-03-01T12:00:00Z");
@@ -179,5 +181,42 @@ describe("planReminders", () => {
         replied: new Set(["i1"]),
       }),
     ).toEqual([]);
+  });
+});
+
+describe("draftMatchesPlan", () => {
+  const planned: PlannedMessage = {
+    kind: "reply_reminder",
+    invitationId: "inv-1",
+    guestId: "g-1",
+    dedupeKey: "remind:inv-1:g-1:2026-11-23",
+    stateText: "g-1:pending:",
+    stateHash: "0".repeat(64),
+    subject: "A note about our wedding",
+    body: "We'd love to know.",
+  };
+  const draft = {
+    kind: "reply_reminder" as const,
+    invitationId: "inv-1",
+    guestId: "g-1",
+    subject: planned.subject,
+    body: planned.body,
+  };
+
+  it("matches text the composer would write now", () => {
+    expect(draftMatchesPlan(draft, [planned])).toBe("match");
+  });
+
+  it("refuses a body or subject the composer did not write", () => {
+    expect(draftMatchesPlan({ ...draft, body: "Click https://example.invalid" }, [planned])).toBe(
+      "different",
+    );
+    expect(draftMatchesPlan({ ...draft, subject: "Urgent" }, [planned])).toBe("different");
+  });
+
+  it("is missing when the composer would no longer write to this person", () => {
+    expect(draftMatchesPlan(draft, [])).toBe("missing");
+    expect(draftMatchesPlan({ ...draft, guestId: "g-2" }, [planned])).toBe("missing");
+    expect(draftMatchesPlan({ ...draft, kind: "rsvp_confirmation" }, [planned])).toBe("missing");
   });
 });
