@@ -6,6 +6,10 @@ import { SiteView } from "@/features/website/site-view";
 import { hasCapability, requireWorkspace } from "@/server/auth/workspace-guard";
 import { loadEventData } from "@/server/events/queries";
 import { loadSite } from "@/server/website/queries";
+import { publicHotels } from "@/domain/lodging/publish";
+import { lodgingEnabled } from "@/server/lodging/flag";
+import { loadLodgingHotels } from "@/server/lodging/queries";
+import { loadWeddingSettings } from "@/server/workspace/queries";
 
 export const metadata: Metadata = {
   title: "Website preview",
@@ -21,6 +25,13 @@ export default async function WebsitePreviewPage({ params }: { params: Promise<{
   const [site, eventData] = await Promise.all([loadSite(wid), loadEventData(wid)]);
   if (!site) notFound();
   const d = site.draft;
+  // Same rule as publishing (app_private.site_snapshot), so the preview matches the public page.
+  const hotels =
+    lodgingEnabled() && d.hotels === true && hasCapability(access, "guests.manage")
+      ? await Promise.all([loadLodgingHotels(wid), loadWeddingSettings(wid)]).then(([l, s]) =>
+          publicHotels(l.hotels, l.blocks, s.baseCurrency),
+        )
+      : [];
   const byId = new Map(eventData.events.map((e) => [e.id, e]));
   const preview: PublicSite = {
     template: d.template,
@@ -47,6 +58,7 @@ export default async function WebsitePreviewPage({ params }: { params: Promise<{
         },
       ];
     }),
+    ...(hotels.length > 0 && { hotels }),
   };
   return (
     <div>

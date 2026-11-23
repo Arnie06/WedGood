@@ -65,6 +65,27 @@ export type SiteDraft = {
   faq: { q: string; a: string }[];
   registry: { label: string; url: string }[];
   events: SiteEventEntry[];
+  /** UX-17: show hotels the couple marked for guests (copied from Lodging when publishing). */
+  hotels?: boolean;
+};
+
+/** A hotel as published: no ids, and a nightly rate only where the couple chose to show it. */
+export type PublicHotel = {
+  name: string;
+  address?: string;
+  phone?: string;
+  websiteUrl?: string;
+  note?: string;
+  blocks: {
+    label?: string;
+    checkIn: string;
+    checkOut: string;
+    bookBy?: string;
+    bookingUrl?: string;
+    bookingCode?: string;
+    nightlyRateMinor?: number;
+    currency?: string;
+  }[];
 };
 
 /** What a visitor receives. No event ids, no workspace ids. */
@@ -87,6 +108,7 @@ export type PublicSite = {
     where?: string;
     notes?: string;
   }[];
+  hotels?: PublicHotel[];
   invitation?: { label: string };
 };
 
@@ -291,6 +313,8 @@ export function parseSiteForm(
     events.push(entry);
   }
 
+  const hotels = get("hotels") === "on";
+
   if (Object.keys(errors).length > 0 || !isTemplate(template)) return { ok: false, errors };
   return {
     ok: true,
@@ -305,6 +329,7 @@ export function parseSiteForm(
       faq,
       registry,
       events,
+      ...(hotels && { hotels: true }),
     },
   };
 }
@@ -363,6 +388,7 @@ export function readDraft(value: unknown): SiteDraft {
         },
       ];
     }),
+    ...(o.hotels === true && { hotels: true }),
   };
 }
 

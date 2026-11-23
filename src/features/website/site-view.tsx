@@ -1,7 +1,9 @@
 import { ButtonLink } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import { Ornament } from "@/components/ui/ornament";
+import { formatDateOnly, isDateOnly } from "@/domain/dates/date-only";
 import { EVENT_KIND_LABELS, formatEventDate, type EventKind } from "@/domain/events/event";
+import { formatMinor } from "@/domain/money/money";
 import type { PublicSite, SiteTemplate } from "@/domain/website/site";
 import { cn } from "@/lib/cn";
 
@@ -32,6 +34,12 @@ const THEME: Record<
     ornament: false,
   },
 };
+
+const outLink =
+  "inline-flex min-h-11 items-center font-semibold text-action-emphasis underline underline-offset-4 break-all";
+
+/** A date-only value as "June 11, 2027"; anything malformed is shown as given. */
+const day = (iso: string) => (isDateOnly(iso) ? formatDateOnly(iso) : iso);
 
 function Prose({ children }: { children: string }) {
   // Plain text only: React escapes it, newlines are kept visually.
@@ -132,6 +140,70 @@ export function SiteView({ site, banner, rsvpHref }: SiteViewProps) {
             Travel and stay
           </h2>
           <Prose>{site.travel}</Prose>
+        </section>
+      )}
+
+      {site.hotels && site.hotels.length > 0 && (
+        <section aria-labelledby="site-hotels" className="space-y-3">
+          <h2 id="site-hotels" className={cn("font-serif text-headline-sm", theme.align)}>
+            Where to stay
+          </h2>
+          <ul className="space-y-4">
+            {site.hotels.map((h, i) => (
+              <Card as="li" key={`${h.name}-${i}`} className="space-y-3">
+                <CardTitle as="h3">{h.name}</CardTitle>
+                {h.address && <p className="text-body-md break-words">{h.address}</p>}
+                {h.phone && <p className="text-body-md break-words">{h.phone}</p>}
+                {h.note && <Prose>{h.note}</Prose>}
+                {h.blocks.map((b, j) => (
+                  <div
+                    key={`${b.checkIn}-${j}`}
+                    className="space-y-1 border-t border-border-hairline pt-3"
+                  >
+                    <p className="text-label-lg font-semibold break-words">
+                      {b.label ? `${b.label}: ` : "Room block: "}
+                      {day(b.checkIn)} to {day(b.checkOut)}
+                    </p>
+                    {b.nightlyRateMinor !== undefined && b.currency && (
+                      <p className="text-body-md">
+                        Group rate {formatMinor(b.nightlyRateMinor, b.currency)} a night
+                      </p>
+                    )}
+                    {b.bookBy && (
+                      <p className="text-body-md">Book by {day(b.bookBy)} to get the group rate.</p>
+                    )}
+                    {b.bookingCode && (
+                      <p className="text-body-md break-words">
+                        Booking code: <span className="font-semibold">{b.bookingCode}</span>
+                      </p>
+                    )}
+                    {b.bookingUrl && (
+                      <a
+                        href={b.bookingUrl}
+                        target="_blank"
+                        rel="noopener noreferrer nofollow"
+                        className={outLink}
+                      >
+                        Book a room at {h.name}
+                        <span className="sr-only"> (opens in a new tab)</span>
+                      </a>
+                    )}
+                  </div>
+                ))}
+                {h.websiteUrl && (
+                  <a
+                    href={h.websiteUrl}
+                    target="_blank"
+                    rel="noopener noreferrer nofollow"
+                    className={outLink}
+                  >
+                    {h.name} website
+                    <span className="sr-only"> (opens in a new tab)</span>
+                  </a>
+                )}
+              </Card>
+            ))}
+          </ul>
         </section>
       )}
 

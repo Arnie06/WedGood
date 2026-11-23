@@ -59,6 +59,7 @@ Scripts are contract names, not existing files. If no Docker, provide documented
 | GUEST_EMAIL | server; `on` enables the guest email outbox (UX-16) | no (default off) |
 | MAIL_PROVIDER / MAIL_ALLOW_DEV_SINK | server; `dev-sink` = labelled local capture that reaches no one; production refuses it unless the allow is `true` (E2E only). No real provider exists yet (UX-16) | no |
 | GUEST_SHUTTLES | server; `on` enables guest shuttles: event page card, `/plan/events/[eventId]/shuttles` and its CSV (UX-17) | no (default off) |
+| GUEST_LODGING | server; `on` enables lodging: `/plan/lodging` and its CSV, the Budget page possible-costs card, the website hotels option, and (L2) the RSVP stay question (UX-17) | no (default off) |
 
 Create `.env.example` with placeholders, no real credentials. Validate at startup per environment; optional adapters report unconfigured. Never expose service secrets through NEXT_PUBLIC. Production and staging separate projects/buckets/keys; use synthetic data in preview. Configure auth redirects/CORS, CSP, TLS, rate limiting, email domain and verified sender before enabling delivery.
 

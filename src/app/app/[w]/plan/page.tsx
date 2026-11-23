@@ -18,6 +18,7 @@ import { TaskToggle } from "@/features/plan/task-toggle";
 import { createTask, updateTask } from "@/server/plan/actions";
 import { loadAssigneeOptions, loadTasks, type TaskRecord } from "@/server/plan/queries";
 import { hasCapability, requireWorkspace } from "@/server/auth/workspace-guard";
+import { lodgingEnabled } from "@/server/lodging/flag";
 import { loadWeddingSettings } from "@/server/workspace/queries";
 import { readDensity } from "@/server/display/density";
 
@@ -78,6 +79,14 @@ export default async function PlanPage({ params }: { params: Promise<{ w: string
           Events
         </Link>
         {" · "}
+        {lodgingEnabled() && hasCapability(access, "guests.manage") && (
+          <>
+            <Link href={`${base}/plan/lodging`} className={link}>
+              Lodging
+            </Link>
+            {" · "}
+          </>
+        )}
         <Link href={`${base}/plan/day-of`} className={link}>
           Wedding day
         </Link>

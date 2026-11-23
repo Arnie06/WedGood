@@ -147,13 +147,13 @@ test("write, preview, publish, share with an invitation, then unpublish", async 
   await expect(
     page.getByText("Please confirm that you want this page to be public."),
   ).toBeVisible();
-  await page.getByRole("checkbox").check();
+  await page.getByRole("checkbox", { name: /I.ve previewed the saved draft/ }).check();
   await page.getByRole("button", { name: "Publish website" }).click();
   await expect(
     page.getByText("Use lowercase letters, numbers and single hyphens only."),
   ).toBeVisible();
   await page.getByLabel(/^Web address/).fill(slug);
-  await page.getByRole("checkbox").check();
+  await page.getByRole("checkbox", { name: /I.ve previewed the saved draft/ }).check();
   await page.getByRole("button", { name: "Publish website" }).click();
   await expect(page.getByText(/Published\. Your website is now public/)).toBeVisible();
   await expect(page.getByText("Published", { exact: true })).toBeVisible();

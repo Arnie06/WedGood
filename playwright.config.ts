@@ -87,6 +87,7 @@ export default defineConfig({
       MAIL_ALLOW_DEV_SINK: "true",
       // UX-17 is off by default; the suite turns guest shuttles on.
       GUEST_SHUTTLES: "on",
+      GUEST_LODGING: "on",
     },
   },
 });

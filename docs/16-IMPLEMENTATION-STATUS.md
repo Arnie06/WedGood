@@ -89,6 +89,15 @@ This ledger is for Claude Code, Codex and human maintainers. Keep it factual; do
 
 ## Session log
 
+### 2026-11-23 · Claude Code · UX-17 lodging, L1 (hotels, blocks, stays, budget card, website) · branch `main`
+
+- **Scope:** plan approved 2026-11-23 (ADR-031 UX-17 lodging addendum). L1 of two; L2 (the guest RSVP answer, a public write) is next, then an independent review of both migrations.
+- **Migration:** `20270103090000_guest_lodging.sql` (tables `lodging_hotels`, `lodging_blocks`, `lodging_stays`; RPCs `add_lodging_hotel`, `update_lodging_hotel`, `set_lodging_hotel_archived`, `add_lodging_block`, `update_lodging_block`, `remove_lodging_block`, `record_lodging_pickup`, `set_lodging_stays`, `lodging_possible_costs`; replaced `app_private.site_draft_ok` and `app_private.site_snapshot`). Applied locally with `db:migrate`; later edits to the uncommitted file (defaults on two RPCs, currency beside a published rate, a `version` column on stays) were applied to the local DB as deltas. No reset; demo logins untouched. Types regenerated.
+- **Files:** new `src/domain/lodging/{attrition,input,stays,publish}.ts` (+ tests), `src/server/lodging/{flag,errors,queries,actions}.ts`, `src/features/lodging/lodging-forms.tsx`, `src/features/budget/possible-costs-card.tsx`, `src/app/app/[w]/plan/lodging/{page.tsx,export/route.ts}`, `tests/integration/lodging.test.ts`, `tests/e2e/lodging.spec.ts`. Edited the Budget, Plan, website editor and preview pages, `src/domain/website/site.ts`, `src/server/website/public.ts`, `src/features/website/{site-view,website-forms}.tsx`, `playwright.config.ts` (`GUEST_LODGING=on`), `.env.example`, `tests/e2e/website.spec.ts` (its confirmation checkbox is now named, since the editor has a second checkbox), docs 06/10/13/15/16.
+- **Commands (2026-11-23):** typecheck, lint, format clean; `test:unit` 1033 passed (80 files); `test:integration` 867 passed (41 files, 13 new); Playwright chromium `lodging.spec.ts` 3/3 (flow at 390 incl. pickup, budget card, stays, CSV, publish with rate hidden then shown; viewer; axe and no overflow at 320/1280), plus website, budget, budget-counts, checklist, responsive, accessibility, grants: 88 run, 4 timed out under parallel load and passed serially. Screenshots inspected: Lodging at 390 and 320, Budget card at 390, public hotels at 320.
+- **Not verified:** VoiceOver, 200% zoom, WebKit/Firefox, full e2e; a fresh `db:reset` of the chain.
+- **Next:** L2, the guest "Where are you staying?" answer on single and party links (migration `20270104090000_rsvp_lodging.sql`), then the review.
+
 ### 2026-11-23 · Claude Code · Commits, independent review (REL-09 to REL-12, UX-06 to UX-17) and its fixes · branch `main`
 
 - **Commits (local, not pushed):** `f6d4036` audit outputs, `ce60ce3` REL-01 to REL-12 and UX-01 to UX-18 code/migrations/tests (one commit: shared files were edited by several tickets), `fef20d4` docs.

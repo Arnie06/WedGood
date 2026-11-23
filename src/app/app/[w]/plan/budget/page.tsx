@@ -30,6 +30,9 @@ import { DriftNote } from "@/features/events/drift-note";
 import { hasCapability, requireWorkspace } from "@/server/auth/workspace-guard";
 import { loadWeddingSettings } from "@/server/workspace/queries";
 import { readDensity } from "@/server/display/density";
+import { PossibleCostsCard } from "@/features/budget/possible-costs-card";
+import { lodgingEnabled } from "@/server/lodging/flag";
+import { loadPossibleCosts } from "@/server/lodging/queries";
 
 export const metadata: Metadata = { title: "Budget" };
 
@@ -40,10 +43,11 @@ export default async function BudgetPage({ params }: { params: Promise<{ w: stri
   const base = `/app/${access.wedding.id}`;
   const canEdit = hasCapability(access, "budget.manage");
   const density = await readDensity(access.wedding.id, access.membership.role);
-  const [settings, inputs, events] = await Promise.all([
+  const [settings, inputs, events, possibleCosts] = await Promise.all([
     loadWeddingSettings(access.wedding.id),
     loadBudgetInputs(access.wedding.id),
     loadEventLabels(access.wedding.id),
+    lodgingEnabled() ? loadPossibleCosts(access.wedding.id) : Promise.resolve([]),
   ]);
   const { budget, ledger } = inputs;
   // Locked caterer counts against replies. Only for members who may read guest totals (ADR-031 D2).
@@ -294,6 +298,13 @@ export default async function BudgetPage({ params }: { params: Promise<{ w: stri
           )}
         </section>
       )}
+
+      <PossibleCostsCard
+        rows={possibleCosts}
+        categories={new Map(budget.categories.map((c) => [c.id, c.name]))}
+        currency={cur}
+        lodgingHref={hasCapability(access, "guests.manage") ? `${base}/plan/lodging` : null}
+      />
 
       {!hasPlan ? (
         <Card>

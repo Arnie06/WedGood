@@ -26,6 +26,38 @@ const publicSiteSchema = z.object({
       notes: text.optional(),
     }),
   ),
+  hotels: z
+    .array(
+      z.object({
+        name: text,
+        address: text.optional(),
+        phone: text.optional(),
+        websiteUrl: z
+          .string()
+          .regex(/^https:\/\//)
+          .optional(),
+        note: text.optional(),
+        blocks: z.array(
+          z.object({
+            label: text.optional(),
+            checkIn: text,
+            checkOut: text,
+            bookBy: text.optional(),
+            bookingUrl: z
+              .string()
+              .regex(/^https:\/\//)
+              .optional(),
+            bookingCode: text.optional(),
+            nightlyRateMinor: z.number().int().positive().optional(),
+            currency: z
+              .string()
+              .regex(/^[A-Z]{3}$/)
+              .optional(),
+          }),
+        ),
+      }),
+    )
+    .optional(),
   invitation: z.object({ label: text }).optional(),
 });
 
@@ -53,6 +85,30 @@ export function toPublicSite(data: unknown): PublicSite | null {
       ...(e.where !== undefined && { where: e.where }),
       ...(e.notes !== undefined && { notes: e.notes }),
     })),
+    ...(s.hotels !== undefined &&
+      s.hotels.length > 0 && {
+        hotels: s.hotels.map((h) => ({
+          name: h.name,
+          ...(h.address !== undefined && { address: h.address }),
+          ...(h.phone !== undefined && { phone: h.phone }),
+          ...(h.websiteUrl !== undefined && { websiteUrl: h.websiteUrl }),
+          ...(h.note !== undefined && { note: h.note }),
+          blocks: h.blocks.map((b) => ({
+            checkIn: b.checkIn,
+            checkOut: b.checkOut,
+            ...(b.label !== undefined && { label: b.label }),
+            ...(b.bookBy !== undefined && { bookBy: b.bookBy }),
+            ...(b.bookingUrl !== undefined && { bookingUrl: b.bookingUrl }),
+            ...(b.bookingCode !== undefined && { bookingCode: b.bookingCode }),
+            // A rate is shown only together with its currency.
+            ...(b.nightlyRateMinor !== undefined &&
+              b.currency !== undefined && {
+                nightlyRateMinor: b.nightlyRateMinor,
+                currency: b.currency,
+              }),
+          })),
+        })),
+      }),
     ...(s.invitation !== undefined && { invitation: { label: s.invitation.label } }),
   };
 }

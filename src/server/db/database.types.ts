@@ -813,6 +813,90 @@ isOneToOne: false
       referencedColumns: ["wedding_id","id"]
     }
                   ]
+                },"lodging_blocks": {
+                  Row: {
+                    "attrition_allowed_bp": number | null,"attrition_charge_minor": number | null,"booking_code": string | null,"booking_url": string | null,"budget_category_id": string | null,"check_in": string,"check_out": string,"created_at": string,"created_by": string | null,"cutoff_date": string | null,"hotel_id": string,"id": string,"label": string | null,"nightly_rate_minor": number | null,"picked_up_as_of": string | null,"picked_up_room_nights": number | null,"rooms_per_night": number,"updated_at": string,"version": number,"wedding_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "attrition_allowed_bp"?: number | null,"attrition_charge_minor"?: number | null,"booking_code"?: string | null,"booking_url"?: string | null,"budget_category_id"?: string | null,"check_in": string,"check_out": string,"created_at"?: string,"created_by"?: string | null,"cutoff_date"?: string | null,"hotel_id": string,"id"?: string,"label"?: string | null,"nightly_rate_minor"?: number | null,"picked_up_as_of"?: string | null,"picked_up_room_nights"?: number | null,"rooms_per_night": number,"updated_at"?: string,"version"?: number,"wedding_id": string
+                  }
+                  Update: {
+                    "attrition_allowed_bp"?: number | null,"attrition_charge_minor"?: number | null,"booking_code"?: string | null,"booking_url"?: string | null,"budget_category_id"?: string | null,"check_in"?: string,"check_out"?: string,"created_at"?: string,"created_by"?: string | null,"cutoff_date"?: string | null,"hotel_id"?: string,"id"?: string,"label"?: string | null,"nightly_rate_minor"?: number | null,"picked_up_as_of"?: string | null,"picked_up_room_nights"?: number | null,"rooms_per_night"?: number,"updated_at"?: string,"version"?: number,"wedding_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "lodging_blocks_wedding_id_budget_category_id_fkey"
+      columns: ["wedding_id","budget_category_id"]
+isOneToOne: false
+      referencedRelation: "budget_categories"
+      referencedColumns: ["wedding_id","id"]
+    },{
+      foreignKeyName: "lodging_blocks_wedding_id_hotel_id_fkey"
+      columns: ["wedding_id","hotel_id"]
+isOneToOne: false
+      referencedRelation: "lodging_hotels"
+      referencedColumns: ["wedding_id","id"]
+    }
+                  ]
+                },"lodging_hotels": {
+                  Row: {
+                    "address": string | null,"archived_at": string | null,"candidate_id": string | null,"created_at": string,"created_by": string | null,"guest_note": string | null,"id": string,"name": string,"phone": string | null,"show_rate": boolean,"show_to_guests": boolean,"updated_at": string,"version": number,"website_url": string | null,"wedding_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "address"?: string | null,"archived_at"?: string | null,"candidate_id"?: string | null,"created_at"?: string,"created_by"?: string | null,"guest_note"?: string | null,"id"?: string,"name": string,"phone"?: string | null,"show_rate"?: boolean,"show_to_guests"?: boolean,"updated_at"?: string,"version"?: number,"website_url"?: string | null,"wedding_id": string
+                  }
+                  Update: {
+                    "address"?: string | null,"archived_at"?: string | null,"candidate_id"?: string | null,"created_at"?: string,"created_by"?: string | null,"guest_note"?: string | null,"id"?: string,"name"?: string,"phone"?: string | null,"show_rate"?: boolean,"show_to_guests"?: boolean,"updated_at"?: string,"version"?: number,"website_url"?: string | null,"wedding_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "lodging_hotels_wedding_id_candidate_id_fkey"
+      columns: ["wedding_id","candidate_id"]
+isOneToOne: false
+      referencedRelation: "candidates"
+      referencedColumns: ["wedding_id","id"]
+    },{
+      foreignKeyName: "lodging_hotels_wedding_id_fkey"
+      columns: ["wedding_id"]
+isOneToOne: false
+      referencedRelation: "weddings"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"lodging_stays": {
+                  Row: {
+                    "guest_answered_at": string | null,"guest_hotel_id": string | null,"guest_id": string,"guest_kind": string | null,"id": string,"planner_hotel_id": string | null,"planner_kind": string | null,"updated_at": string,"version": number,"wedding_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "guest_answered_at"?: string | null,"guest_hotel_id"?: string | null,"guest_id": string,"guest_kind"?: string | null,"id"?: string,"planner_hotel_id"?: string | null,"planner_kind"?: string | null,"updated_at"?: string,"version"?: number,"wedding_id": string
+                  }
+                  Update: {
+                    "guest_answered_at"?: string | null,"guest_hotel_id"?: string | null,"guest_id"?: string,"guest_kind"?: string | null,"id"?: string,"planner_hotel_id"?: string | null,"planner_kind"?: string | null,"updated_at"?: string,"version"?: number,"wedding_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "lodging_stays_wedding_id_guest_hotel_id_fkey"
+      columns: ["wedding_id","guest_hotel_id"]
+isOneToOne: false
+      referencedRelation: "lodging_hotels"
+      referencedColumns: ["wedding_id","id"]
+    },{
+      foreignKeyName: "lodging_stays_wedding_id_guest_id_fkey"
+      columns: ["wedding_id","guest_id"]
+isOneToOne: false
+      referencedRelation: "guests"
+      referencedColumns: ["wedding_id","id"]
+    },{
+      foreignKeyName: "lodging_stays_wedding_id_planner_hotel_id_fkey"
+      columns: ["wedding_id","planner_hotel_id"]
+isOneToOne: false
+      referencedRelation: "lodging_hotels"
+      referencedColumns: ["wedding_id","id"]
+    }
+                  ]
                 },"meal_options": {
                   Row: {
                     "active": boolean,"created_at": string,"event_id": string,"id": string,"name": string,"updated_at": string,"version": number,"wedding_id": string
@@ -1493,6 +1577,12 @@ isOneToOne: true
 "add_design_item":
 { Args: { "p_board": string,"p_candidate"?: string,"p_idempotency_key"?: string,"p_kind": string,"p_note"?: string,"p_title": string,"p_url"?: string,"p_wedding": string }; Returns: string
                            },
+"add_lodging_block":
+{ Args: { "p_block": Json,"p_hotel_id": string,"p_wedding": string }; Returns: string
+                           },
+"add_lodging_hotel":
+{ Args: { "p_hotel": Json,"p_wedding": string }; Returns: string
+                           },
 "add_meal_option":
 { Args: { "p_event_id": string,"p_name": string,"p_wedding": string }; Returns: string
                            },
@@ -1699,6 +1789,11 @@ isOneToOne: true
 "lock_guarantee":
 { Args: { "p_candidate"?: string,"p_count": number,"p_due"?: string,"p_event": string,"p_idempotency_key"?: string,"p_seen": Json,"p_wedding": string }; Returns: string
                            },
+"lodging_possible_costs":
+{ Args: { "p_wedding": string }; Returns: {
+              "attrition_allowed_bp": number,"attrition_charge_minor": number,"block_id": string,"budget_category_id": string,"check_in": string,"check_out": string,"cutoff_date": string,"hotel_archived": boolean,"hotel_name": string,"label": string,"nightly_rate_minor": number,"picked_up_as_of": string,"picked_up_room_nights": number,"rooms_per_night": number
+            }[]
+                           },
 "move_design_item":
 { Args: { "p_direction": string,"p_item": string,"p_wedding": string }; Returns: undefined
                            },
@@ -1734,6 +1829,9 @@ isOneToOne: true
               "author_name": string,"body": string,"created_at": string,"id": string,"subject_id": string,"subject_kind": string,"subject_title": string
             }[]
                            },
+"record_lodging_pickup":
+{ Args: { "p_as_of"?: string,"p_block_id": string,"p_expected_version": number,"p_room_nights"?: number,"p_wedding": string }; Returns: number
+                           },
 "record_payment":
 { Args: { "p_amount_minor": number,"p_commitment"?: string,"p_external_ref"?: string,"p_idempotency_key"?: string,"p_invoice"?: string,"p_item"?: string,"p_kind": string,"p_method"?: string,"p_note"?: string,"p_paid_on": string,"p_wedding": string }; Returns: string
                            },
@@ -1754,6 +1852,9 @@ isOneToOne: true
                            },
 "remove_design_item":
 { Args: { "p_expected_version": number,"p_item": string,"p_wedding": string }; Returns: string
+                           },
+"remove_lodging_block":
+{ Args: { "p_block_id": string,"p_expected_version": number,"p_wedding": string }; Returns: undefined
                            },
 "remove_member":
 { Args: { "p_expected_version": number,"p_membership": string }; Returns: undefined
@@ -1839,6 +1940,12 @@ isOneToOne: true
 "set_invitation_delivery":
 { Args: { "p_expected_version": number,"p_invitation_id": string,"p_shared": boolean,"p_wedding": string }; Returns: undefined
                            },
+"set_lodging_hotel_archived":
+{ Args: { "p_archived": boolean,"p_expected_version": number,"p_hotel_id": string,"p_wedding": string }; Returns: number
+                           },
+"set_lodging_stays":
+{ Args: { "p_guests": (string)[],"p_hotel_id"?: string,"p_kind"?: string,"p_wedding": string }; Returns: number
+                           },
 "set_meal_option_active":
 { Args: { "p_active": boolean,"p_expected_version": number,"p_option_id": string,"p_wedding": string }; Returns: undefined
                            },
@@ -1910,6 +2017,12 @@ isOneToOne: true
                            },
 "update_invitation":
 { Args: { "p_deadline"?: string,"p_expected_version": number,"p_expires_at": string,"p_invitation_id": string,"p_plus_one_quota": number,"p_wedding": string }; Returns: undefined
+                           },
+"update_lodging_block":
+{ Args: { "p_block": Json,"p_block_id": string,"p_expected_version": number,"p_wedding": string }; Returns: number
+                           },
+"update_lodging_hotel":
+{ Args: { "p_expected_version": number,"p_hotel": Json,"p_hotel_id": string,"p_wedding": string }; Returns: number
                            },
 "update_proposal":
 { Args: { "p_expected_version": number,"p_notes"?: string,"p_proposal": string,"p_received_on"?: string,"p_source_url"?: string,"p_title": string,"p_valid_until"?: string,"p_wedding": string }; Returns: number

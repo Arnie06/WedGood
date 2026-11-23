@@ -7,6 +7,8 @@ import { PublishForm, SiteForm, UnpublishForm } from "@/features/website/website
 import { hasCapability, requireWorkspace } from "@/server/auth/workspace-guard";
 import { loadEventData } from "@/server/events/queries";
 import { loadSite } from "@/server/website/queries";
+import { lodgingEnabled } from "@/server/lodging/flag";
+import { loadLodgingHotels } from "@/server/lodging/queries";
 import { emptyDraft } from "@/domain/website/site";
 
 export const metadata: Metadata = { title: "Guest website" };
@@ -40,7 +42,21 @@ export default async function WebsitePage({ params }: { params: Promise<{ w: str
     );
   }
 
-  const [site, eventData] = await Promise.all([loadSite(wid), loadEventData(wid)]);
+  const withLodging = lodgingEnabled();
+  const [site, eventData, lodging] = await Promise.all([
+    loadSite(wid),
+    loadEventData(wid),
+    withLodging ? loadLodgingHotels(wid) : Promise.resolve(null),
+  ]);
+  const shownHotels = lodging?.hotels.filter((h) => h.showToGuests && !h.archived).length ?? 0;
+  // Hotels are copied when publishing; later edits in Lodging need a new publish to appear.
+  const hotelsStale =
+    lodging !== null &&
+    site?.published === true &&
+    site.draft.hotels === true &&
+    site.publishedAt !== null &&
+    lodging.lastChangedAt !== null &&
+    lodging.lastChangedAt > site.publishedAt;
   const events = eventData.events.map((e) => ({
     id: e.id,
     name: e.name,
@@ -82,7 +98,19 @@ export default async function WebsitePage({ params }: { params: Promise<{ w: str
 
       <Card as="section" aria-labelledby="site-edit" className="space-y-4">
         <CardTitle id="site-edit">Write the page</CardTitle>
-        <SiteForm workspaceId={wid} version={version} draft={draft} events={events} />
+        {hotelsStale && (
+          <p role="status" className="text-body-md">
+            Hotel details changed in Lodging since you last published. Publish again to update the
+            public page.
+          </p>
+        )}
+        <SiteForm
+          workspaceId={wid}
+          version={version}
+          draft={draft}
+          events={events}
+          lodging={lodging ? { shown: shownHotels } : null}
+        />
       </Card>
 
       {site ? (

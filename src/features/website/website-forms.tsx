@@ -48,11 +48,14 @@ export function SiteForm({
   version,
   draft,
   events,
+  lodging = null,
 }: {
   workspaceId: string;
   version: number;
   draft: SiteDraft;
   events: EventChoice[];
+  /** UX-17: present when lodging is on; how many hotels are marked for guests. */
+  lodging?: { shown: number } | null;
 }) {
   const [state, formAction, pending] = useTrayActionState(saveSite, idle);
   const echoed = state.status === "error" ? state.values : undefined;
@@ -128,6 +131,24 @@ export function SiteForm({
           defaultValue={val("travel", draft.travel)}
           error={errors.travel}
         />
+        {lodging && (
+          <label className="flex min-h-11 items-start gap-3 text-body-md">
+            <input
+              type="checkbox"
+              name="hotels"
+              defaultChecked={echoed ? echoed.hotels === "on" : draft.hotels === true}
+              className="mt-1 size-5 shrink-0 accent-action-secondary"
+            />
+            <span>
+              Show the hotels you marked for guests
+              <span className="block text-body-sm text-ink-muted">
+                {lodging.shown === 0
+                  ? "No hotels are marked for guests yet. Mark them in Lodging."
+                  : `${lodging.shown} ${lodging.shown === 1 ? "hotel" : "hotels"} marked for guests in Lodging. Names, addresses, booking details and book-by dates are shown; rooms held and bookings never are.`}
+              </span>
+            </span>
+          </label>
+        )}
       </fieldset>
 
       <fieldset className="space-y-4">
