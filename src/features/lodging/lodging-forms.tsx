@@ -472,7 +472,11 @@ export function StaysForm({
         </ul>
       </fieldset>
       <Button type="submit" disabled={pending || chosen.size === 0 || chosen.size > 20}>
-        {pending ? "Saving…" : `Save for ${chosen.size === 0 ? "" : `${chosen.size} `}guests`}
+        {pending
+          ? "Saving…"
+          : chosen.size === 0
+            ? "Save for guests"
+            : `Save for ${chosen.size} ${chosen.size === 1 ? "guest" : "guests"}`}
       </Button>
       <Feedback state={state} />
     </form>

@@ -38,6 +38,7 @@ const STEP_ORDER: readonly RsvpStep[] = [
   "details",
   "plusOne",
   "questions",
+  "stay",
   "review",
 ];
 
@@ -170,6 +171,24 @@ export function setPersonDetails(
   return next;
 }
 
+/** The party's one answer to "Where are you staying?" (UX-17): read from the first open event that asks. */
+export function partyStay(facts: PartyRsvpFacts, draft: PartyDraft): string {
+  const e = eventsForStep(facts, draft, "stay")[0];
+  return e ? draftOf(draft, e).stay : "";
+}
+
+/** The hotels offered (the same for every event of a wedding); from the first open event. */
+export function partyHotels(facts: PartyRsvpFacts) {
+  return openEvents(facts)[0]?.hotels ?? [];
+}
+
+/** Writes the one answer into every open event's draft, so each event sends the same stay. */
+export function setPartyStay(facts: PartyRsvpFacts, draft: PartyDraft, value: string): PartyDraft {
+  const next: Record<string, RsvpDraft> = { ...draft };
+  for (const e of openEvents(facts)) next[e.invitationId] = { ...draftOf(draft, e), stay: value };
+  return next;
+}
+
 export type PartyStepProblem = {
   field: "attendance" | "plusOneName" | "questions";
   message: string;
@@ -248,8 +267,9 @@ export function partyReviewSections(
   draft: PartyDraft,
   mode: "draft" | "saved" = "draft",
 ): PartyReviewSection[] {
-  // A person's notes are shown under the first event that has them, not repeated under each.
+  // A person's notes and stay are shown under the first event that has them, not repeated under each.
   const shown = new Set<string>();
+  const shownStay = new Set<string>();
   return facts.events.map((e) => {
     const byMember = new Map(e.members.map((m) => [m.id, personKeyOf(m)]));
     // A closed event shows what is stored, whatever the screen: nothing in it can be sent.
@@ -259,14 +279,23 @@ export function partyReviewSections(
       e.closed ? "saved" : mode,
     ).map((line) => {
       const key = byMember.get(line.key);
-      if (!line.notes || key === undefined) return line;
-      if (shown.has(key)) {
-        const { notes: _repeat, ...rest } = line;
-        void _repeat;
-        return rest;
+      if (key === undefined) return line;
+      let out = line;
+      if (out.stay) {
+        if (shownStay.has(key)) {
+          const { stay: _repeat, ...rest } = out;
+          void _repeat;
+          out = rest;
+        } else shownStay.add(key);
       }
-      shown.add(key);
-      return line;
+      if (out.notes) {
+        if (shown.has(key)) {
+          const { notes: _repeat, ...rest } = out;
+          void _repeat;
+          out = rest;
+        } else shown.add(key);
+      }
+      return out;
     });
     return { invitationId: e.invitationId, name: e.name, closed: e.closed, lines };
   });

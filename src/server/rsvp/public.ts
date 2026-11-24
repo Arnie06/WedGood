@@ -6,6 +6,7 @@ import { createAdminClient } from "@/server/supabase/admin";
 import { hashInviteToken, isWellFormedInviteToken } from "@/server/members/invite-token";
 import { parseDefinition } from "@/domain/guests/rsvp-form";
 import { parseClientIpConfig, throttleSubject } from "./client-ip";
+import { lodgingEnabled } from "@/server/lodging/flag";
 import { addToCalendarEnabled, formBuilderEnabled, guestDetailsEnabled } from "./flags";
 
 const status = z.enum(["pending", "accepted", "declined"]);
@@ -42,6 +43,10 @@ export const rsvpViewSchema = z.object({
   }),
   mealOptions: z.array(z.object({ id: z.string(), name: z.string() })),
   form: formSchema,
+  // UX-17 lodging: hotels the couple marked for guests (names and book-by dates only).
+  hotels: z
+    .array(z.object({ id: z.string(), name: z.string(), bookBy: z.string().nullable() }))
+    .max(30),
   members: z.array(
     z.object({
       id: z.string(),
@@ -55,6 +60,13 @@ export const rsvpViewSchema = z.object({
       personKey: z.string(),
       // UX-11: which of the couple's questions this person has answered, never the answers.
       answered: z.array(z.string()),
+      // UX-17: this person's own answer to "Where are you staying?" (not sensitive like notes).
+      stay: z
+        .object({
+          kind: z.enum(["hotel", "elsewhere", "not_staying"]),
+          hotelId: z.string().nullable(),
+        })
+        .nullable(),
     }),
   ),
 });
@@ -69,12 +81,22 @@ export type RsvpView = Omit<FullView, "workspaceId"> & {
   addToCalendar: boolean;
 };
 
+/** With lodging switched off, guests see no hotels and no saved stays. */
+function withLodging(
+  v: Pick<FullView, "hotels" | "members">,
+): Pick<FullView, "hotels" | "members"> {
+  return lodgingEnabled()
+    ? { hotels: v.hotels, members: v.members }
+    : { hotels: [], members: v.members.map((m) => ({ ...m, stay: null })) };
+}
+
 export function toPublicView(full: FullView): RsvpView {
   const { workspaceId: _workspaceId, ...rest } = full;
   void _workspaceId;
   return {
     ...rest,
     form: formBuilderEnabled() ? rest.form : null,
+    ...withLodging(rest),
     askDetails: guestDetailsEnabled(),
     addToCalendar: addToCalendarEnabled(),
   };
@@ -136,7 +158,12 @@ export function toPublicPartyView(full: FullPartyView): RsvpPartyView {
   const forms = formBuilderEnabled();
   return {
     ...rest,
-    events: events.map((e) => ({ ...e, form: forms ? e.form : null, askDetails })),
+    events: events.map((e) => ({
+      ...e,
+      ...withLodging(e),
+      form: forms ? e.form : null,
+      askDetails,
+    })),
     addToCalendar: addToCalendarEnabled(),
   };
 }

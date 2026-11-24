@@ -36,6 +36,7 @@ import {
   DetailsPrivacyNote,
   ErrorMessage,
   QuestionFields,
+  StayFields,
   StepButtons,
   StepForm,
   Summary,
@@ -446,6 +447,18 @@ export function RsvpForm({ token, initial }: { token: string; initial: RsvpView 
         <StepButtons onBack={back} />
       </StepForm>
     );
+  } else if (screen === "stay") {
+    body = (
+      <StepForm onSubmit={next}>
+        <StepHeading title={RSVP_STEP_TITLES.stay} step={stepInfo("stay")} focusKey={focusKey} />
+        <StayFields
+          hotels={view.hotels}
+          value={draft.stay}
+          onChange={(stay) => setDraft((d) => ({ ...d, stay }))}
+        />
+        <StepButtons onBack={back} />
+      </StepForm>
+    );
   } else {
     const submission = buildSubmission(view, draft);
     const notes = skippedNotes(view, draft);
@@ -491,11 +504,19 @@ export function RsvpForm({ token, initial }: { token: string; initial: RsvpView 
               Edit questions
             </Button>
           )}
+          {steps.includes("stay") && (
+            <Button variant="quiet" size="sm" disabled={pending} onClick={() => go("stay")}>
+              Edit where you&apos;re staying
+            </Button>
+          )}
         </div>
         <input type="hidden" name="token" value={token} />
         <input type="hidden" name="version" value={view.version} />
         {submission.formVersionId && (
           <input type="hidden" name="formVersionId" value={submission.formVersionId} />
+        )}
+        {steps.includes("stay") && draft.stay !== "" && (
+          <input type="hidden" name="stay" value={draft.stay} />
         )}
         {submission.responses.map((r) => (
           <span key={r.memberId} hidden>

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { friendlyRsvpError } from "@/server/events/errors";
 import { createAdminClient } from "@/server/supabase/admin";
+import { lodgingEnabled } from "@/server/lodging/flag";
 import { formBuilderEnabled, guestDetailsEnabled, partyLinksEnabled } from "./flags";
 import {
   FORM_CHANGED,
@@ -29,6 +30,13 @@ const answersSchema = z
   .record(z.string().regex(/^q_[a-z0-9]{8}$/), z.string().trim().min(1).max(500))
   .refine((r) => Object.keys(r).length <= 10)
   .optional();
+// UX-17 lodging: where this person is staying. The database checks the hotel is offered to guests.
+const staySchema = z
+  .discriminatedUnion("kind", [
+    z.strictObject({ kind: z.literal("hotel"), hotelId: uuid }),
+    z.strictObject({ kind: z.enum(["elsewhere", "not_staying"]), hotelId: z.null().optional() }),
+  ])
+  .optional();
 const repliesSchema = z
   .array(
     z.strictObject({
@@ -46,6 +54,7 @@ const repliesSchema = z
             dietary: z.string().trim().min(1).max(500).optional(),
             accessibility: z.string().trim().min(1).max(500).optional(),
             answers: answersSchema,
+            stay: staySchema,
           }),
         )
         .max(13),
@@ -56,6 +65,7 @@ const repliesSchema = z
           dietary: z.string().trim().min(1).max(500).optional(),
           accessibility: z.string().trim().min(1).max(500).optional(),
           answers: answersSchema,
+          stay: staySchema,
         })
         .nullable(),
     }),
@@ -90,6 +100,10 @@ export async function submitPartyRsvp(
   // The couple's questions likewise: with that switch off, no answers and no form version are sent.
   const askDetails = guestDetailsEnabled();
   const forms = formBuilderEnabled();
+  const lodging = lodgingEnabled();
+  // With lodging off, a stay is dropped; a decline never carries one (the database ignores it too).
+  const withStay = (stay: z.infer<typeof staySchema>) =>
+    lodging && stay ? { stay: stay.kind === "hotel" ? stay : { kind: stay.kind } } : {};
   const payload = replies.data.map(({ formVersionId, ...r }) => {
     const version = forms ? (formVersionId ?? null) : null;
     const withAnswers = (a: Record<string, string> | undefined) =>
@@ -97,17 +111,19 @@ export async function submitPartyRsvp(
     return {
       ...r,
       formVersionId: version,
-      responses: r.responses.map(({ dietary, accessibility, answers, ...x }) => ({
+      responses: r.responses.map(({ dietary, accessibility, answers, stay, ...x }) => ({
         ...x,
         mealOptionId: x.status === "accepted" ? x.mealOptionId : null,
         ...(x.status === "accepted" && askDetails && { dietary, accessibility }),
         ...(x.status === "accepted" && withAnswers(answers)),
+        ...(x.status === "accepted" && withStay(stay)),
       })),
       plusOne: r.plusOne
-        ? (({ dietary, accessibility, answers, ...p }) => ({
+        ? (({ dietary, accessibility, answers, stay, ...p }) => ({
             ...p,
             ...(askDetails && { dietary, accessibility }),
             ...withAnswers(answers),
+            ...withStay(stay),
           }))(r.plusOne)
         : null,
     };

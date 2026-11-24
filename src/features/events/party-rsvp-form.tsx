@@ -13,13 +13,16 @@ import {
   openEvents,
   partyApplicableSteps,
   partyDraftFromFacts,
+  partyHotels,
   partyInitialStep,
   partyRemovedNames,
   partyNextStep,
   partyPreviousStep,
   partyReviewSections,
   partySkippedNotes,
+  partyStay,
   partyValidateStep,
+  setPartyStay,
   setPersonDetails,
   type PartyDraft,
   type PartyEventFacts,
@@ -46,6 +49,7 @@ import {
   DetailsPrivacyNote,
   ErrorMessage,
   QuestionFields,
+  StayFields,
   StepButtons,
   StepForm,
   Summary,
@@ -507,6 +511,18 @@ export function PartyRsvpForm({ token, initial }: { token: string; initial: Rsvp
         <StepButtons onBack={back} />
       </StepForm>
     );
+  } else if (screen === "stay") {
+    body = (
+      <StepForm onSubmit={next}>
+        <StepHeading title={RSVP_STEP_TITLES.stay} step={stepInfo("stay")} focusKey={focusKey} />
+        <StayFields
+          hotels={partyHotels(facts)}
+          value={partyStay(facts, draft)}
+          onChange={(value) => setDraft((d) => setPartyStay(facts, d, value))}
+        />
+        <StepButtons onBack={back} />
+      </StepForm>
+    );
   } else {
     const replies = buildPartySubmission(facts, draft);
     const notes = partySkippedNotes(facts, draft);
@@ -550,6 +566,11 @@ export function PartyRsvpForm({ token, initial }: { token: string; initial: Rsvp
           {steps.includes("questions") && (
             <Button variant="quiet" size="sm" disabled={pending} onClick={() => go("questions")}>
               Edit questions
+            </Button>
+          )}
+          {steps.includes("stay") && (
+            <Button variant="quiet" size="sm" disabled={pending} onClick={() => go("stay")}>
+              Edit where you&apos;re staying
             </Button>
           )}
         </div>

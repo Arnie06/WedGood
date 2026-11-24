@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { friendlyRsvpError } from "@/server/events/errors";
 import { createAdminClient } from "@/server/supabase/admin";
+import { lodgingEnabled } from "@/server/lodging/flag";
 import { formBuilderEnabled, guestDetailsEnabled } from "./flags";
 import {
   FORM_CHANGED,
@@ -44,6 +45,19 @@ function answerFields(form: FormData, prefix: string): Record<string, string> | 
   return out;
 }
 
+type StayPayload = { kind: "hotel"; hotelId: string } | { kind: "elsewhere" | "not_staying" };
+
+/** "hotel:<id>", "elsewhere" or "not_staying"; anything else, or lodging off, is no answer. */
+function parseStay(raw: FormDataEntryValue | null): StayPayload | null {
+  if (!lodgingEnabled() || typeof raw !== "string") return null;
+  if (raw === "elsewhere" || raw === "not_staying") return { kind: raw };
+  if (raw.startsWith("hotel:")) {
+    const id = raw.slice("hotel:".length);
+    return uuid.safeParse(id).success ? { kind: "hotel", hotelId: id } : null;
+  }
+  return null;
+}
+
 /** Trimmed text from a form field; blank is "nothing typed". Over the limit is refused by the caller. */
 function textField(form: FormData, name: string): string | null {
   const v = form.get(name);
@@ -71,6 +85,9 @@ export async function submitRsvp(_: RsvpActionState, form: FormData): Promise<Rs
     formBuilderEnabled() && typeof formVersion === "string" && uuid.safeParse(formVersion).success
       ? formVersion
       : null;
+  // UX-17: one "where are you staying" answer for everyone attending in this send; dropped when
+  // lodging is off. The database checks the hotel belongs to this wedding and is offered to guests.
+  const stay = parseStay(form.get("stay"));
   const responses: {
     memberId: string;
     status: string;
@@ -79,6 +96,7 @@ export async function submitRsvp(_: RsvpActionState, form: FormData): Promise<Rs
     dietary?: string;
     accessibility?: string;
     answers?: Record<string, string>;
+    stay?: StayPayload;
   }[] = [];
   let tooLong = false;
   let answerTooLong = false;
@@ -119,6 +137,7 @@ export async function submitRsvp(_: RsvpActionState, form: FormData): Promise<Rs
         askDetails &&
         notes(textField(form, `dietary_${id}`), textField(form, `access_${id}`))),
       ...(status === "accepted" && answers(`ans_${id}_`)),
+      ...(status === "accepted" && stay && { stay }),
     });
   }
   const plusName = form.get("plusOneName");
@@ -132,6 +151,7 @@ export async function submitRsvp(_: RsvpActionState, form: FormData): Promise<Rs
           ...(askDetails &&
             notes(textField(form, "plusOneDietary"), textField(form, "plusOneAccess"))),
           ...answers("plusOneAns_"),
+          ...(stay && { stay }),
         }
       : null;
   if (responses.length === 0 && !plusOne) {

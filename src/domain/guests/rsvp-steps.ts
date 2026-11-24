@@ -27,7 +27,15 @@ export type RsvpMemberFacts = {
   personKey?: string;
   /** Keys of the couple's questions this person has answered. The answers are never sent back (UX-11). */
   answered?: readonly string[];
+  /** This person's own saved answer to "Where are you staying?" (UX-17 lodging). */
+  stay?: StayAnswer | null;
 };
+
+/** UX-17 lodging: where a guest says they are staying. */
+export type StayAnswer = { kind: "hotel" | "elsewhere" | "not_staying"; hotelId: string | null };
+
+/** A hotel the couple marked for guests. */
+export type RsvpHotelFacts = { id: string; name: string; bookBy: string | null };
 
 /** The couple's published questions for this event (UX-11). */
 export type RsvpFormFacts = {
@@ -45,6 +53,8 @@ export type RsvpFacts = {
   askDetails?: boolean;
   /** The couple's own questions, when they have published some and the switch is on (UX-11). */
   form?: RsvpFormFacts | null;
+  /** Hotels to choose from for "Where are you staying?", when lodging is on (UX-17). */
+  hotels?: readonly RsvpHotelFacts[];
 };
 
 /** Draft key for the plus-one being added in this send (they have no member id yet). */
@@ -66,9 +76,15 @@ export type RsvpDraft = {
   };
   /** Answers to the couple's questions, by member id (or NEW_PLUS_ONE), then question key. */
   custom: Readonly<Record<string, AnswersDraft>>;
+  /**
+   * One answer to "Where are you staying?" for everyone attending in this send: "" (not answered),
+   * "elsewhere", "not_staying" or `hotel:<id>` (UX-17).
+   */
+  stay: string;
 };
 
-export type RsvpStep = "attendance" | "meals" | "details" | "plusOne" | "questions" | "review";
+export type RsvpStep =
+  "attendance" | "meals" | "details" | "plusOne" | "questions" | "stay" | "review";
 
 export const RSVP_STEP_TITLES: Record<RsvpStep, string> = {
   attendance: "Who's coming?",
@@ -76,6 +92,7 @@ export const RSVP_STEP_TITLES: Record<RsvpStep, string> = {
   details: "Anything we should know?",
   plusOne: "Bringing a guest?",
   questions: "A few more questions",
+  stay: "Where are you staying?",
   review: "Check your reply",
 };
 
@@ -103,7 +120,43 @@ export function draftFromFacts(facts: RsvpFacts): RsvpDraft {
     details: {},
     plusOne: { bringing: false, name: "", mealOptionId: null, dietary: "", accessibility: "" },
     custom: {},
+    stay: initialStay(facts),
   };
+}
+
+// ---------------------------------------------------------------- where are you staying (UX-17)
+export const STAY_ELSEWHERE = "elsewhere";
+export const STAY_NOT_STAYING = "not_staying";
+
+/** The draft value for a saved stay; "" when the hotel is no longer offered. */
+export function stayValue(facts: RsvpFacts, s: StayAnswer | null | undefined): string {
+  if (!s) return "";
+  if (s.kind !== "hotel") return s.kind;
+  return s.hotelId && facts.hotels?.some((h) => h.id === s.hotelId) ? `hotel:${s.hotelId}` : "";
+}
+
+/** A returning guest starts from what they said, when everyone who answered said the same. */
+function initialStay(facts: RsvpFacts): string {
+  const values = new Set(facts.members.filter((m) => m.stay).map((m) => stayValue(facts, m.stay)));
+  return values.size === 1 ? ([...values][0] ?? "") : "";
+}
+
+/** The payload for a draft value; null when nothing (or an unknown hotel) is chosen. */
+export function stayFromValue(facts: RsvpFacts, value: string): StayAnswer | null {
+  if (value === STAY_ELSEWHERE || value === STAY_NOT_STAYING) return { kind: value, hotelId: null };
+  if (value.startsWith("hotel:")) {
+    const id = value.slice("hotel:".length);
+    return facts.hotels?.some((h) => h.id === id) ? { kind: "hotel", hotelId: id } : null;
+  }
+  return null;
+}
+
+export function stayLabelFor(facts: RsvpFacts, s: StayAnswer | null | undefined): string | null {
+  if (!s) return null;
+  if (s.kind === "elsewhere") return "Staying elsewhere";
+  if (s.kind === "not_staying") return "Not staying overnight";
+  const name = facts.hotels?.find((h) => h.id === s.hotelId)?.name;
+  return name ? `Staying at ${name}` : "Staying at a hotel";
 }
 
 function attending(facts: RsvpFacts, draft: RsvpDraft): RsvpMemberFacts[] {
@@ -162,6 +215,10 @@ function questionsApply(facts: RsvpFacts, draft: RsvpDraft): boolean {
   return questionPeople(facts, draft).length > 0;
 }
 
+function stayApplies(facts: RsvpFacts, draft: RsvpDraft): boolean {
+  return (facts.hotels?.length ?? 0) > 0 && attending(facts, draft).length > 0;
+}
+
 /** The steps this guest will see, in order, given the answers so far. */
 export function applicableSteps(facts: RsvpFacts, draft: RsvpDraft): RsvpStep[] {
   const steps: RsvpStep[] = ["attendance"];
@@ -169,6 +226,7 @@ export function applicableSteps(facts: RsvpFacts, draft: RsvpDraft): RsvpStep[] 
   if (detailsApply(facts, draft)) steps.push("details");
   if (plusOneApplies(facts, draft)) steps.push("plusOne");
   if (questionsApply(facts, draft)) steps.push("questions");
+  if (stayApplies(facts, draft)) steps.push("stay");
   steps.push("review");
   return steps;
 }
@@ -259,6 +317,9 @@ export type SubmittedDetails = { dietary?: string; accessibility?: string };
 /** Answers to the couple's questions, only present when something was typed (UX-11). */
 export type SubmittedAnswers = { answers?: Record<string, string> };
 
+/** Where an attending person is staying, only present when the guest chose something (UX-17). */
+export type SubmittedStay = { stay?: StayAnswer };
+
 export type RsvpSubmission = {
   responses: ({
     memberId: string;
@@ -267,9 +328,13 @@ export type RsvpSubmission = {
     /** A guest-added plus-one the guest took off the reply: declined, place freed (UX-09). */
     remove?: true;
   } & SubmittedDetails &
-    SubmittedAnswers)[];
+    SubmittedAnswers &
+    SubmittedStay)[];
   plusOne:
-    ({ name: string; mealOptionId: string | null } & SubmittedDetails & SubmittedAnswers) | null;
+    | ({ name: string; mealOptionId: string | null } & SubmittedDetails &
+        SubmittedAnswers &
+        SubmittedStay)
+    | null;
   /** The published form version the guest answered; null when the couple asks no questions. */
   formVersionId: string | null;
 };
@@ -296,6 +361,8 @@ export function cleanDetails(d: DetailsDraft): SubmittedDetails {
  */
 export function buildSubmission(facts: RsvpFacts, draft: RsvpDraft): RsvpSubmission {
   const meals = facts.mealOptions.length > 0;
+  const chosen = stayApplies(facts, draft) ? stayFromValue(facts, draft.stay) : null;
+  const stay: SubmittedStay = chosen ? { stay: chosen } : {};
   const responses: RsvpSubmission["responses"] = [];
   for (const m of facts.members) {
     const a = draft.answers[m.id];
@@ -309,6 +376,7 @@ export function buildSubmission(facts: RsvpFacts, draft: RsvpDraft): RsvpSubmiss
       // A decline carries no notes, and nothing is sent when the event is not asking.
       ...(a.status === "accepted" && facts.askDetails && cleanDetails(detailsOf(draft, m.id))),
       ...(a.status === "accepted" && typedAnswers(facts, draft, m.id)),
+      ...(a.status === "accepted" && stay),
     });
   }
   const name = newPlusOneName(facts, draft);
@@ -319,6 +387,7 @@ export function buildSubmission(facts: RsvpFacts, draft: RsvpDraft): RsvpSubmiss
           mealOptionId: meals ? draft.plusOne.mealOptionId : null,
           ...(facts.askDetails && cleanDetails(draft.plusOne)),
           ...typedAnswers(facts, draft, NEW_PLUS_ONE),
+          ...stay,
         }
       : null;
   return { responses, plusOne, formVersionId: facts.form?.versionId ?? null };
@@ -333,6 +402,8 @@ export type ReviewLine = {
   notes?: string;
   /** Answers to the couple's questions: what is about to be sent, or "saved" (UX-11). */
   answers?: string;
+  /** Where they are staying: what is about to be sent, or what is saved (UX-17). */
+  stay?: string;
 };
 
 export const SAVED_ANSWERS = "Answers to the couple's questions are saved.";
@@ -371,6 +442,8 @@ export function reviewLines(
       ? "Meal not chosen yet"
       : (facts.mealOptions.find((o) => o.id === id)?.name ?? "Meal not chosen yet");
   const meals = facts.mealOptions.length > 0;
+  const typedStay =
+    mode === "draft" && stayApplies(facts, draft) ? stayFromValue(facts, draft.stay) : null;
   const lines: ReviewLine[] = facts.members.map((m) => {
     const a = draft.answers[m.id];
     const status = a?.status ?? null;
@@ -384,9 +457,14 @@ export function reviewLines(
         ? (typedAnswerLine(facts, typedAnswers(facts, draft, m.id)) ??
           (facts.form && (m.answered?.length ?? 0) > 0 ? SAVED_ANSWERS : null))
         : null;
+    const stay =
+      status === "accepted" && (facts.hotels?.length ?? 0) > 0
+        ? stayLabelFor(facts, typedStay ?? m.stay)
+        : null;
     return {
       ...(notes !== null && { notes }),
       ...(answers !== null && { answers }),
+      ...(stay !== null && { stay }),
       key: m.id,
       name: m.isPlusOne ? `${m.name} (plus-one)` : m.name,
       answer:
@@ -404,6 +482,7 @@ export function reviewLines(
   if (submission.plusOne) {
     const plusNotes = typedNotes(submission.plusOne);
     const plusAnswers = typedAnswerLine(facts, submission.plusOne);
+    const plusStay = stayLabelFor(facts, submission.plusOne.stay);
     lines.push({
       key: NEW_PLUS_ONE,
       name: `${submission.plusOne.name} (your guest)`,
@@ -411,6 +490,7 @@ export function reviewLines(
       meal: meals ? mealName(submission.plusOne.mealOptionId) : null,
       ...(plusNotes !== null && { notes: plusNotes }),
       ...(plusAnswers !== null && { answers: plusAnswers }),
+      ...(plusStay !== null && { stay: plusStay }),
     });
   }
   return lines;

@@ -4,7 +4,15 @@ import { Button } from "@/components/ui/button";
 import { TextAreaField } from "@/components/ui/text-area-field";
 import { TextField } from "@/components/ui/text-field";
 import { FORM_LIMITS, type AnswersDraft, type FormQuestion } from "@/domain/guests/rsvp-form";
-import { DETAILS_MAX, type DetailsDraft, type ReviewLine } from "@/domain/guests/rsvp-steps";
+import { formatDateOnly, isDateOnly } from "@/domain/dates/date-only";
+import {
+  DETAILS_MAX,
+  STAY_ELSEWHERE,
+  STAY_NOT_STAYING,
+  type DetailsDraft,
+  type ReviewLine,
+  type RsvpHotelFacts,
+} from "@/domain/guests/rsvp-steps";
 import { cn } from "@/lib/cn";
 
 /** Shared pieces of the guest RSVP steppers (single-event UX-03 and party link UX-06). */
@@ -122,6 +130,7 @@ export function Summary({ lines }: { lines: ReviewLine[] }) {
           </span>
           {l.notes && <span className="w-full text-body-sm text-ink-muted">{l.notes}</span>}
           {l.answers && <span className="w-full text-body-sm text-ink-muted">{l.answers}</span>}
+          {l.stay && <span className="w-full text-body-sm text-ink-muted">{l.stay}</span>}
         </li>
       ))}
     </ul>
@@ -232,5 +241,60 @@ export function QuestionFields({
         );
       })}
     </div>
+  );
+}
+
+/**
+ * "Where are you staying?" (UX-17 lodging): one optional answer for everyone attending in this
+ * reply. Hotels are the ones the couple marked for guests; the guest can also say elsewhere, not
+ * overnight, or leave it unanswered.
+ */
+export function StayFields({
+  hotels,
+  value,
+  onChange,
+}: {
+  hotels: readonly RsvpHotelFacts[];
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const options: [string, string, string | null][] = [
+    ...hotels.map((h): [string, string, string | null] => [
+      `hotel:${h.id}`,
+      h.name,
+      h.bookBy && isDateOnly(h.bookBy)
+        ? `Book by ${formatDateOnly(h.bookBy)} for the group rate`
+        : null,
+    ]),
+    [STAY_ELSEWHERE, "Somewhere else", null],
+    [STAY_NOT_STAYING, "Not staying overnight", null],
+    ["", "Not sure yet", null],
+  ];
+  return (
+    <fieldset className="space-y-3">
+      <legend className="mb-2 text-body-md text-ink-muted">
+        Optional. This helps the couple plan rooms and transport. Booking is still up to you.
+      </legend>
+      <div className="grid gap-2">
+        {options.map(([v, label, hint]) => (
+          <label key={v || "unsure"} className={choiceCard}>
+            <input
+              type="radio"
+              name="stay-choice"
+              value={v}
+              checked={value === v}
+              onChange={() => onChange(v)}
+              className={choiceInput}
+            />
+            <span>
+              {label}
+              {hint && (
+                <span className="block text-body-sm font-normal text-ink-muted">{hint}</span>
+              )}
+            </span>
+          </label>
+        ))}
+      </div>
+    </fieldset>
   );
 }

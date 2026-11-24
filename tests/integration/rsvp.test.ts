@@ -247,6 +247,8 @@ describe("accountless response", () => {
       "name",
       "personKey",
       "status",
+      // UX-17: the person's own answer to "Where are you staying?" (kind and hotel id only).
+      "stay",
     ]);
   });
 

@@ -89,6 +89,16 @@ This ledger is for Claude Code, Codex and human maintainers. Keep it factual; do
 
 ## Session log
 
+### 2026-11-23 · Claude Code · UX-17 lodging, L2 (guest "Where are you staying?") and lodging review · branch `main`
+
+- **Scope:** L2 of the lodging plan (ADR-031 UX-17 lodging addenda), a new public write path, plus the independent review of both lodging migrations (recorded in the ADR-031 L2 addendum: no high or medium findings).
+- **Migration:** `20270104090000_rsvp_lodging.sql` (new `app_private.rsvp_save_stay`; `rsvp_apply_with_form` re-created with the stay calls; `rsvp_projection` swapped, asserted, to add `hotels` and each member's own `stay`). Applied locally with `db:migrate`; replayed in a rolled-back transaction from the pre-L2 functions and compared by hash and ACL: identical. No reset; demo logins untouched.
+- **Files:** new `src/domain/guests/rsvp-stay.test.ts`, `tests/integration/rsvp-lodging.test.ts`, `tests/e2e/rsvp-lodging.spec.ts`. Edited `src/domain/guests/{rsvp-steps,rsvp-party-steps}.ts` (a `stay` step; party asks once and mirrors it to every open event), `src/features/events/{rsvp-form,party-rsvp-form,rsvp-parts}.tsx` (`StayFields`, the step, an "Edit where you're staying" link, a stay line on Review), `src/server/rsvp/{public,actions,party-actions}.ts` (view schema; both actions drop `stay` with the switch off), `tests/integration/{rsvp,rsvp-details}.test.ts` (the guest member key allowlist now includes `stay`), docs 06/10/15/16.
+- **Commands (2026-11-23):** typecheck, lint and format clean; `test:unit` 1039 passed (81 files); `test:integration`: full run 871 of 875, the 4 failures being two stale key allowlists (fixed, 42/42 after) and two 30 s timeouts under machine load (`event-demand` passes 14/14 with a 180 s limit; `event-vendors` passes on rerun); new `rsvp-lodging` 8/8. Playwright chromium: new `rsvp-lodging.spec.ts` 2/2 and `lodging.spec.ts` 3/3 on a quiet machine. The full chromium run (301 tests, 2 workers) took 1.0 h with 250 passed and 51 failed; a serial rerun passed 36 of the 51; the remaining 15 all pass with a 120 s limit once the machine was quiet. So every test has passed, but not in one clean run. Screenshot of the guest step at 320 px inspected.
+- **Environment note:** the slow, failing runs were caused by machine load (load average above 400; browsers, a security scanner and a stale `next-server` left running about three days, which was stopped with the owner's approval). One more `next dev` session on port 3000 was left running. Failures at 35 to 60 s against a 30 s limit across unrelated specs were the sign; do not read them as product bugs.
+- **Not verified:** a single clean full e2e run; VoiceOver, 200% zoom, WebKit/Firefox for the new screens; a fresh `db:reset` of the whole chain.
+- **Next:** day-of check-in (guests and vendors, existing roles, `DAY_OF_CHECKIN=on`), the last UX-17 slice, after its plan is approved. Optional first: a clean full e2e run on a quiet machine, and the owner's VoiceOver pass for UX-03.
+
 ### 2026-11-23 · Claude Code · UX-17 lodging, L1 (hotels, blocks, stays, budget card, website) · branch `main`
 
 - **Scope:** plan approved 2026-11-23 (ADR-031 UX-17 lodging addendum). L1 of two; L2 (the guest RSVP answer, a public write) is next, then an independent review of both migrations.
