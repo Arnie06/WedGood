@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button";
-import { Card, CardTitle } from "@/components/ui/card";
+import { WorkspacePageHeading } from "@/components/shell/workspace-page-heading";
+import { Card } from "@/components/ui/card";
 import { presetDef } from "@/domain/packages/catalog";
 import { hasCapability, requireWorkspace } from "@/server/auth/workspace-guard";
 import { loadPackages, packageFreshness } from "@/server/packages/queries";
@@ -25,24 +26,20 @@ export default async function PackagesPage({ params }: { params: Promise<{ w: st
     }).format(new Date(iso));
 
   return (
-    <div className="max-w-3xl space-y-8">
-      <header className="space-y-2">
-        <h1 className="font-serif text-headline-mobile md:text-headline-lg">Packages</h1>
-        <p className="text-body-lg text-ink-muted">
-          Fixed PDF and CSV copies of your plan for the couple, family or vendors. A package
-          doesn&apos;t change after it is made; it just tells you when your plan has moved on.
-        </p>
-      </header>
-
+    <div className="space-y-6">
+      <WorkspacePageHeading
+        title="Packages"
+        description="Dated PDF and CSV copies of your plan for family, vendors and planners."
+        actions={
+          allowed && <ButtonLink href={`${base}/plan/packages/new`}>Create a package</ButtonLink>
+        }
+      />
       {!allowed ? (
         <Card>
           <p className="text-body-md">Only the workspace owner or a partner can see packages.</p>
         </Card>
       ) : (
         <>
-          <p>
-            <ButtonLink href={`${base}/plan/packages/new`}>Create a package</ButtonLink>
-          </p>
           {packages.length === 0 ? (
             <Card>
               <p className="text-body-md text-ink-muted">
@@ -51,43 +48,44 @@ export default async function PackagesPage({ params }: { params: Promise<{ w: st
               </p>
             </Card>
           ) : (
-            <ul className="space-y-4">
+            <ul className="record-list">
               {packages.map((p) => {
                 const state = freshness.get(p.id) ?? "unknown";
                 return (
-                  <li key={p.id}>
-                    <Card className="space-y-3">
-                      <div className="flex flex-wrap items-start justify-between gap-2">
-                        <CardTitle as="h2">
-                          <Link href={`${base}/plan/packages/${p.id}`} className={link}>
-                            {p.title}
-                          </Link>
-                        </CardTitle>
-                        {state === "current" ? (
-                          <Badge tone="confirmed">Matches your plan</Badge>
-                        ) : state === "stale" ? (
-                          <Badge tone="pending">Plan has changed</Badge>
-                        ) : (
-                          <Badge>Not checked</Badge>
-                        )}
-                      </div>
-                      <p className="text-body-md text-ink-muted">
-                        {presetDef(p.preset).label}
-                        {p.recipient ? ` · for ${p.recipient}` : ""} · made {when(p.createdAt)} UTC
-                        · plan revision {p.revision}
-                      </p>
-                      <p className="flex flex-wrap gap-x-4 gap-y-1 text-body-md">
-                        {p.artifacts.map((a) => (
-                          <a
-                            key={a.format}
-                            href={`${base}/plan/packages/${p.id}/download?format=${a.format}`}
-                            className={link}
-                          >
-                            Download {a.format.toUpperCase()}
-                          </a>
-                        ))}
-                      </p>
-                    </Card>
+                  <li key={p.id} className="space-y-1 px-4 py-3">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <h2 className="min-w-0 text-body-md font-semibold wrap-anywhere">
+                        <Link
+                          href={`${base}/plan/packages/${p.id}`}
+                          className={`${link} inline-flex min-h-11 items-center`}
+                        >
+                          {p.title}
+                        </Link>
+                      </h2>
+                      {state === "current" ? (
+                        <Badge tone="confirmed">Matches your plan</Badge>
+                      ) : state === "stale" ? (
+                        <Badge tone="pending">Plan has changed</Badge>
+                      ) : (
+                        <Badge>Not checked</Badge>
+                      )}
+                    </div>
+                    <p className="text-body-md text-ink-muted">
+                      {presetDef(p.preset).label}
+                      {p.recipient ? ` · for ${p.recipient}` : ""} · made {when(p.createdAt)} UTC ·
+                      plan revision {p.revision}
+                    </p>
+                    <p className="flex flex-wrap gap-x-4 gap-y-1 text-body-md">
+                      {p.artifacts.map((a) => (
+                        <a
+                          key={a.format}
+                          href={`${base}/plan/packages/${p.id}/download?format=${a.format}`}
+                          className={`${link} inline-flex min-h-11 items-center`}
+                        >
+                          Download {a.format.toUpperCase()}
+                        </a>
+                      ))}
+                    </p>
                   </li>
                 );
               })}

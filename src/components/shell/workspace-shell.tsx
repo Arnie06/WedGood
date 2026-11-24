@@ -10,7 +10,6 @@ import { BottomNav, SidebarNav } from "./workspace-nav";
 export function WorkspaceShell({
   basePath,
   workspaceName,
-  workspaceSubtitle,
   badge,
   headerAction,
   notice,
@@ -20,7 +19,6 @@ export function WorkspaceShell({
 }: {
   basePath: string;
   workspaceName: string;
-  workspaceSubtitle?: string | undefined;
   badge?: ReactNode;
   headerAction?: ReactNode;
   notice?: ReactNode;
@@ -30,8 +28,11 @@ export function WorkspaceShell({
   children: ReactNode;
 }) {
   return (
-    <div data-density={density} className="min-h-dvh lg:grid lg:grid-cols-[16rem_minmax(0,1fr)]">
-      <aside className="sticky top-0 hidden h-dvh flex-col border-r border-border-hairline bg-canvas px-5 py-6 lg:flex">
+    <div
+      data-density={density}
+      className="min-h-dvh lg:grid lg:grid-cols-[14rem_minmax(0,1fr)] xl:grid-cols-[15rem_minmax(0,1fr)]"
+    >
+      <aside className="sticky top-0 hidden h-dvh flex-col border-r border-border-hairline bg-surface px-4 py-6 xl:px-5 lg:flex">
         <Hallmark />
         <SidebarNav basePath={basePath} />
         {sidebarFooter && <div className="mt-auto">{sidebarFooter}</div>}
@@ -46,14 +47,12 @@ export function WorkspaceShell({
               </span>
               <div className="min-w-0">
                 <p className="truncate font-serif text-headline-sm text-ink">{workspaceName}</p>
-                {workspaceSubtitle && (
-                  <p className="truncate text-body-sm text-ink-muted">{workspaceSubtitle}</p>
-                )}
+                {badge && <div className="sm:hidden">{badge}</div>}
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-2">
               {headerAction}
-              {badge}
+              {badge && <div className="hidden sm:block">{badge}</div>}
             </div>
           </div>
         </header>
@@ -63,7 +62,7 @@ export function WorkspaceShell({
         <main
           id="main"
           tabIndex={-1}
-          className="flex-1 px-margin-mobile pt-8 pb-32 md:px-8 lg:px-12 lg:pb-16"
+          className="flex-1 px-margin-mobile pt-6 pb-32 md:px-8 lg:px-12 lg:pb-16"
         >
           <div className="mx-auto w-full max-w-6xl">{children}</div>
         </main>

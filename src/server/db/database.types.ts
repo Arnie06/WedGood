@@ -565,6 +565,32 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"guest_checkins": {
+                  Row: {
+                    "checked_in_at": string,"checked_in_by": string | null,"event_id": string,"guest_id": string,"wedding_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "checked_in_at"?: string,"checked_in_by"?: string | null,"event_id": string,"guest_id": string,"wedding_id": string
+                  }
+                  Update: {
+                    "checked_in_at"?: string,"checked_in_by"?: string | null,"event_id"?: string,"guest_id"?: string,"wedding_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "guest_checkins_wedding_id_event_id_fkey"
+      columns: ["wedding_id","event_id"]
+isOneToOne: false
+      referencedRelation: "events"
+      referencedColumns: ["wedding_id","id"]
+    },{
+      foreignKeyName: "guest_checkins_wedding_id_guest_id_fkey"
+      columns: ["wedding_id","guest_id"]
+isOneToOne: false
+      referencedRelation: "guests"
+      referencedColumns: ["wedding_id","id"]
+    }
+                  ]
                 },"guest_imports": {
                   Row: {
                     "created_at": string,"created_by": string | null,"guest_count": number,"id": string,"new_household_count": number,"wedding_id": string
@@ -1491,6 +1517,32 @@ isOneToOne: false
       referencedColumns: ["wedding_id","id"]
     }
                   ]
+                },"vendor_arrivals": {
+                  Row: {
+                    "arrived_at": string,"arrived_by": string | null,"candidate_id": string,"event_id": string,"wedding_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "arrived_at"?: string,"arrived_by"?: string | null,"candidate_id": string,"event_id": string,"wedding_id": string
+                  }
+                  Update: {
+                    "arrived_at"?: string,"arrived_by"?: string | null,"candidate_id"?: string,"event_id"?: string,"wedding_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "vendor_arrivals_event_id_candidate_id_fkey"
+      columns: ["event_id","candidate_id"]
+isOneToOne: true
+      referencedRelation: "event_vendors"
+      referencedColumns: ["event_id","candidate_id"]
+    },{
+      foreignKeyName: "vendor_arrivals_wedding_id_event_id_fkey"
+      columns: ["wedding_id","event_id"]
+isOneToOne: false
+      referencedRelation: "events"
+      referencedColumns: ["wedding_id","id"]
+    }
+                  ]
                 },"venue_spaces": {
                   Row: {
                     "archived_at": string | null,"candidate_id": string,"created_at": string,"id": string,"kind": string,"name": string,"notes": string | null,"seated_capacity": number | null,"standing_capacity": number | null,"updated_at": string,"version": number,"wedding_id": string
@@ -1656,6 +1708,9 @@ isOneToOne: true
                            },
 "change_member_role":
 { Args: { "p_expected_version": number,"p_membership": string,"p_role": Database["public"]['Enums']["membership_role"] }; Returns: undefined
+                           },
+"check_in_guests":
+{ Args: { "p_event": string,"p_guests": (string)[],"p_wedding": string }; Returns: number
                            },
 "commit_guest_import":
 { Args: { "p_idempotency_key": string,"p_rows": Json,"p_wedding": string }; Returns: string
@@ -1835,6 +1890,9 @@ isOneToOne: true
 "record_payment":
 { Args: { "p_amount_minor": number,"p_commitment"?: string,"p_external_ref"?: string,"p_idempotency_key"?: string,"p_invoice"?: string,"p_item"?: string,"p_kind": string,"p_method"?: string,"p_note"?: string,"p_paid_on": string,"p_wedding": string }; Returns: string
                            },
+"record_vendor_arrival":
+{ Args: { "p_candidate": string,"p_event": string,"p_wedding": string }; Returns: boolean
+                           },
 "redeem_collaborator_invite":
 { Args: { "p_token_hash": string }; Returns: string
                            },
@@ -1978,6 +2036,12 @@ isOneToOne: true
                            },
 "unassign_shuttle_guest":
 { Args: { "p_guest": string,"p_run": string,"p_wedding": string }; Returns: undefined
+                           },
+"undo_guest_check_in":
+{ Args: { "p_event": string,"p_guest": string,"p_wedding": string }; Returns: boolean
+                           },
+"undo_vendor_arrival":
+{ Args: { "p_candidate": string,"p_event": string,"p_wedding": string }; Returns: boolean
                            },
 "unlink_document":
 { Args: { "p_document": string,"p_target": string,"p_target_type": string,"p_wedding": string }; Returns: undefined

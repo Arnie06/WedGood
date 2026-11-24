@@ -35,7 +35,7 @@ export default async function SeatingIndexPage({ params }: { params: Promise<{ w
 
   const data = await loadEventData(wid);
   return (
-    <div className="max-w-3xl space-y-6">
+    <div className="space-y-6">
       <header className="space-y-2">
         {heading}
         <p className="text-body-lg text-ink-muted">
@@ -72,28 +72,33 @@ export default async function SeatingIndexPage({ params }: { params: Promise<{ w
           </Link>
         </Card>
       )}
-      <ul className="space-y-3">
-        {data.events.map((event) => {
-          const members = data.members.filter((m) => m.eventId === event.id && m.active);
-          const attending = members.filter((m) => m.status === "accepted").length;
-          return (
-            <li key={event.id}>
-              <Card className="space-y-2">
-                <CardTitle>{event.name}</CardTitle>
-                <p className="text-body-md text-ink-muted">
-                  {[
-                    // Don't repeat the kind when the event is simply named after it.
-                    EVENT_KIND_LABELS[event.kind].toLowerCase() === event.name.toLowerCase()
-                      ? null
-                      : EVENT_KIND_LABELS[event.kind],
-                    event.localDate
-                      ? formatDateOnly(parseDateOnly(event.localDate))
-                      : "Date not set",
-                    `${attending} attending`,
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
-                </p>
+      {data.events.length > 0 && (
+        <ul className="record-list">
+          {data.events.map((event) => {
+            const members = data.members.filter((m) => m.eventId === event.id && m.active);
+            const attending = members.filter((m) => m.status === "accepted").length;
+            return (
+              <li
+                key={event.id}
+                className="flex min-w-0 flex-wrap items-center justify-between gap-x-5 px-4 py-3"
+              >
+                <div className="min-w-0">
+                  <h2 className="text-body-md font-semibold wrap-anywhere">{event.name}</h2>
+                  <p className="text-body-sm text-ink-muted">
+                    {[
+                      // Don't repeat the kind when the event is simply named after it.
+                      EVENT_KIND_LABELS[event.kind].toLowerCase() === event.name.toLowerCase()
+                        ? null
+                        : EVENT_KIND_LABELS[event.kind],
+                      event.localDate
+                        ? formatDateOnly(parseDateOnly(event.localDate))
+                        : "Date not set",
+                      `${attending} attending`,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </p>
+                </div>
                 <p className="flex flex-wrap gap-x-6">
                   <Link
                     href={`${base}/seating/${event.id}`}
@@ -108,11 +113,11 @@ export default async function SeatingIndexPage({ params }: { params: Promise<{ w
                     Event page<span className="sr-only"> for {event.name}</span>
                   </Link>
                 </p>
-              </Card>
-            </li>
-          );
-        })}
-      </ul>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 }

@@ -47,7 +47,7 @@ export default async function BookingsPage({ params }: { params: Promise<{ w: st
   const overdue = views.reduce((s, v) => s + v.schedule.overdueMinor, 0);
 
   return (
-    <div className="max-w-3xl space-y-8">
+    <div className="space-y-6">
       <header className="space-y-2">
         <h1 className="font-serif text-headline-mobile md:text-headline-lg">
           Bookings and payments
@@ -99,21 +99,23 @@ export default async function BookingsPage({ params }: { params: Promise<{ w: st
             </p>
           </Card>
         ) : (
-          <ul className="space-y-4">
+          <ul className="record-list">
             {views.map((v) => {
               const next = v.schedule.rows.find((r) => r.status !== "covered");
               return (
-                <Card as="li" key={v.commitment.id} className="space-y-2">
+                <li key={v.commitment.id} className="space-y-1 px-4 py-3">
                   <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-                    <h3 className="font-serif text-headline-sm break-words">
+                    <h3 className="min-w-0 text-body-md font-semibold wrap-anywhere">
                       <Link
                         href={`${base}/plan/budget/bookings/${v.commitment.id}`}
-                        className={link}
+                        className={`${link} inline-flex min-h-11 items-center`}
                       >
                         {v.commitment.title}
                       </Link>
                     </h3>
-                    <p className="text-body-lg font-semibold">{money(v.commitment.amountMinor)}</p>
+                    <p className="text-body-md font-semibold tabular-nums">
+                      {money(v.commitment.amountMinor)}
+                    </p>
                   </div>
                   <p className="text-body-md text-ink-muted">
                     {nameOf(v.commitment.candidateId) ?? "No vendor linked"} · Paid{" "}
@@ -132,7 +134,7 @@ export default async function BookingsPage({ params }: { params: Promise<{ w: st
                         ? "No payment schedule yet"
                         : "Schedule fully covered"}
                   </p>
-                </Card>
+                </li>
               );
             })}
           </ul>

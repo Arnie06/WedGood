@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Card, CardTitle } from "@/components/ui/card";
+import { WorkspacePageHeading } from "@/components/shell/workspace-page-heading";
+import { Card } from "@/components/ui/card";
 import { TrayButton } from "@/components/ui/tray";
 import { formatEventDate } from "@/domain/events/event";
 import { EventForm } from "@/features/events/event-forms";
@@ -28,15 +29,12 @@ export default async function EventsPage({ params }: { params: Promise<{ w: stri
   ]);
 
   return (
-    <div className="max-w-3xl space-y-6">
-      <header className="space-y-2">
-        <h1 className="font-serif text-headline-mobile md:text-headline-lg">Events</h1>
-        <p className="text-body-lg text-ink-muted">
-          Each event, such as the ceremony or reception, has its own guests, meals, seating and
-          agenda. Open one to see how it is coming together.
-        </p>
-        {canManage && (
-          <div className="pt-1">
+    <div className="space-y-6">
+      <WorkspacePageHeading
+        title="Events"
+        description="Guest counts, seating and agendas for each event."
+        actions={
+          canManage && (
             <TrayButton
               label="Add an event"
               title="Add an event"
@@ -49,9 +47,9 @@ export default async function EventsPage({ params }: { params: Promise<{ w: stri
                 timeZones={listTimeZones()}
               />
             </TrayButton>
-          </div>
-        )}
-      </header>
+          )
+        }
+      />
 
       {events.length === 0 && (
         <Card>
@@ -63,40 +61,47 @@ export default async function EventsPage({ params }: { params: Promise<{ w: stri
         </Card>
       )}
 
-      <ul className="space-y-3">
-        {events.map((event) => {
-          const counts = demand.byEvent.get(event.id);
-          return (
-            <li key={event.id}>
-              <Card className="space-y-2">
-                <CardTitle>{event.name}</CardTitle>
-                <p className="text-body-md text-ink-muted">
-                  {[
-                    kindLabel(event.kind).toLowerCase() === event.name.toLowerCase()
-                      ? null
-                      : kindLabel(event.kind),
-                    formatEventDate(event.localDate) ?? "Date not set",
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
-                </p>
-                {counts && (
-                  <p className="text-body-md">
-                    {counts.yes} attending · {counts.waiting} waiting · planning for{" "}
-                    {counts.planningNumber}
+      {events.length > 0 && (
+        <ul className="record-list">
+          {events.map((event) => {
+            const counts = demand.byEvent.get(event.id);
+            return (
+              <li
+                key={event.id}
+                className="grid min-w-0 gap-x-5 gap-y-1 px-4 py-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-center"
+              >
+                <div className="min-w-0">
+                  <h2 className="text-body-md font-semibold wrap-anywhere">{event.name}</h2>
+                  <p className="text-body-md text-ink-muted">
+                    {[
+                      kindLabel(event.kind).toLowerCase() === event.name.toLowerCase()
+                        ? null
+                        : kindLabel(event.kind),
+                      formatEventDate(event.localDate) ?? "Date not set",
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
                   </p>
-                )}
+                </div>
+                <div>
+                  {counts && (
+                    <p className="text-body-sm text-ink-muted">
+                      {counts.yes} attending · {counts.waiting} waiting · planning for{" "}
+                      {counts.planningNumber}
+                    </p>
+                  )}
+                </div>
                 <Link
                   href={`${base}/plan/events/${event.id}`}
                   className={`${link} inline-flex min-h-11 items-center`}
                 >
                   Open the event page<span className="sr-only"> for {event.name}</span>
                 </Link>
-              </Card>
-            </li>
-          );
-        })}
-      </ul>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 }

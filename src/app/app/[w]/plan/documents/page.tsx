@@ -101,7 +101,7 @@ export default async function DocumentsPage({
   const canDownload = unscannedDownloadsAllowed();
 
   return (
-    <div className="max-w-3xl space-y-8">
+    <div className="space-y-6">
       <header className="space-y-2">
         <h1 className="font-serif text-headline-mobile md:text-headline-lg">Documents</h1>
         <p className="text-body-lg text-ink-muted">
@@ -177,87 +177,85 @@ export default async function DocumentsPage({
             </p>
           </Card>
         ) : (
-          <ul className="space-y-4">
+          <ul className="record-list">
             {visible.map((d) => {
               const attached = linksFor(d.id, data.links, labels);
               const attachedKeys = new Set(attached.map((a) => a.key));
               return (
-                <li key={d.id}>
-                  <Card>
-                    <div className="space-y-3">
-                      <div className="space-y-1">
-                        <CardTitle>{d.title}</CardTitle>
-                        <p className="flex flex-wrap items-center gap-2 text-body-sm text-ink-muted">
-                          <Badge tone="neutral">{DOCUMENT_KIND_LABELS[d.kind]}</Badge>
-                          <Badge tone="pending">Not virus-scanned</Badge>
-                          <span>
-                            {formatBytes(d.bytes)} · added {dateFmt.format(new Date(d.createdAt))}
-                          </span>
-                        </p>
-                      </div>
-                      <div>
-                        {canDownload ? (
-                          <a
-                            href={`${base}/plan/documents/${d.id}/download`}
-                            className={`${link} inline-flex min-h-11 items-center`}
+                <li key={d.id} className="space-y-2 px-4 py-3">
+                  <div className="space-y-1">
+                    <CardTitle as="h3" className="wrap-anywhere">
+                      {d.title}
+                    </CardTitle>
+                    <p className="flex flex-wrap items-center gap-2 text-body-sm text-ink-muted">
+                      <Badge tone="neutral">{DOCUMENT_KIND_LABELS[d.kind]}</Badge>
+                      <Badge tone="pending">Not virus-scanned</Badge>
+                      <span>
+                        {formatBytes(d.bytes)} · added {dateFmt.format(new Date(d.createdAt))}
+                      </span>
+                    </p>
+                  </div>
+                  <div>
+                    {canDownload ? (
+                      <a
+                        href={`${base}/plan/documents/${d.id}/download`}
+                        className={`${link} inline-flex min-h-11 items-center`}
+                      >
+                        Download {d.title}
+                      </a>
+                    ) : (
+                      <p className="text-body-sm text-ink-muted">
+                        Download is off until a malware scanner is configured.
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <h3 className="text-label-lg font-semibold">Attached to</h3>
+                    {attached.length === 0 ? (
+                      <p className="text-body-sm text-ink-muted">Nothing yet.</p>
+                    ) : (
+                      <ul className="divide-y divide-border-hairline">
+                        {attached.map((a) => (
+                          <li
+                            key={a.key}
+                            className="flex flex-wrap items-center justify-between gap-2 py-1"
                           >
-                            Download {d.title}
-                          </a>
-                        ) : (
-                          <p className="text-body-sm text-ink-muted">
-                            Download is off until a malware scanner is configured.
-                          </p>
-                        )}
-                      </div>
-                      <div>
-                        <h3 className="text-label-lg font-semibold">Attached to</h3>
-                        {attached.length === 0 ? (
-                          <p className="text-body-sm text-ink-muted">Nothing yet.</p>
-                        ) : (
-                          <ul className="divide-y divide-border-hairline">
-                            {attached.map((a) => (
-                              <li
-                                key={a.key}
-                                className="flex flex-wrap items-center justify-between gap-2 py-1"
-                              >
-                                <span className="break-words">{a.label}</span>
-                                <DetachButton
-                                  workspaceId={wid}
-                                  documentId={d.id}
-                                  link={a.key}
-                                  label={a.label}
-                                />
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                      </div>
-                      <details className="group">
-                        <summary className="min-h-11 cursor-pointer py-2 text-label-lg font-semibold text-action-emphasis">
-                          Attach, rename or archive
-                        </summary>
-                        <div className="space-y-6 pt-3">
-                          <AttachDocumentForm
-                            workspaceId={wid}
-                            documentId={d.id}
-                            options={options.filter((o) => !attachedKeys.has(o.value))}
-                          />
-                          <EditDocumentForm
-                            workspaceId={wid}
-                            documentId={d.id}
-                            version={d.version}
-                            title={d.title}
-                            kind={d.kind}
-                          />
-                          <ArchiveDocumentForm
-                            workspaceId={wid}
-                            documentId={d.id}
-                            version={d.version}
-                          />
-                        </div>
-                      </details>
+                            <span className="break-words">{a.label}</span>
+                            <DetachButton
+                              workspaceId={wid}
+                              documentId={d.id}
+                              link={a.key}
+                              label={a.label}
+                            />
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                  <details className="group">
+                    <summary className="min-h-11 cursor-pointer py-2 text-label-lg font-semibold text-action-emphasis">
+                      Attach, rename or archive
+                    </summary>
+                    <div className="space-y-6 pt-3">
+                      <AttachDocumentForm
+                        workspaceId={wid}
+                        documentId={d.id}
+                        options={options.filter((o) => !attachedKeys.has(o.value))}
+                      />
+                      <EditDocumentForm
+                        workspaceId={wid}
+                        documentId={d.id}
+                        version={d.version}
+                        title={d.title}
+                        kind={d.kind}
+                      />
+                      <ArchiveDocumentForm
+                        workspaceId={wid}
+                        documentId={d.id}
+                        version={d.version}
+                      />
                     </div>
-                  </Card>
+                  </details>
                 </li>
               );
             })}

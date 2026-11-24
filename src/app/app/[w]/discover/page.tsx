@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { randomUUID } from "node:crypto";
 import Link from "next/link";
+import { WorkspacePageHeading } from "@/components/shell/workspace-page-heading";
 import { Card, CardTitle } from "@/components/ui/card";
 import { buttonClasses } from "@/components/ui/button";
 import { TrayButton } from "@/components/ui/tray";
@@ -10,7 +11,7 @@ import { VENDOR_CATEGORIES } from "@/domain/candidates/categories";
 import { filterCandidates, parseFilters } from "@/domain/candidates/filter";
 import { MOVABLE_STAGES, PIPELINE_STAGES, isPipelineStage } from "@/domain/proposals/stages";
 import { parseMajorToMinor } from "@/domain/wedding/settings";
-import { CandidateCard } from "@/features/discover/candidate-card";
+import { CandidateRow } from "@/features/discover/candidate-row";
 import { CandidateForm } from "@/features/discover/candidate-form";
 import { createCandidate } from "@/server/candidates/actions";
 import { hasCapability, requireWorkspace } from "@/server/auth/workspace-guard";
@@ -81,82 +82,92 @@ export default async function DiscoverPage({
   withUnknown.set("unknown", "1");
 
   return (
-    <div className="max-w-3xl space-y-8">
-      <header className="space-y-2">
-        <h1 className="font-serif text-headline-mobile md:text-headline-lg">
-          Venues &amp; vendors
-        </h1>
-        <p className="text-body-lg text-ink-muted">
-          Save the places and people you&apos;re considering, with where you found them. This is
-          your own list: nothing here is checked, confirmed available or booked.
-        </p>
-      </header>
-
-      {canManage && (
-        <div className="flex flex-col gap-3 sm:flex-row">
-          <TrayButton
-            label="Add a venue"
-            title="Add a venue"
-            description="Only the name is required. Anything you leave blank stays unknown."
-            openOnParam="addVenue"
-          >
-            <CandidateForm
-              action={createCandidate}
-              kind="venue"
-              currency={currency}
-              defaults={EMPTY_CANDIDATE}
-              lookupWorkspaceId={access.wedding.id}
-              hidden={{ workspaceId: access.wedding.id, idempotencyKey: randomUUID() }}
-              submitLabel="Save"
-              pendingLabel="Saving…"
-            />
-          </TrayButton>
-          <TrayButton
-            label="Add a vendor"
-            variant="outline"
-            title="Add a vendor"
-            description="Only the name and what they do are required."
-            openOnParam="addVendor"
-          >
-            <CandidateForm
-              action={createCandidate}
-              kind="vendor"
-              currency={currency}
-              defaults={EMPTY_CANDIDATE}
-              lookupWorkspaceId={access.wedding.id}
-              hidden={{ workspaceId: access.wedding.id, idempotencyKey: randomUUID() }}
-              submitLabel="Save"
-              pendingLabel="Saving…"
-            />
-          </TrayButton>
-        </div>
-      )}
-      <p>
-        <Link href={`${base}/discover/compare`} className={link}>
+    <div className="space-y-6">
+      <WorkspacePageHeading
+        title="Venues & vendors"
+        description="Your shortlist of venues and vendors, with the prices and sources you saved."
+        actions={
+          canManage && (
+            <>
+              <TrayButton
+                label="Add a venue"
+                title="Add a venue"
+                description="Only the name is required. Anything you leave blank stays unknown."
+                openOnParam="addVenue"
+              >
+                <CandidateForm
+                  action={createCandidate}
+                  kind="venue"
+                  currency={currency}
+                  defaults={EMPTY_CANDIDATE}
+                  lookupWorkspaceId={access.wedding.id}
+                  hidden={{ workspaceId: access.wedding.id, idempotencyKey: randomUUID() }}
+                  submitLabel="Save"
+                  pendingLabel="Saving…"
+                />
+              </TrayButton>
+              <TrayButton
+                label="Add a vendor"
+                variant="outline"
+                title="Add a vendor"
+                description="Only the name and what they do are required."
+                openOnParam="addVendor"
+              >
+                <CandidateForm
+                  action={createCandidate}
+                  kind="vendor"
+                  currency={currency}
+                  defaults={EMPTY_CANDIDATE}
+                  lookupWorkspaceId={access.wedding.id}
+                  hidden={{ workspaceId: access.wedding.id, idempotencyKey: randomUUID() }}
+                  submitLabel="Save"
+                  pendingLabel="Saving…"
+                />
+              </TrayButton>
+            </>
+          )
+        }
+      />
+      <nav aria-label="Venue and vendor tools" className="tool-nav">
+        <Link href={`${base}/discover/compare`} className="tool-link">
           Compare quotes
         </Link>
-      </p>
+      </nav>
 
       {all.length > 0 && (
         <form
           method="get"
-          className="space-y-4"
+          className="space-y-2"
           role="search"
           aria-label="Filter saved venues and vendors"
         >
-          <TextField
-            label="Search"
-            name="q"
-            type="search"
-            autoComplete="off"
-            placeholder="Name, place or note"
-            defaultValue={filters.q}
-          />
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="min-w-0 max-w-md flex-1 basis-32">
+              <TextField
+                label="Search"
+                name="q"
+                type="search"
+                autoComplete="off"
+                placeholder="Name, place or note"
+                defaultValue={filters.q}
+              />
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <button type="submit" className={buttonClasses({ variant: "secondary", size: "sm" })}>
+                Apply filters
+              </button>
+              {filtered && (
+                <a href={`${base}/discover`} className={link}>
+                  Clear filters
+                </a>
+              )}
+            </div>
+          </div>
           <details open={showMore} className="space-y-4">
             <summary className="min-h-11 cursor-pointer py-2 text-label-lg font-semibold">
               More filters
             </summary>
-            <div className="mt-3 space-y-4">
+            <div className="mt-2 grid gap-3 rounded-card border border-border-hairline bg-surface p-3 sm:grid-cols-2 sm:p-4">
               <SelectField label="Type" name="category" defaultValue={filters.category}>
                 <option value="all">Everything</option>
                 <option value="venue">Venues</option>
@@ -174,7 +185,7 @@ export default async function DiscoverPage({
                   </option>
                 ))}
               </SelectField>
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-3 sm:col-span-full sm:grid-cols-2">
                 <TextField
                   label="Seats at least"
                   hint="Venues only."
@@ -216,16 +227,6 @@ export default async function DiscoverPage({
               </label>
             </div>
           </details>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <button type="submit" className={buttonClasses({ variant: "secondary" })}>
-              Apply filters
-            </button>
-            {filtered && (
-              <a href={`${base}/discover`} className={link}>
-                Clear filters
-              </a>
-            )}
-          </div>
         </form>
       )}
 
@@ -250,7 +251,7 @@ export default async function DiscoverPage({
               ({matches.length})
             </span>
           </h2>
-          <div aria-live="polite">
+          <div aria-live="polite" className="empty:hidden">
             {hiddenUnknown > 0 && (
               <p className="text-body-md text-ink-muted">
                 {hiddenUnknown} more {hiddenUnknown === 1 ? "has" : "have"} no price or capacity to
@@ -271,18 +272,28 @@ export default async function DiscoverPage({
               </p>
             </Card>
           ) : (
-            <ul className="space-y-3">
-              {matches.map((c) => (
-                <CandidateCard
-                  key={c.id}
-                  candidate={c}
-                  workspaceId={access.wedding.id}
-                  base={base}
-                  currency={currency}
-                  canManage={canManage}
-                />
-              ))}
-            </ul>
+            <div className="rounded-card border border-border-hairline bg-surface">
+              <div
+                aria-hidden="true"
+                className="hidden grid-cols-[2.75rem_minmax(0,2fr)_minmax(0,1.35fr)_minmax(0,1fr)] gap-x-4 border-b border-border-hairline bg-surface-sunken px-4 py-2 text-label-md font-semibold text-ink-muted lg:grid"
+              >
+                <span className="col-start-2">Venue or vendor</span>
+                <span>Price and capacity</span>
+                <span>Source</span>
+              </div>
+              <ul className="divide-y divide-border-hairline">
+                {matches.map((c) => (
+                  <CandidateRow
+                    key={c.id}
+                    candidate={c}
+                    workspaceId={access.wedding.id}
+                    base={base}
+                    currency={currency}
+                    canManage={canManage}
+                  />
+                ))}
+              </ul>
+            </div>
           )}
         </section>
       )}

@@ -146,11 +146,11 @@ test("a planner starts compact, a couple starts comfortable, and each can switch
   await expect(shell(page)).toHaveAttribute("data-density", "comfortable");
 
   // The owner chooses compact: the guest rows get tighter, and the cookie stays on this wedding.
-  const card = page.locator("section[aria-labelledby=list] > ul > li").first();
-  const before = (await card.boundingBox())!.height;
+  const row = page.getByTestId("guest-row").filter({ hasText: "Ada Example" });
+  const before = (await row.boundingBox())!.height;
   await spacing(page).getByRole("button", { name: "Compact" }).click();
   await expect(shell(page)).toHaveAttribute("data-density", "compact");
-  const after = (await card.boundingBox())!.height;
+  const after = (await row.boundingBox())!.height;
   expect(after).toBeLessThan(before);
   const cookies = await page.context().cookies();
   const saved = cookies.find((c) => c.name === `wg-density-${f.w}`);
@@ -171,7 +171,9 @@ test("compact lists have no overflow, keep 44px targets and pass axe", async ({ 
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`/app/${f.w}/guests?event=${f.event}`);
     await expect(shell(page)).toHaveAttribute("data-density", "compact");
-    await expect(page.getByText("Answer").first()).toBeVisible();
+    await expect(
+      page.getByText("Answer", { exact: true }).filter({ visible: true }).first(),
+    ).toBeVisible();
     await page.screenshot({
       path: `test-results/screenshots/${width}/guests-compact.png`,
       fullPage: true,

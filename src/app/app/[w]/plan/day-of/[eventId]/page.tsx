@@ -11,6 +11,7 @@ import { dayLabel, kindLabel, rangeLabel, zoneName } from "@/features/timeline/f
 import { hasCapability, requireWorkspace } from "@/server/auth/workspace-guard";
 import { vendorLabel } from "@/domain/events/vendors";
 import { loadAgendaVendorOptions, loadEventVendorData } from "@/server/events/vendors";
+import { checkInEnabled } from "@/server/checkin/flag";
 import { loadAssigneeOptions } from "@/server/plan/queries";
 import { loadEventLabels, loadTimeline } from "@/server/timeline/queries";
 import { loadWeddingSettings } from "@/server/workspace/queries";
@@ -99,6 +100,14 @@ export default async function AgendaPage({
           >
             Printable coordinator handoff
           </Link>
+          {checkInEnabled() && (
+            <Link
+              href={`${base}/plan/day-of/${event.id}/check-in`}
+              className={`${link} inline-flex min-h-11 items-center`}
+            >
+              Check-in on the day
+            </Link>
+          )}
         </p>
         {atThisEvent.length > 0 && (
           <p className="text-body-md text-ink-muted" data-testid="agenda-vendors">

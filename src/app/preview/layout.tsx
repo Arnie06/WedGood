@@ -33,9 +33,6 @@ export default function PreviewLayout({ children }: { children: ReactNode }) {
           </p>
         </div>
       }
-      sidebarFooter={
-        <p className="text-body-sm text-ink-muted">Preview only. Accounts aren&apos;t open yet.</p>
-      }
     >
       {children}
     </WorkspaceShell>

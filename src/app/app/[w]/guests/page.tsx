@@ -1,10 +1,10 @@
 import { CircleAlert } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Badge } from "@/components/ui/badge";
-import { ButtonLink, buttonClasses } from "@/components/ui/button";
+import { WorkspacePageHeading } from "@/components/shell/workspace-page-heading";
+import { ButtonLink } from "@/components/ui/button";
 import { TrayButton } from "@/components/ui/tray";
-import { Card, CardTitle } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { DensityToggle } from "@/components/ui/density-toggle";
 import { nameKey } from "@/domain/guests/import";
 import {
@@ -97,6 +97,8 @@ export default async function GuestsPage({
   const visible = data.guests.filter((g) => g.archived === showArchived).filter(matches);
 
   const households = new Map(data.households.map((h) => [h.id, h]));
+  const activeHouseholds = new Set(active.flatMap((g) => (g.householdId ? [g.householdId] : [])))
+    .size;
   const groups = new Map<string, GuestRecord[]>();
   for (const g of visible) {
     const key = g.householdId ?? "";
@@ -119,67 +121,66 @@ export default async function GuestsPage({
   const replyHref = (f: string) => `${base}/guests?event=${event?.id ?? ""}&reply=${f}`;
 
   return (
-    <div className="max-w-3xl space-y-8">
-      <header className="space-y-3">
-        <h1 className="font-serif text-headline-mobile md:text-headline-lg">Guest list</h1>
-        <p className="text-body-lg text-ink-muted">
-          Everyone you may invite, grouped by household. Nothing is sent to anyone from here.
-        </p>
-        {active.length > 0 && (
-          <p className="text-body-md text-ink-muted">
-            {active.length} {active.length === 1 ? "guest" : "guests"} ·{" "}
-            {new Set(active.map((g) => g.householdId).filter(Boolean)).size} households · {adults}{" "}
-            {adults === 1 ? "adult" : "adults"} · {children} {children === 1 ? "child" : "children"}
-            {active.length - adults - children > 0 &&
-              ` · ${active.length - adults - children} not yet marked adult or child`}
-          </p>
-        )}
-        <nav aria-label="Guest tools" className="flex flex-wrap gap-2">
-          {[
-            ["Events", `${base}/plan/events`],
-            ["Invitations", `${base}/guests/invitations`],
-            ...(guestEmailEnabled() ? [["Guest emails", `${base}/guests/messages`]] : []),
-            ...(hasCapability(access, "seating.manage") ? [["Seating", `${base}/seating`]] : []),
-            ["Guest website", `${base}/website`],
-          ].map(([label, href]) => (
-            <Link
-              key={href}
-              href={href!}
-              className={`${buttonClasses({ variant: "outline", size: "sm" })}`}
+    <div className="space-y-6">
+      <WorkspacePageHeading
+        title="Guest list"
+        description={
+          active.length > 0 && (
+            <>
+              {active.length} {active.length === 1 ? "guest" : "guests"} · {activeHouseholds}{" "}
+              {activeHouseholds === 1 ? "household" : "households"} · {adults}{" "}
+              {adults === 1 ? "adult" : "adults"} · {children}{" "}
+              {children === 1 ? "child" : "children"}
+              {active.length - adults - children > 0 &&
+                ` · ${active.length - adults - children} age unspecified`}
+            </>
+          )
+        }
+        actions={
+          <>
+            <TrayButton
+              label="Add a guest"
+              title="Add a guest"
+              openOnParam="add"
+              description="Just a name is enough. This stays open so you can keep adding."
             >
-              {label}
-            </Link>
-          ))}
-        </nav>
-      </header>
-
-      <section aria-label="Add guests" className="flex flex-wrap gap-3">
-        <TrayButton
-          label="Add a guest"
-          title="Add a guest"
-          openOnParam="add"
-          description="Just a name is enough. This stays open so you can keep adding."
-        >
-          <GuestForm
-            quick
-            workspaceId={wid}
-            householdNames={data.households.map((h) => h.name)}
-            showPrivate={canSeePrivate}
-            submitLabel="Add guest"
-          />
-        </TrayButton>
-        <ButtonLink href={`${base}/guests/import`} variant="outline">
-          Import a spreadsheet
-        </ButtonLink>
-      </section>
+              <GuestForm
+                quick
+                workspaceId={wid}
+                householdNames={data.households.map((h) => h.name)}
+                showPrivate={canSeePrivate}
+                submitLabel="Add guest"
+              />
+            </TrayButton>
+            <ButtonLink href={`${base}/guests/import`} variant="outline">
+              Import a spreadsheet
+            </ButtonLink>
+          </>
+        }
+      />
+      <nav aria-label="Guest tools" className="tool-nav">
+        <Link href={`${base}/plan/events`} className="tool-link">
+          Events
+        </Link>
+        <Link href={`${base}/guests/invitations`} className="tool-link">
+          Invitations
+        </Link>
+        {guestEmailEnabled() && (
+          <Link href={`${base}/guests/messages`} className="tool-link">
+            Guest emails
+          </Link>
+        )}
+        {hasCapability(access, "seating.manage") && (
+          <Link href={`${base}/seating`} className="tool-link">
+            Seating
+          </Link>
+        )}
+        <Link href={`${base}/website`} className="tool-link">
+          Guest website
+        </Link>
+      </nav>
 
       <section aria-labelledby="list" className="space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-          <h2 id="list" className="font-serif text-headline-sm">
-            {showArchived ? "Archived guests" : "Your guests"}
-          </h2>
-          <DensityToggle workspaceId={wid} density={density} />
-        </div>
         {data.guests.length > 0 && (
           <>
             <GuestFilters
@@ -228,13 +229,22 @@ export default async function GuestsPage({
                 )}
               </div>
             )}
-
-            <p role="status" className="text-body-sm text-ink-muted">
-              Showing {visible.length} {visible.length === 1 ? "guest" : "guests"}
-              {filtering ? " that match" : ""}.
-            </p>
           </>
         )}
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+          <div>
+            <h2 id="list" className="font-serif text-headline-sm">
+              {showArchived ? "Archived guests" : "Your guests"}
+            </h2>
+            {data.guests.length > 0 && (
+              <p role="status" className="text-body-sm text-ink-muted">
+                Showing {visible.length} {visible.length === 1 ? "guest" : "guests"}
+                {filtering ? " that match" : ""}.
+              </p>
+            )}
+          </div>
+          {data.guests.length > 0 && <DensityToggle workspaceId={wid} density={density} />}
+        </div>
 
         {ordered.length === 0 ? (
           <Card>
@@ -245,43 +255,61 @@ export default async function GuestsPage({
             </p>
           </Card>
         ) : (
-          <ul className="space-y-4 compact:space-y-2">
-            {ordered.map(([hid, members]) => {
-              const h = households.get(hid);
-              return (
-                <li key={hid || "none"}>
-                  <Card>
-                    <CardTitle as="h3">{h ? h.name : "Individual guests"}</CardTitle>
-                    {h && (
-                      <p className="text-body-sm text-ink-muted">
-                        {members.length} {members.length === 1 ? "person" : "people"} shown
-                      </p>
-                    )}
-                    <ul className="mt-2 divide-y divide-border-hairline compact:mt-1">
+          <div className="rounded-card border border-border-hairline bg-surface">
+            <div
+              aria-hidden="true"
+              className="hidden grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-4 border-b border-border-hairline px-4 py-2 text-label-md font-semibold text-ink-muted lg:grid"
+            >
+              <span>Guest</span>
+              {replies ? (
+                <div className="grid grid-cols-3 gap-3">
+                  <span>Answer</span>
+                  <span>Meal</span>
+                  <span>Seat</span>
+                </div>
+              ) : (
+                <span>Age and tags</span>
+              )}
+            </div>
+            <ul className="divide-y divide-border-hairline">
+              {ordered.map(([hid, members]) => {
+                const h = households.get(hid);
+                return (
+                  <li key={hid || "none"}>
+                    <h3 className="bg-surface-sunken px-3 py-2 text-body-sm font-semibold wrap-anywhere text-ink-muted sm:px-4">
+                      {h ? h.name : "Individual guests"}
+                    </h3>
+                    <ul className="divide-y divide-border-hairline">
                       {members.map((g) => (
                         <li
                           key={g.id}
-                          className="py-1 compact:md:grid compact:md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] compact:md:items-center compact:md:gap-4"
+                          data-testid="guest-row"
+                          className="grid min-w-0 gap-x-4 gap-y-1 px-3 py-1.5 sm:px-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] lg:items-center compact:py-0"
                         >
-                          <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className={replies ? "min-w-0" : "contents"}>
                             <Link
                               href={`${base}/guests/${g.id}`}
-                              className={`${link} inline-flex min-h-11 items-center break-words`}
+                              className={`${link} inline-flex min-h-11 items-center rounded-hairline wrap-anywhere`}
                             >
-                              {g.fullName}
+                              <span className="min-w-0">{g.fullName}</span>
                             </Link>
-                            <span className="flex flex-wrap items-center gap-2">
-                              {g.ageGroup && (
-                                <Badge tone="neutral">
-                                  {g.ageGroup === "adult" ? "Adult" : "Child"}
-                                </Badge>
-                              )}
-                              {g.tags.map((t) => (
-                                <Badge key={t} tone="ceremony">
-                                  {t}
-                                </Badge>
-                              ))}
-                            </span>
+                            {(g.ageGroup || g.tags.length > 0) && (
+                              <span className="flex min-w-0 flex-wrap items-center gap-1.5 pb-2 lg:pb-0">
+                                {g.ageGroup && (
+                                  <span className="text-body-sm text-ink-muted">
+                                    {g.ageGroup === "adult" ? "Adult" : "Child"}
+                                  </span>
+                                )}
+                                {g.tags.map((t) => (
+                                  <span
+                                    key={t}
+                                    className="max-w-full rounded-full bg-status-neutral-bg px-2 py-0.5 text-body-sm wrap-anywhere text-status-neutral-fg"
+                                  >
+                                    {t}
+                                  </span>
+                                ))}
+                              </span>
+                            )}
                           </div>
                           {replies && (
                             <ReplyCells reply={replies.byGuest.get(g.id)} replies={replies} />
@@ -289,18 +317,16 @@ export default async function GuestsPage({
                         </li>
                       ))}
                     </ul>
-                  </Card>
-                </li>
-              );
-            })}
-          </ul>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
         )}
-        <p className="text-body-sm">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 text-body-sm">
           <a href={`${base}/guests/export`} className={`${link} inline-flex min-h-11 items-center`}>
             Download the list as CSV
           </a>
-        </p>
-        <p className="text-body-sm text-ink-muted">
           {showArchived ? (
             <Link href={`${base}/guests`} className={link}>
               Back to your guests
@@ -310,7 +336,7 @@ export default async function GuestsPage({
               View {archivedCount} archived {archivedCount === 1 ? "guest" : "guests"}
             </Link>
           ) : null}
-        </p>
+        </div>
       </section>
     </div>
   );
@@ -325,30 +351,30 @@ function Flag({ children }: { children: string }) {
   );
 }
 
-/** Answer, meal and seat for the chosen event. Labelled cells, so they read well as cards on a phone. */
+/** Answer, meal and seat for the chosen event. Individual labels keep each row readable on narrow screens. */
 function ReplyCells({ reply, replies }: { reply: GuestReply | undefined; replies: GuestReplies }) {
   const answer = answerOf(reply);
   const meal = !reply || reply.answer !== "yes" ? "—" : !replies.asksMeal ? "Not asked" : null;
   const seat = reply?.seat ? describeSeat(reply.seat) : null;
   return (
-    <dl className="grid grid-cols-3 gap-x-3 pb-2 text-body-sm compact:md:pb-0">
+    <dl className="grid grid-cols-3 gap-x-3 pb-2 text-body-sm lg:pb-0">
       <div className="min-w-0">
-        <dt className="text-label-md text-ink-muted">Answer</dt>
-        <dd className="break-words">
+        <dt className="text-label-md text-ink-muted lg:sr-only">Answer</dt>
+        <dd className="wrap-anywhere">
           {ANSWER_LABELS[answer]}
           {reply?.isPlusOne && " (plus-one)"}
           {reply?.replyClosed && <span className="block text-ink-muted">Reply date passed</span>}
         </dd>
       </div>
       <div className="min-w-0">
-        <dt className="text-label-md text-ink-muted">Meal</dt>
-        <dd className="break-words">
+        <dt className="text-label-md text-ink-muted lg:sr-only">Meal</dt>
+        <dd className="wrap-anywhere">
           {meal ?? (needsMeal(reply) ? <Flag>Not chosen</Flag> : reply?.meal)}
         </dd>
       </div>
       <div className="min-w-0">
-        <dt className="text-label-md text-ink-muted">Seat</dt>
-        <dd className="break-words">
+        <dt className="text-label-md text-ink-muted lg:sr-only">Seat</dt>
+        <dd className="wrap-anywhere">
           {needsSeat(reply) ? (
             <Flag>{seat ? `Not confirmed (${seat})` : "Not seated"}</Flag>
           ) : (

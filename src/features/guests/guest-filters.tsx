@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useTransition } from "react";
+import { cn } from "@/lib/cn";
 import { buttonClasses } from "@/components/ui/button";
 import { SelectField } from "@/components/ui/select-field";
 import { TextField } from "@/components/ui/text-field";
@@ -94,7 +95,14 @@ export function GuestFilters({
       ref={formRef}
       method="get"
       action={`${base}/guests`}
-      className="space-y-3"
+      className={cn(
+        "grid grid-cols-2 gap-3 lg:items-end",
+        events.length === 0
+          ? "lg:grid-cols-[minmax(0,2fr)_repeat(2,minmax(0,1fr))]"
+          : event === ""
+            ? "lg:grid-cols-[minmax(0,2fr)_repeat(3,minmax(0,1fr))]"
+            : "lg:grid-cols-[minmax(0,1.5fr)_repeat(4,minmax(0,1fr))]",
+      )}
       role="search"
       onSubmit={(event) => {
         event.preventDefault();
@@ -107,6 +115,7 @@ export function GuestFilters({
         name="q"
         type="search"
         defaultValue={q}
+        className="col-span-full lg:col-span-1"
         autoComplete="off"
         maxLength={100}
         onChange={() => {
@@ -115,13 +124,13 @@ export function GuestFilters({
         }}
       />
       {events.length > 0 && (
-        <div className="grid gap-3 sm:grid-cols-2 sm:items-end">
+        <>
           <SelectField
             label="Show replies for"
             name="event"
             defaultValue={event}
             onChange={apply}
-            hint="Adds each guest's answer, meal and seat for that event."
+            className={event === "" ? "col-span-full lg:col-span-1" : undefined}
           >
             <option value="">No event</option>
             {events.map((e) => (
@@ -140,35 +149,33 @@ export function GuestFilters({
               ))}
             </SelectField>
           )}
-        </div>
+        </>
       )}
-      <div className="grid gap-3 sm:grid-cols-2">
-        <SelectField label="Adult or child" name="age" defaultValue={age} onChange={apply}>
-          <option value="">Everyone</option>
-          <option value="adult">Adults</option>
-          <option value="child">Children</option>
-        </SelectField>
-        <SelectField label="Tag" name="tag" defaultValue={tag} onChange={apply}>
-          <option value="">All tags</option>
-          {allTags.map((t) => (
-            <option key={t} value={t}>
-              {t}
-            </option>
-          ))}
-        </SelectField>
-      </div>
-      <div className="flex flex-wrap gap-3">
-        <noscript>
-          <button type="submit" className={buttonClasses({ variant: "secondary" })}>
-            Apply filters
-          </button>
-        </noscript>
-        {(filtering || showArchived) && (
+      <SelectField label="Adult or child" name="age" defaultValue={age} onChange={apply}>
+        <option value="">Everyone</option>
+        <option value="adult">Adults</option>
+        <option value="child">Children</option>
+      </SelectField>
+      <SelectField label="Tag" name="tag" defaultValue={tag} onChange={apply}>
+        <option value="">All tags</option>
+        {allTags.map((t) => (
+          <option key={t} value={t}>
+            {t}
+          </option>
+        ))}
+      </SelectField>
+      <noscript className="col-span-full">
+        <button type="submit" className={buttonClasses({ variant: "secondary" })}>
+          Apply filters
+        </button>
+      </noscript>
+      {(filtering || showArchived) && (
+        <div className="col-span-full">
           <button type="button" onClick={clear} className={buttonClasses({ variant: "outline" })}>
             Clear
           </button>
-        )}
-      </div>
+        </div>
+      )}
     </form>
   );
 }

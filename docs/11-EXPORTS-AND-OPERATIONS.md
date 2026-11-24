@@ -35,7 +35,7 @@ A4/US Letter configurable, portrait default; landscape for wide comparisons/seat
 
 ## Wedding day mode
 
-R1 master agenda, responsible person/vendor, venue, times, contacts and printable coordinator handoff. R3 operational mode: timeline status (`upcoming`, `in_progress`, `complete`, `delayed`, `cancelled`), vendor check-ins, separate setup/teardown and call sheets, issue priority/status/owner, transport pickup lists, styling appointments, shot schedule, contingency plan with triggers and manual activation. One incident affects relevant timeline proposals not all concurrent work automatically. Couple can delegate coordinator access; vendor sees own tasks only. No claim of live status unless someone or validated integration updates it.
+R1 master agenda, responsible person/vendor, venue, times, contacts and printable coordinator handoff. Built early behind `DAY_OF_CHECKIN=on` (UX-17): per-event check-in of guests (separate from the reply) and of vendors linked to the event, with an attendance CSV; no timeline status, vendor login or delegated coordinator role yet. R3 operational mode: timeline status (`upcoming`, `in_progress`, `complete`, `delayed`, `cancelled`), vendor check-ins, separate setup/teardown and call sheets, issue priority/status/owner, transport pickup lists, styling appointments, shot schedule, contingency plan with triggers and manual activation. One incident affects relevant timeline proposals not all concurrent work automatically. Couple can delegate coordinator access; vendor sees own tasks only. No claim of live status unless someone or validated integration updates it.
 
 ### Offline requirements (R3)
 

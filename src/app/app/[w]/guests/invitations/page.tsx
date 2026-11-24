@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { WorkspacePageHeading } from "@/components/shell/workspace-page-heading";
 import { Badge, type BadgeTone } from "@/components/ui/badge";
 import { Card, CardTitle } from "@/components/ui/card";
 import { TrayButton } from "@/components/ui/tray";
-import { EVENT_KIND_LABELS, effectiveEventZone } from "@/domain/events/event";
+import { EVENT_KIND_LABELS, effectiveEventZone, formatEventDate } from "@/domain/events/event";
 import { invitationState, type InvitationState } from "@/domain/events/invitation";
 import { partyGroups, partyIsLive, type PartyGroup } from "@/domain/events/party";
 import { lockedTypes, summarizeAnswers } from "@/domain/guests/rsvp-form";
@@ -115,29 +116,11 @@ export default async function InvitationsPage({ params }: { params: Promise<{ w:
   const livePartyIds = new Set(data.parties.filter((p) => partyIsLive(p, now)).map((p) => p.id));
 
   return (
-    <div className="max-w-3xl space-y-8">
-      <header className="space-y-2">
-        <h1 className="font-serif text-headline-mobile md:text-headline-lg">
-          Events and invitations
-        </h1>
-        <p className="text-body-lg text-ink-muted">
-          Each event has its own invitations and answers. Creating a link sends nothing; you share
-          it yourself. Guests answer without an account.
-        </p>
-        <p className="text-body-md text-ink-muted" data-testid="mail-status">
-          {mail.configured && !mail.captureOnly
-            ? "Email sending is set up, but nothing is sent unless you approve it."
-            : `${mail.captureOnly ? "Email is in test mode and reaches no one" : "Email sending isn't set up"}, so copy each link and share it yourself. “Shared” means you told us you shared it, not that it was delivered or read.`}
-        </p>
-        {guestEmailEnabled() && (
-          <p className="text-body-md">
-            <Link href={`${base}/guests/messages`} className={link}>
-              Guest emails
-            </Link>
-            : prepare reply confirmations and reminders, and read each one before it can be sent.
-          </p>
-        )}
-        <div className="flex flex-wrap items-center gap-3 pt-1">
+    <div className="space-y-6">
+      <WorkspacePageHeading
+        title="Events and invitations"
+        description="Manage invitation links and replies for each event."
+        actions={
           <TrayButton
             label="Add an event"
             title="Add an event"
@@ -150,11 +133,37 @@ export default async function InvitationsPage({ params }: { params: Promise<{ w:
               timeZones={listTimeZones()}
             />
           </TrayButton>
-          <Link href={`${base}/guests`} className={`${link} inline-flex min-h-11 items-center`}>
-            Back to the guest list
+        }
+      />
+      <nav className="tool-nav" aria-label="Invitation tools">
+        <Link href={`${base}/guests`} className="tool-link">
+          Back to the guest list
+        </Link>
+        {guestEmailEnabled() && (
+          <Link href={`${base}/guests/messages`} className="tool-link">
+            Guest emails
           </Link>
-        </div>
-      </header>
+        )}
+      </nav>
+      <p className="text-body-md text-ink-muted" data-testid="mail-status">
+        {mail.configured && !mail.captureOnly
+          ? "Email sending is set up, but nothing is sent unless you approve it."
+          : `${mail.captureOnly ? "Email is in test mode and reaches no one" : "Email sending isn't set up"}, so copy each link and share it yourself. “Shared” means you told us you shared it, not that it was delivered or read.`}
+      </p>
+      {(data.events.length > 1 || groups.length > 0) && (
+        <nav aria-label="Jump to invitations" className="flex flex-wrap gap-x-4">
+          {data.events.map((event) => (
+            <a key={event.id} href={`#event-${event.id}`} className="tool-link">
+              {event.name}
+            </a>
+          ))}
+          {groups.length > 0 && (
+            <a href="#party-links" className="tool-link">
+              All-event links
+            </a>
+          )}
+        </nav>
+      )}
 
       {groups.length > 0 && (
         <PartyLinksSection
@@ -221,11 +230,19 @@ export default async function InvitationsPage({ params }: { params: Promise<{ w:
             <Card className="space-y-4">
               <div>
                 <CardTitle>
-                  <span id={eventHeading}>{event.name}</span>
+                  <span id={eventHeading} className="scroll-mt-24">
+                    {event.name}
+                  </span>
                 </CardTitle>
                 <p className="text-body-md text-ink-muted">
-                  {EVENT_KIND_LABELS[event.kind]}
-                  {event.localDate ? ` · ${event.localDate}` : " · date not set"}
+                  {[
+                    EVENT_KIND_LABELS[event.kind].toLowerCase() === event.name.toLowerCase()
+                      ? null
+                      : EVENT_KIND_LABELS[event.kind],
+                    formatEventDate(event.localDate) ?? "Date not set",
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
                   {event.capacity !== null ? ` · capacity ${event.capacity}` : ""}
                   {event.targetAttendance !== null
                     ? ` · planning for ${event.targetAttendance}`
@@ -238,7 +255,7 @@ export default async function InvitationsPage({ params }: { params: Promise<{ w:
               {counts && counts.yes > 0 && (
                 <div>
                   <h3 className="text-label-lg font-semibold">Meal choices so far</h3>
-                  <ul className="text-body-md">
+                  <ul className="flex flex-wrap gap-x-4 text-body-sm text-ink-muted">
                     {counts.meals
                       .filter((m) => m.count > 0)
                       .map((m) => (
@@ -344,149 +361,157 @@ export default async function InvitationsPage({ params }: { params: Promise<{ w:
 
             <div className="space-y-3">
               <h3 className="font-serif text-headline-sm">Invitations ({invitations.length})</h3>
-              {invitations.length === 0 && (
+              {invitations.length === 0 ? (
                 <p className="text-body-md text-ink-muted">No invitations for this event yet.</p>
-              )}
-              {invitations.map((inv) => {
-                const state = invitationState(inv, now);
-                const invMembers = data.members.filter((m) => m.invitationId === inv.id);
-                const sends = submissions.get(inv.id) ?? [];
-                return (
-                  <Card key={inv.id} className="space-y-3">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="font-semibold">{inv.label}</p>
-                      <div className="flex flex-wrap gap-2">
-                        {state !== "revoked" && (
-                          <Badge
-                            tone={
-                              inv.deliveryStatus === "shared_manually" ? "confirmed" : "neutral"
-                            }
-                          >
-                            {inv.deliveryStatus === "shared_manually"
-                              ? `Shared by you ${dayFmt(inv.deliveryMarkedAt ?? inv.expiresAt)}`
-                              : "Not shared yet"}
-                          </Badge>
-                        )}
-                        <Badge tone={STATE_TONE[state]}>{STATE_LABEL[state]}</Badge>
-                      </div>
-                    </div>
-                    {inv.partyId && livePartyIds.has(inv.partyId) && state !== "revoked" && (
-                      <p className="text-body-sm text-ink-muted">
-                        Also answered through the link for all events.
-                      </p>
-                    )}
-                    <p className="text-body-sm text-ink-muted">
-                      Link works until{" "}
-                      <ZonedDate iso={inv.expiresAt} timeZone={eventZone} month="short" />
-                      {inv.deadline && (
-                        <>
-                          {" · reply by "}
-                          <ZonedDate iso={inv.deadline} timeZone={eventZone} month="short" />
-                        </>
-                      )}
-                      {inv.plusOneQuota > 0
-                        ? ` · plus-ones ${inv.plusOnesUsed} of ${inv.plusOneQuota} used`
-                        : ""}
-                    </p>
-                    <ul className="space-y-1">
-                      {invMembers.map((m) => {
-                        const guest = guestById.get(m.guestId);
-                        return (
-                          <li key={m.id} className="text-body-md">
-                            {guest?.fullName ?? "Guest"}
-                            {m.isPlusOne ? " (plus-one)" : ""}:{" "}
-                            <span className="font-semibold">{STATUS_LABEL[m.status]}</span>
-                            {m.mealOptionId ? ` · ${mealName(m.mealOptionId)}` : ""}
-                          </li>
-                        );
-                      })}
-                    </ul>
-                    {sends.length > 0 && (
-                      <TrayButton
-                        triggerStyle="link"
-                        label={sentLabel(sends.length)}
-                        ariaLabel={`${sentLabel(sends.length)} by the guest for ${inv.label}`}
-                        title="What the guest sent"
-                        description={inv.label}
-                      >
-                        <p className="text-body-sm text-ink-muted">
-                          One line for each time the guest pressed Send and something changed. Sends
-                          that changed nothing are not listed. Names, answers and notes are not kept
-                          here; the fingerprint only shows whether two sends were the same.
-                        </p>
-                        <ol className="mt-3 space-y-3">
-                          {sends.map((x) => (
-                            <li key={x.id} className="space-y-1 text-body-md">
-                              <p className="font-semibold">
-                                <ZonedDate iso={x.submittedAt} timeZone={eventZone} month="short" />
-                                {x.partyId ? " · through the link for all events" : ""}
-                              </p>
-                              <p className="text-body-sm text-ink-muted">
-                                {x.acceptedCount} accepted · {x.declinedCount} declined
-                                {x.plusOneAdded ? " · plus-one added" : ""}
-                                {x.plusOnesRemoved > 0
-                                  ? ` · ${x.plusOnesRemoved} ${x.plusOnesRemoved === 1 ? "plus-one" : "plus-ones"} removed`
-                                  : ""}
-                                {x.detailsCount > 0
-                                  ? ` · notes saved for ${x.detailsCount} ${x.detailsCount === 1 ? "person" : "people"}`
-                                  : ""}
-                                {x.answersCount > 0
-                                  ? ` · answered your questions for ${x.answersCount} ${x.answersCount === 1 ? "person" : "people"}`
-                                  : ""}
-                              </p>
-                              <p className="text-body-sm text-ink-muted">
-                                {x.customForm
-                                  ? `Your questions, version ${x.formVersion}`
-                                  : "Standard form"}{" "}
-                                · workspace revision {x.acceptedRevision} · fingerprint{" "}
-                                <span className="font-mono">{x.payloadHash.slice(0, 10)}</span>
-                              </p>
-                            </li>
-                          ))}
-                        </ol>
-                      </TrayButton>
-                    )}
-                    {state !== "revoked" && (
-                      <>
-                        <TrayButton
-                          triggerStyle="link"
-                          label="Change an answer"
-                          ariaLabel={`Change an answer for ${inv.label}`}
-                          title="Change an answer"
-                          description={inv.label}
-                        >
-                          <div className="space-y-4">
-                            {invMembers
-                              .filter((m) => m.active)
-                              .map((m) => (
-                                <OverrideForm
-                                  key={`${m.id}-${m.status}-${m.mealOptionId ?? ""}`}
-                                  workspaceId={wid}
-                                  member={{
-                                    id: m.id,
-                                    name: guestById.get(m.guestId)?.fullName ?? "guest",
-                                    status: m.status,
-                                    mealOptionId: m.mealOptionId,
-                                  }}
-                                  meals={activeMeals}
-                                />
-                              ))}
+              ) : (
+                <ul className="record-list">
+                  {invitations.map((inv) => {
+                    const state = invitationState(inv, now);
+                    const invMembers = data.members.filter((m) => m.invitationId === inv.id);
+                    const sends = submissions.get(inv.id) ?? [];
+                    return (
+                      <li key={inv.id} className="space-y-2 px-4 py-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <p className="font-semibold">{inv.label}</p>
+                          <div className="flex flex-wrap gap-2">
+                            {state !== "revoked" && (
+                              <Badge
+                                tone={
+                                  inv.deliveryStatus === "shared_manually" ? "confirmed" : "neutral"
+                                }
+                              >
+                                {inv.deliveryStatus === "shared_manually"
+                                  ? `Shared by you ${dayFmt(inv.deliveryMarkedAt ?? inv.expiresAt)}`
+                                  : "Not shared yet"}
+                              </Badge>
+                            )}
+                            <Badge tone={STATE_TONE[state]}>{STATE_LABEL[state]}</Badge>
                           </div>
-                        </TrayButton>
-                        <InvitationActions
-                          workspaceId={wid}
-                          invitation={{
-                            id: inv.id,
-                            version: inv.version,
-                            label: inv.label,
-                            shared: inv.deliveryStatus === "shared_manually",
-                          }}
-                        />
-                      </>
-                    )}
-                  </Card>
-                );
-              })}
+                        </div>
+                        {inv.partyId && livePartyIds.has(inv.partyId) && state !== "revoked" && (
+                          <p className="text-body-sm text-ink-muted">
+                            Also answered through the link for all events.
+                          </p>
+                        )}
+                        <p className="text-body-sm text-ink-muted">
+                          Link works until{" "}
+                          <ZonedDate iso={inv.expiresAt} timeZone={eventZone} month="short" />
+                          {inv.deadline && (
+                            <>
+                              {" · reply by "}
+                              <ZonedDate iso={inv.deadline} timeZone={eventZone} month="short" />
+                            </>
+                          )}
+                          {inv.plusOneQuota > 0
+                            ? ` · plus-ones ${inv.plusOnesUsed} of ${inv.plusOneQuota} used`
+                            : ""}
+                        </p>
+                        <ul className="space-y-1">
+                          {invMembers.map((m) => {
+                            const guest = guestById.get(m.guestId);
+                            return (
+                              <li key={m.id} className="text-body-md">
+                                {guest?.fullName ?? "Guest"}
+                                {m.isPlusOne ? " (plus-one)" : ""}:{" "}
+                                <span className="font-semibold">{STATUS_LABEL[m.status]}</span>
+                                {m.mealOptionId ? ` · ${mealName(m.mealOptionId)}` : ""}
+                              </li>
+                            );
+                          })}
+                        </ul>
+                        {sends.length > 0 && (
+                          <TrayButton
+                            triggerStyle="link"
+                            label={sentLabel(sends.length)}
+                            ariaLabel={`${sentLabel(sends.length)} by the guest for ${inv.label}`}
+                            title="What the guest sent"
+                            description={inv.label}
+                          >
+                            <p className="text-body-sm text-ink-muted">
+                              One line for each time the guest pressed Send and something changed.
+                              Sends that changed nothing are not listed. Names, answers and notes
+                              are not kept here; the fingerprint only shows whether two sends were
+                              the same.
+                            </p>
+                            <ol className="mt-3 space-y-3">
+                              {sends.map((x) => (
+                                <li key={x.id} className="space-y-1 text-body-md">
+                                  <p className="font-semibold">
+                                    <ZonedDate
+                                      iso={x.submittedAt}
+                                      timeZone={eventZone}
+                                      month="short"
+                                    />
+                                    {x.partyId ? " · through the link for all events" : ""}
+                                  </p>
+                                  <p className="text-body-sm text-ink-muted">
+                                    {x.acceptedCount} accepted · {x.declinedCount} declined
+                                    {x.plusOneAdded ? " · plus-one added" : ""}
+                                    {x.plusOnesRemoved > 0
+                                      ? ` · ${x.plusOnesRemoved} ${x.plusOnesRemoved === 1 ? "plus-one" : "plus-ones"} removed`
+                                      : ""}
+                                    {x.detailsCount > 0
+                                      ? ` · notes saved for ${x.detailsCount} ${x.detailsCount === 1 ? "person" : "people"}`
+                                      : ""}
+                                    {x.answersCount > 0
+                                      ? ` · answered your questions for ${x.answersCount} ${x.answersCount === 1 ? "person" : "people"}`
+                                      : ""}
+                                  </p>
+                                  <p className="text-body-sm text-ink-muted">
+                                    {x.customForm
+                                      ? `Your questions, version ${x.formVersion}`
+                                      : "Standard form"}{" "}
+                                    · workspace revision {x.acceptedRevision} · fingerprint{" "}
+                                    <span className="font-mono">{x.payloadHash.slice(0, 10)}</span>
+                                  </p>
+                                </li>
+                              ))}
+                            </ol>
+                          </TrayButton>
+                        )}
+                        {state !== "revoked" && (
+                          <>
+                            <TrayButton
+                              triggerStyle="link"
+                              label="Change an answer"
+                              ariaLabel={`Change an answer for ${inv.label}`}
+                              title="Change an answer"
+                              description={inv.label}
+                            >
+                              <div className="space-y-4">
+                                {invMembers
+                                  .filter((m) => m.active)
+                                  .map((m) => (
+                                    <OverrideForm
+                                      key={`${m.id}-${m.status}-${m.mealOptionId ?? ""}`}
+                                      workspaceId={wid}
+                                      member={{
+                                        id: m.id,
+                                        name: guestById.get(m.guestId)?.fullName ?? "guest",
+                                        status: m.status,
+                                        mealOptionId: m.mealOptionId,
+                                      }}
+                                      meals={activeMeals}
+                                    />
+                                  ))}
+                              </div>
+                            </TrayButton>
+                            <InvitationActions
+                              workspaceId={wid}
+                              invitation={{
+                                id: inv.id,
+                                version: inv.version,
+                                label: inv.label,
+                                shared: inv.deliveryStatus === "shared_manually",
+                              }}
+                            />
+                          </>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
             </div>
           </section>
         );
@@ -516,55 +541,53 @@ function PartyLinksSection({
 }) {
   return (
     <section aria-labelledby="party-links" className="space-y-3">
-      <h2 id="party-links" className="font-serif text-headline-sm">
+      <h2 id="party-links" className="scroll-mt-24 font-serif text-headline-sm">
         One link for all events
       </h2>
       <p className="text-body-md text-ink-muted">
         A household invited to more than one event can answer them all from one link. Their link for
         each event keeps working, and both show the same answers.
       </p>
-      <ul className="space-y-3">
+      <ul className="record-list">
         {groups.map((g) => {
           const covered = g.party
             ? g.invitationIds.filter((id) => !g.notInLink.includes(id))
             : g.invitationIds;
           return (
-            <li key={g.key}>
-              <Card className="space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="font-semibold">{g.label}</p>
-                  <Badge tone={g.party ? "confirmed" : "neutral"}>
-                    {g.party ? "Link made" : "No link yet"}
-                  </Badge>
-                </div>
-                <p className="text-body-md">
-                  {g.party ? "Covers " : "Would cover "}
-                  {covered.map(eventName).join(", ")}
+            <li key={g.key} className="space-y-2 px-4 py-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="font-semibold">{g.label}</p>
+                <Badge tone={g.party ? "confirmed" : "neutral"}>
+                  {g.party ? "Link made" : "No link yet"}
+                </Badge>
+              </div>
+              <p className="text-body-md">
+                {g.party ? "Covers " : "Would cover "}
+                {covered.map(eventName).join(", ")}
+              </p>
+              {g.party && (
+                <p className="text-body-sm text-ink-muted">
+                  Link works until{" "}
+                  <ZonedDate iso={g.party.expiresAt} timeZone={weddingZone} month="short" />. Each
+                  event keeps its own reply-by date.
                 </p>
-                {g.party && (
-                  <p className="text-body-sm text-ink-muted">
-                    Link works until{" "}
-                    <ZonedDate iso={g.party.expiresAt} timeZone={weddingZone} month="short" />. Each
-                    event keeps its own reply-by date.
-                  </p>
-                )}
-                {g.notInLink.length > 0 && (
-                  <p className="text-body-sm text-ink-muted">
-                    Not in this link: {g.notInLink.map(eventName).join(", ")}. To include it, revoke
-                    this link and make a new one.
-                  </p>
-                )}
-                {g.blocked && g.blocked !== "has_link" && (
-                  <p className="text-body-sm text-ink-muted">{BLOCKED[g.blocked]}</p>
-                )}
-                <PartyLinkControls
-                  workspaceId={workspaceId}
-                  label={g.label}
-                  invitationIds={g.invitationIds}
-                  canCreate={g.blocked === null}
-                  party={g.party ? { id: g.party.id, version: g.party.version } : null}
-                />
-              </Card>
+              )}
+              {g.notInLink.length > 0 && (
+                <p className="text-body-sm text-ink-muted">
+                  Not in this link: {g.notInLink.map(eventName).join(", ")}. To include it, revoke
+                  this link and make a new one.
+                </p>
+              )}
+              {g.blocked && g.blocked !== "has_link" && (
+                <p className="text-body-sm text-ink-muted">{BLOCKED[g.blocked]}</p>
+              )}
+              <PartyLinkControls
+                workspaceId={workspaceId}
+                label={g.label}
+                invitationIds={g.invitationIds}
+                canCreate={g.blocked === null}
+                party={g.party ? { id: g.party.id, version: g.party.version } : null}
+              />
             </li>
           );
         })}

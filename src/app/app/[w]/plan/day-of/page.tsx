@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Card, CardTitle } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
+import { formatEventDate } from "@/domain/events/event";
 import { kindLabel } from "@/features/timeline/format";
 import { hasCapability, requireWorkspace } from "@/server/auth/workspace-guard";
 import { loadEventLabels, loadTimelineCounts } from "@/server/timeline/queries";
@@ -17,7 +18,7 @@ export default async function DayOfIndexPage({ params }: { params: Promise<{ w: 
     loadTimelineCounts(access.wedding.id),
   ]);
   return (
-    <div className="max-w-3xl space-y-6">
+    <div className="space-y-6">
       <header className="space-y-2">
         <h1 className="font-serif text-headline-mobile md:text-headline-lg">Wedding day</h1>
         <p className="text-body-lg text-ink-muted">
@@ -51,29 +52,40 @@ export default async function DayOfIndexPage({ params }: { params: Promise<{ w: 
           </Link>
         </Card>
       )}
-      <ul className="space-y-3">
-        {events.map((event) => {
-          const n = counts.get(event.id) ?? 0;
-          return (
-            <li key={event.id}>
-              <Card className="space-y-2">
-                <CardTitle>{event.name}</CardTitle>
-                <p className="text-body-md text-ink-muted">
-                  {kindLabel(event.kind)}
-                  {event.localDate ? ` · ${event.localDate}` : ""} ·{" "}
-                  {n === 0 ? "No agenda yet" : `${n} ${n === 1 ? "item" : "items"}`}
-                </p>
+      {events.length > 0 && (
+        <ul className="record-list">
+          {events.map((event) => {
+            const n = counts.get(event.id) ?? 0;
+            return (
+              <li
+                key={event.id}
+                className="flex min-w-0 flex-wrap items-center justify-between gap-x-5 px-4 py-3"
+              >
+                <div className="min-w-0">
+                  <h2 className="text-body-md font-semibold wrap-anywhere">{event.name}</h2>
+                  <p className="text-body-sm text-ink-muted">
+                    {[
+                      kindLabel(event.kind).toLowerCase() === event.name.toLowerCase()
+                        ? null
+                        : kindLabel(event.kind),
+                      formatEventDate(event.localDate),
+                      n === 0 ? "No agenda yet" : `${n} ${n === 1 ? "item" : "items"}`,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </p>
+                </div>
                 <Link
                   href={`${base}/plan/day-of/${event.id}`}
                   className={`${link} inline-flex min-h-11 items-center`}
                 >
                   Open the agenda<span className="sr-only"> for {event.name}</span>
                 </Link>
-              </Card>
-            </li>
-          );
-        })}
-      </ul>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 }

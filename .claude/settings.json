@@ -31,7 +31,17 @@
       "Bash(orb status *)",
       "Read(//Users/alang/.orbstack/**)",
       "Bash(npx pnpm@12.21.0 add -D -E @supabase/supabase-js pg @types/pg)",
-      "Bash(npx pnpm@12.21.0 run format:check)"
+      "Bash(npx pnpm@12.21.0 run format:check)",
+      "Bash(pnpm db:start)",
+      "Bash(pnpm dev *)",
+      "Bash(npx pnpm@12.21.0 install --frozen-lockfile)",
+      "Bash(test -f .env.local || cp .env.example .env.local && echo \"Environment file ready\")",
+      "Bash(npx pnpm@12.21.0 dev)",
+      "Bash(curl -s http://localhost:3000/)",
+      "Bash(supabase status *)"
+    ],
+    "additionalDirectories": [
+      "/Users/alang/Documents/Personal/Apps/WedGood"
     ]
   }
 }

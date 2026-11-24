@@ -30,7 +30,7 @@ function useActiveKey(basePath: string): NavGroupKey | null {
 export function SidebarNav({ basePath }: { basePath: string }) {
   const activeKey = useActiveKey(basePath);
   return (
-    <nav aria-label="Workspace" className="mt-10">
+    <nav aria-label="Workspace" className="mt-8">
       <ul className="space-y-1">
         {navGroups.map((group) => {
           const Icon = icons[group.key];

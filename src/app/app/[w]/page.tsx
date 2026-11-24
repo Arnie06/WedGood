@@ -1,3 +1,4 @@
+import { ChevronRight, ClipboardList, Users, Wallet } from "lucide-react";
 import Link from "next/link";
 import { ButtonLink } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
@@ -21,20 +22,20 @@ import { buildReplyStrip } from "@/domain/home/reply-strip";
 import { ReplyStripCard } from "@/features/home/reply-strip-card";
 import { loadEventDemand } from "@/server/events/demand";
 import { loadReplyDeadlines } from "@/server/events/reply-dates";
+import { loadBudgetInputs, summarizeBudgetInputs } from "@/server/budget/view";
+import {
+  DashboardHero,
+  DashboardMetric,
+  DashboardMetrics,
+} from "@/features/home/dashboard-overview";
 
-const linkClass = "font-semibold text-action-emphasis underline underline-offset-4";
-
-function countdown(days: number): string {
-  if (days === 0) return "That's today";
-  if (days === 1) return "1 day to go";
-  if (days > 1) return `${days} days to go`;
-  return days === -1 ? "1 day ago" : `${-days} days ago`;
-}
+const linkClass =
+  "inline-flex min-h-11 items-center font-semibold text-action-emphasis underline underline-offset-4";
 
 export default async function WorkspaceHomePage({ params }: { params: Promise<{ w: string }> }) {
   const access = await requireWorkspace((await params).w);
   const canManageGuests = hasCapability(access, "guests.manage");
-  const [s, tasks, counts, events, attention, demand, deadlines] = await Promise.all([
+  const [s, tasks, counts, events, attention, demand, deadlines, budgetInputs] = await Promise.all([
     loadWeddingSettings(access.wedding.id),
     loadTasks(access.wedding.id),
     loadHomeCounts(access.wedding.id),
@@ -47,6 +48,7 @@ export default async function WorkspaceHomePage({ params }: { params: Promise<{ 
     }),
     // Invitations are owner/partner only; collaborators see counts without reply dates.
     canManageGuests ? loadReplyDeadlines(access.wedding.id) : new Map<string, string[]>(),
+    loadBudgetInputs(access.wedding.id),
   ]);
   const ATTENTION_SHOWN = 3;
   const replyStrip = buildReplyStrip(
@@ -63,9 +65,8 @@ export default async function WorkspaceHomePage({ params }: { params: Promise<{ 
   const base = `/app/${access.wedding.id}`;
 
   const date = s.date ? parseDateOnly(s.date) : null;
-  const days = date ? daysBetween(todayInZone(s.timezone), date) : null;
-
   const today = todayInZone(s.timezone);
+  const days = date ? daysBetween(today, date) : null;
   const summaries = tasks.map(toSummary);
   const steps = nextSteps(summaries, today, 3);
   const { done, total } = progress(summaries);
@@ -91,203 +92,213 @@ export default async function WorkspaceHomePage({ params }: { params: Promise<{ 
   });
   const [primary, ...others] = actions;
 
-  const facts: { label: string; value: string; note?: string }[] = [
-    date
-      ? { label: "Date", value: formatDateOnly(date), note: countdown(days ?? 0) }
-      : { label: "Date", value: "Not set yet", note: "Still deciding is fine." },
-    {
-      label: "Budget target",
-      value:
-        s.targetBudgetMinor === null
-          ? "Not set yet"
-          : formatMinor(s.targetBudgetMinor, s.baseCurrency),
-    },
-    {
-      label: "Guest target",
-      value: s.targetGuestCount === null ? "Not set yet" : String(s.targetGuestCount),
-    },
-    { label: "Location", value: s.location ?? "Not set yet" },
-  ];
+  const budget = summarizeBudgetInputs(budgetInputs, s);
+  const money = (minor: number) => formatMinor(minor, s.baseCurrency);
+  const hasForecast = budget.items.length > 0 || budget.committedMinor > 0;
+  const budgetTarget = s.targetBudgetMinor === null ? null : money(s.targetBudgetMinor);
+  const forecast = hasForecast
+    ? `${budget.incomplete ? "At least " : ""}${money(budget.forecastMinor)}`
+    : null;
+  const guestTarget = s.targetGuestCount;
+  const guestCount = canManageGuests ? counts.guestCount : null;
+  const eventSettings = `${base}/settings/event`;
+  const planHref = `${base}/plan`;
 
-  const attentionCard = (
-    <Card as="section" aria-labelledby="home-attention" data-testid="home-attention">
-      <CardTitle>
-        <span id="home-attention">Needs attention</span>
-      </CardTitle>
-      <p className="mt-1 text-body-md text-ink-muted">
-        {attentionSummary(attention.visible.length)}
-      </p>
-      {attention.visible.length > 0 && (
-        <div className="mt-3">
-          <AttentionList
-            items={attention.visible.slice(0, ATTENTION_SHOWN)}
-            base={base}
-            workspaceId={access.wedding.id}
-            canAct={attention.canAct}
-          />
-        </div>
+  const nextUp = primary && (
+    <Card as="section" aria-labelledby="next-up">
+      <CardTitle id="next-up">Next up</CardTitle>
+      <div className="mt-3">
+        <ActionBlock action={primary} base={base} s={s} workspaceId={access.wedding.id} lead />
+      </div>
+      {others.length > 0 && (
+        <ul className="mt-3 divide-y divide-border-hairline border-t border-border-hairline">
+          {others.map((a) => (
+            <li key={a.id} className="py-2 last:pb-0">
+              <ActionBlock action={a} base={base} s={s} workspaceId={access.wedding.id} />
+            </li>
+          ))}
+        </ul>
       )}
-      <SeeAllLink
-        base={base}
-        total={attention.visible.length}
-        shown={ATTENTION_SHOWN}
-        hidden={attention.canAct ? attention.dismissed.length : 0}
-      />
     </Card>
   );
 
   return (
     <div className="space-y-6">
-      <header className="space-y-1">
-        <h1 className="font-serif text-headline-mobile md:text-headline-lg">{s.name}</h1>
-      </header>
-      {replyStrip.rows.length > 0 && (
-        <ReplyStripCard strip={replyStrip} base={base} canManageGuests={canManageGuests} />
-      )}
-      {attention.visible.length > 0 && attentionCard}
-      {primary && (
-        <Card as="section" aria-labelledby="next-up" className="space-y-4">
-          <p id="next-up" className="text-label-lg font-semibold text-ink-muted uppercase">
-            Next up
-          </p>
-          <ActionBlock action={primary} base={base} s={s} workspaceId={access.wedding.id} lead />
-          {others.length > 0 && (
-            <ul className="divide-y divide-border-hairline border-t border-border-hairline">
-              {others.map((a) => (
-                <li key={a.id} className="py-4 last:pb-0">
-                  <ActionBlock action={a} base={base} s={s} workspaceId={access.wedding.id} />
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
-      )}
-      {attention.visible.length === 0 && attentionCard}
-      <Card>
-        <CardTitle>Event details</CardTitle>
-        <dl className="mt-4 grid gap-4 sm:grid-cols-2">
-          {facts.map((f) => (
-            <div key={f.label}>
-              <dt className="text-label-lg text-ink-muted">{f.label}</dt>
-              <dd className="text-body-lg">{f.value}</dd>
-              {f.note && <dd className="text-body-sm text-ink-muted">{f.note}</dd>}
-            </div>
-          ))}
-        </dl>
-        <p className="mt-4">
-          <Link href={`${base}/settings/event`} className={linkClass}>
-            {hasCapability(access, "settings.edit") ? "Edit event details" : "View event details"}
-          </Link>
-        </p>
-      </Card>
-      <Card as="section" aria-labelledby="home-events">
-        <CardTitle>
-          <span id="home-events">Your events</span>
-        </CardTitle>
-        {events.length === 0 ? (
-          <p className="mt-2 text-body-md text-ink-muted">
-            No events yet, such as a ceremony or reception.
-          </p>
-        ) : (
-          <ul className="mt-2 space-y-1">
-            {events.slice(0, 4).map((e) => (
-              <li key={e.id}>
-                <Link
-                  href={`${base}/plan/events/${e.id}`}
-                  className={`${linkClass} inline-flex min-h-11 items-center`}
-                >
-                  {e.name}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
-        <p className="mt-2">
-          <Link
-            href={`${base}/plan/events`}
-            className={`${linkClass} inline-flex min-h-11 items-center`}
-          >
-            {events.length > 4 ? "See all events" : "Open events"}
-          </Link>
-        </p>
-      </Card>
+      <DashboardHero
+        name={s.name}
+        date={date ? formatDateOnly(date) : null}
+        location={s.location}
+        days={days}
+        settings={{
+          href: eventSettings,
+          label: hasCapability(access, "settings.edit")
+            ? "Edit event details"
+            : "View event details",
+        }}
+      />
+      <DashboardMetrics>
+        <DashboardMetric
+          icon={ClipboardList}
+          label="Tasks completed"
+          value={total > 0 ? `${done} / ${total}` : "No tasks yet"}
+          href={planHref}
+        />
+        <DashboardMetric
+          icon={Wallet}
+          label={forecast ? "Budget forecast" : "Budget target"}
+          value={forecast ?? budgetTarget ?? "To be set"}
+          note={forecast && budgetTarget ? `Target ${budgetTarget}` : undefined}
+          href={`${planHref}/budget`}
+        />
+        <DashboardMetric
+          icon={Users}
+          label={guestCount !== null ? "Guests on your list" : "Guest target"}
+          value={guestCount !== null ? String(guestCount) : String(guestTarget ?? "To be set")}
+          note={guestCount !== null && guestTarget !== null ? `Target ${guestTarget}` : undefined}
+          href={canManageGuests ? `${base}/guests` : eventSettings}
+        />
+      </DashboardMetrics>
+
       {drift > 0 && (
-        <Card className="border-border-control">
-          <CardTitle>Your wedding date changed</CardTitle>
-          <p className="mt-2 text-body-md text-ink-muted">
-            {drift} checklist {drift === 1 ? "date doesn't" : "dates don't"} match it yet. Nothing
-            moves until you review.
-          </p>
-          <p className="mt-3">
-            <Link href={`${base}/plan/review-dates`} className={linkClass}>
-              Review the new dates
-            </Link>
-          </p>
-        </Card>
-      )}
-      <Card>
-        <CardTitle>Next steps</CardTitle>
-        {total === 0 ? (
-          <div className="mt-2 space-y-3">
-            <p className="text-body-md text-ink-muted">
-              {canEditPlan
-                ? "Start with a suggested checklist, or add your own first task."
-                : "No tasks yet. The owner can start the checklist."}
-            </p>
-            <p>
-              <Link href={`${base}/plan`} className={linkClass}>
-                {canEditPlan ? "Start your checklist" : "Open the checklist"}
-              </Link>
+        <section
+          aria-labelledby="home-date-change"
+          className="flex flex-wrap items-center justify-between gap-x-5 rounded-card border border-border-hairline bg-surface px-4 py-2"
+        >
+          <div>
+            <h2 id="home-date-change" className="text-body-md font-semibold">
+              Your wedding date changed
+            </h2>
+            <p className="text-body-sm text-ink-muted">
+              {drift} checklist {drift === 1 ? "date needs" : "dates need"} review.
             </p>
           </div>
-        ) : (
-          <div className="mt-3 space-y-4">
-            <ProgressBar
-              label="Checklist"
-              value={done}
-              max={total}
-              valueText={`${done} of ${total} done`}
-            />
-            {steps.length === 0 ? (
-              <p className="text-body-md text-ink-muted">Everything on your checklist is done.</p>
+          <Link href={`${planHref}/review-dates`} className={linkClass}>
+            Review the new dates
+          </Link>
+        </section>
+      )}
+
+      <div className="grid items-start gap-5 md:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+        <div className="min-w-0 space-y-5">
+          {total === 0 && nextUp}
+          <Card as="section" aria-labelledby="home-next-steps">
+            <div className="flex flex-wrap items-center justify-between gap-x-4">
+              <CardTitle id="home-next-steps">Next steps</CardTitle>
+              <Link href={planHref} className={linkClass}>
+                {total === 0 && canEditPlan ? "Start your checklist" : "Open checklist"}
+              </Link>
+            </div>
+            {total === 0 ? (
+              <p className="mt-2 text-body-md text-ink-muted">No tasks yet.</p>
             ) : (
-              <ol className="space-y-3">
-                {steps.map((step) => (
-                  <li key={step.id}>
-                    <p className="text-body-lg">{step.title}</p>
-                    <p className="text-body-sm text-ink-muted">
-                      {dueLabel(byId.get(step.id)?.dueDate ?? null, today)}
-                    </p>
+              <div className="mt-3 space-y-4">
+                <ProgressBar
+                  label="Checklist progress"
+                  value={done}
+                  max={total}
+                  valueText={`${done} of ${total} done`}
+                />
+                {steps.length === 0 ? (
+                  <p className="text-body-md text-ink-muted">
+                    Everything on your checklist is done.
+                  </p>
+                ) : (
+                  <ol className="divide-y divide-border-hairline border-t border-border-hairline">
+                    {steps.map((step) => (
+                      <li key={step.id}>
+                        <Link
+                          href={`${planHref}#task-${step.id}`}
+                          className="flex min-h-11 items-center gap-3 rounded-hairline py-2 hover:text-action-emphasis"
+                        >
+                          <span className="min-w-0 grow">
+                            <span className="block text-body-md font-semibold wrap-anywhere">
+                              {step.title}
+                            </span>
+                            <span className="block text-body-sm text-ink-muted">
+                              {dueLabel(byId.get(step.id)?.dueDate ?? null, today)}
+                            </span>
+                          </span>
+                          <ChevronRight
+                            aria-hidden="true"
+                            className="size-4 shrink-0 text-action-emphasis"
+                          />
+                        </Link>
+                      </li>
+                    ))}
+                  </ol>
+                )}
+              </div>
+            )}
+          </Card>
+          {replyStrip.rows.length > 0 && (
+            <ReplyStripCard strip={replyStrip} base={base} canManageGuests={canManageGuests} />
+          )}
+        </div>
+
+        <div className="min-w-0 space-y-5">
+          {total > 0 && nextUp}
+          <Card as="section" aria-labelledby="home-attention" data-testid="home-attention">
+            <CardTitle id="home-attention">Needs attention</CardTitle>
+            <p className="mt-1 text-body-sm text-ink-muted">
+              {attentionSummary(attention.visible.length)}
+            </p>
+            {attention.visible.length > 0 && (
+              <div className="mt-3">
+                <AttentionList
+                  items={attention.visible.slice(0, ATTENTION_SHOWN)}
+                  base={base}
+                  workspaceId={access.wedding.id}
+                  canAct={attention.canAct}
+                />
+              </div>
+            )}
+            <SeeAllLink
+              base={base}
+              total={attention.visible.length}
+              shown={ATTENTION_SHOWN}
+              hidden={attention.canAct ? attention.dismissed.length : 0}
+            />
+          </Card>
+          <Card as="section" aria-labelledby="home-events">
+            <div className="flex flex-wrap items-center justify-between gap-x-3">
+              <CardTitle id="home-events">Your events</CardTitle>
+              <Link href={`${planHref}/events`} className={linkClass}>
+                {events.length > 4 ? "See all events" : "Open events"}
+              </Link>
+            </div>
+            {events.length === 0 ? (
+              <p className="mt-2 text-body-sm text-ink-muted">No events yet.</p>
+            ) : (
+              <ul className="mt-1 divide-y divide-border-hairline border-t border-border-hairline">
+                {events.slice(0, 4).map((e) => (
+                  <li key={e.id}>
+                    <Link
+                      href={`${planHref}/events/${e.id}`}
+                      className="flex min-h-11 items-center justify-between gap-3 rounded-hairline py-2 text-body-md hover:text-action-emphasis"
+                    >
+                      <span className="min-w-0 wrap-anywhere">{e.name}</span>
+                      <ChevronRight
+                        aria-hidden="true"
+                        className="size-4 shrink-0 text-action-emphasis"
+                      />
+                    </Link>
                   </li>
                 ))}
-              </ol>
+              </ul>
             )}
-            <p>
-              <Link href={`${base}/plan`} className={linkClass}>
-                See the full checklist
-              </Link>
-            </p>
-          </div>
-        )}
-      </Card>
-      <Card>
-        <CardTitle>People</CardTitle>
-        <p className="mt-2 text-body-md text-ink-muted">
-          Invite your partner or helpers, and see what has been shared with you.
-        </p>
-        <p className="mt-4">
-          <Link href={`${base}/settings/members`} className={linkClass}>
-            {hasCapability(access, "members.manage")
-              ? "Manage people and invitations"
-              : "See who has access"}
-          </Link>
-        </p>
-        <p className="mt-2">
-          <Link href={`${base}/shared`} className={linkClass}>
-            Shared choices and comments
-          </Link>
-        </p>
-      </Card>
+          </Card>
+          <nav aria-label="People and sharing" className="flex flex-wrap gap-x-4 px-1">
+            <Link href={`${base}/settings/members`} className="tool-link">
+              {hasCapability(access, "members.manage")
+                ? "Manage people and invitations"
+                : "See who has access"}
+            </Link>
+            <Link href={`${base}/shared`} className="tool-link">
+              Shared choices and comments
+            </Link>
+          </nav>
+        </div>
+      </div>
     </div>
   );
 }
@@ -331,11 +342,7 @@ function ActionBlock({
           inputMode="numeric"
         />
       ) : (
-        <ButtonLink
-          href={`${base}/${action.path}`}
-          variant={lead ? "primary" : "outline"}
-          size="sm"
-        >
+        <ButtonLink href={`${base}/${action.path}`} variant={lead ? "primary" : "quiet"} size="sm">
           {action.cta}
         </ButtonLink>
       )}

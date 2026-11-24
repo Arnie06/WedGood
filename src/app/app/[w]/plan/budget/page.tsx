@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { WorkspacePageHeading } from "@/components/shell/workspace-page-heading";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardTitle } from "@/components/ui/card";
 import { DensityToggle } from "@/components/ui/density-toggle";
@@ -91,53 +92,52 @@ export default async function BudgetPage({ params }: { params: Promise<{ w: stri
   const catOptions = budget.categories.map((c) => ({ id: c.id, name: c.name }));
 
   return (
-    <div className="max-w-3xl space-y-8">
-      <header className="space-y-2">
-        <h1 className="font-serif text-headline-mobile md:text-headline-lg">Budget</h1>
-        <p className="text-body-lg text-ink-muted">
-          Your target, what you&apos;ve planned, and what you&apos;ve actually committed and paid,
-          kept separate. Amounts are in {cur}.
-        </p>
-        {canEdit && (
-          <div className="flex flex-wrap gap-3 pt-2">
-            {hasPlan && (
+    <div className="space-y-6">
+      <WorkspacePageHeading
+        title="Budget"
+        description={`Plan costs and track bookings and payments in ${cur}.`}
+        actions={
+          canEdit && (
+            <>
+              {hasPlan && (
+                <TrayButton
+                  label="Add a cost"
+                  title="Add a cost"
+                  description="What you expect to spend. Leave the amount blank if you don't know yet."
+                >
+                  <ItemForm
+                    action={createItem}
+                    rotateKey
+                    workspaceId={access.wedding.id}
+                    currency={cur}
+                    categories={catOptions}
+                    events={events}
+                    defaults={newItemDefaults(events)}
+                    submitLabel="Add cost"
+                    pendingLabel="Adding…"
+                  />
+                </TrayButton>
+              )}
               <TrayButton
-                label="Add a cost"
-                title="Add a cost"
-                description="What you expect to spend. Leave the amount blank if you don't know yet."
+                label="Add a category"
+                variant={hasPlan ? "outline" : "primary"}
+                title="Add a category"
+                description="A group of costs, like Flowers. The target is guidance, not a limit."
               >
-                <ItemForm
-                  action={createItem}
+                <CategoryForm
+                  action={createCategory}
                   rotateKey
                   workspaceId={access.wedding.id}
                   currency={cur}
-                  categories={catOptions}
-                  events={events}
-                  defaults={newItemDefaults(events)}
-                  submitLabel="Add cost"
+                  defaults={{ name: "", allocation: "" }}
+                  submitLabel="Add category"
                   pendingLabel="Adding…"
                 />
               </TrayButton>
-            )}
-            <TrayButton
-              label="Add a category"
-              variant="outline"
-              title="Add a category"
-              description="A group of costs, like Flowers. The target is guidance, not a limit."
-            >
-              <CategoryForm
-                action={createCategory}
-                rotateKey
-                workspaceId={access.wedding.id}
-                currency={cur}
-                defaults={{ name: "", allocation: "" }}
-                submitLabel="Add category"
-                pendingLabel="Adding…"
-              />
-            </TrayButton>
-          </div>
-        )}
-      </header>
+            </>
+          )
+        }
+      />
 
       {drift.length > 0 && (
         <section aria-labelledby="caterer-counts" className="space-y-3" data-testid="budget-drift">
@@ -169,8 +169,8 @@ export default async function BudgetPage({ params }: { params: Promise<{ w: stri
           <h2 id="summary" className="font-serif text-headline-sm">
             Where you stand
           </h2>
-          <Card>
-            <dl className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
+          <div className="rounded-card border border-border-hairline bg-surface">
+            <dl className="grid grid-cols-2 gap-px bg-border-hairline xl:grid-cols-4 [&>*]:min-w-0 [&>*]:bg-surface [&>*]:p-3 sm:[&>*]:p-4">
               <Figure
                 label="Your target"
                 value={s.targetMinor === null ? "Not set" : money(s.targetMinor)}
@@ -204,7 +204,6 @@ export default async function BudgetPage({ params }: { params: Promise<{ w: stri
                       ? `${s.incomplete ? "At most " : ""}${money(s.headroomMinor)}`
                       : `Over by ${s.incomplete ? "at least " : ""}${money(-s.headroomMinor)}`
                 }
-                note="Target minus forecast."
               />
               <Figure
                 label="Committed and paid"
@@ -222,9 +221,9 @@ export default async function BudgetPage({ params }: { params: Promise<{ w: stri
                     </>
                   ) : (
                     <>
-                      Nothing booked or paid yet. Record a booking from a venue or vendor, or see{" "}
+                      Nothing booked or paid yet.{" "}
                       <Link href={`${base}/plan/budget/bookings`} className={link}>
-                        bookings and payments
+                        Bookings and payments
                       </Link>
                       .
                     </>
@@ -232,7 +231,7 @@ export default async function BudgetPage({ params }: { params: Promise<{ w: stri
                 }
               />
             </dl>
-            <details className="mt-4 border-t border-border-hairline pt-2">
+            <details className="border-t border-border-hairline px-4 pb-1">
               <summary className="min-h-11 cursor-pointer py-2 text-label-lg font-semibold text-action-emphasis">
                 How the forecast is built
               </summary>
@@ -274,7 +273,7 @@ export default async function BudgetPage({ params }: { params: Promise<{ w: stri
                 </div>
               )}
             </details>
-          </Card>
+          </div>
           {s.allocationExceedsTarget && (
             <p role="status" className="text-body-md text-ink">
               <Badge tone="pending">Check</Badge> Your category targets add up to{" "}
@@ -334,32 +333,70 @@ export default async function BudgetPage({ params }: { params: Promise<{ w: stri
             </h2>
             <DensityToggle workspaceId={access.wedding.id} density={density} />
           </div>
-          <ul className="space-y-4 compact:space-y-2">
+          <ul className="record-list">
             {s.categories.map((row) => {
               const cat = budget.categories.find((c) => c.id === row.id)!;
               const items = budget.items.filter((i) => i.categoryId === row.id);
               return (
-                <Card as="li" key={row.id} className="space-y-4 compact:space-y-2">
-                  <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-                    <h3 className="font-serif text-headline-sm">{row.name}</h3>
-                    <p className="text-body-md text-ink-muted">
-                      {row.allocationMinor === null
-                        ? "No target"
-                        : `Target ${money(row.allocationMinor)}`}
-                      {" · "}
-                      {row.unknownItemCount > 0 ? "At least " : ""}
-                      {money(row.forecastMinor)} planned
-                    </p>
+                <li key={row.id}>
+                  <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-border-hairline bg-surface-sunken px-3 py-2 sm:px-4">
+                    <div className="min-w-0 grow">
+                      <h3 className="text-body-md font-semibold wrap-anywhere">{row.name}</h3>
+                      <p className="text-body-sm text-ink-muted tabular-nums">
+                        {row.allocationMinor === null
+                          ? "No target"
+                          : `Target ${money(row.allocationMinor)}`}
+                        {" · "}
+                        {row.unknownItemCount > 0 ? "At least " : ""}
+                        {money(row.forecastMinor)} planned
+                      </p>
+                    </div>
+                    {canEdit && (
+                      <TrayButton
+                        triggerStyle="link"
+                        label="Edit category"
+                        ariaLabel={`Edit category ${row.name}`}
+                        title="Edit category"
+                        description={row.name}
+                      >
+                        <CategoryForm
+                          action={updateCategory}
+                          workspaceId={access.wedding.id}
+                          currency={cur}
+                          extraHidden={{ categoryId: cat.id, version: cat.version }}
+                          defaults={{
+                            name: cat.name,
+                            allocation:
+                              cat.allocationMinor === null
+                                ? ""
+                                : minorToMajorInput(cat.allocationMinor, cur),
+                          }}
+                          submitLabel="Save category"
+                          pendingLabel="Saving…"
+                        />
+                        <ArchiveCategoryForm
+                          workspaceId={access.wedding.id}
+                          categoryId={cat.id}
+                          version={cat.version}
+                          name={cat.name}
+                        />
+                      </TrayButton>
+                    )}
                   </div>
                   {row.overAllocationMinor > 0 && (
-                    <p role="status" className="text-body-md">
+                    <p
+                      role="status"
+                      className="border-b border-border-hairline px-3 py-2 text-body-sm sm:px-4"
+                    >
                       <Badge tone="pending">Over</Badge> Planned costs are{" "}
                       {row.unknownItemCount > 0 ? "at least " : ""}
                       {money(row.overAllocationMinor)} above this category&apos;s target.
                     </p>
                   )}
                   {items.length === 0 ? (
-                    <p className="text-body-md text-ink-muted">No costs in this category yet.</p>
+                    <p className="px-3 py-3 text-body-sm text-ink-muted sm:px-4">
+                      No costs in this category yet.
+                    </p>
                   ) : (
                     <ul className="divide-y divide-border-hairline">
                       {items.map((item) => {
@@ -369,34 +406,37 @@ export default async function BudgetPage({ params }: { params: Promise<{ w: stri
                         return (
                           <li
                             key={item.id}
-                            className="space-y-2 py-3 compact:space-y-0.5 compact:py-1.5"
+                            className={`grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-3 px-3 py-2 sm:gap-x-5 sm:px-4 sm:py-3 compact:py-1 ${canEdit ? "sm:grid-cols-[minmax(0,1fr)_minmax(0,11rem)_5.5rem]" : "sm:grid-cols-[minmax(0,1fr)_minmax(0,11rem)]"}`}
                           >
-                            <div className="flex flex-wrap items-baseline justify-between gap-x-4">
-                              <p className="text-body-lg">{item.name}</p>
-                              <p className="text-body-lg font-semibold">
-                                {bookedItems.has(item.id)
-                                  ? "Booked"
-                                  : itemAmountLabel(item, figure, cur)}
+                            <div className="col-span-full min-w-0 space-y-0.5 sm:col-span-1">
+                              <p className="text-body-md font-semibold wrap-anywhere">
+                                {item.name}
                               </p>
+                              <p className="text-body-sm text-ink-muted">
+                                {itemBasisLabel(item, figure, countCtx)}
+                              </p>
+                              {tracking && (
+                                <p
+                                  className="text-body-sm text-ink-muted"
+                                  data-testid="plan-tracking"
+                                >
+                                  {tracking}
+                                </p>
+                              )}
+                              {drift && <p className="text-body-sm text-ink-muted">{drift}</p>}
                             </div>
-                            <p className="text-body-sm text-ink-muted">
-                              {itemBasisLabel(item, figure, countCtx)}
+                            <p className="min-w-0 text-body-md font-semibold wrap-anywhere tabular-nums sm:text-right">
+                              {bookedItems.has(item.id)
+                                ? "Booked"
+                                : itemAmountLabel(item, figure, cur)}
                             </p>
-                            {tracking && (
-                              <p
-                                className="text-body-sm text-ink-muted"
-                                data-testid="plan-tracking"
-                              >
-                                {tracking}
-                              </p>
-                            )}
-                            {drift && <p className="text-body-sm text-ink-muted">{drift}</p>}
                             {canEdit && (
                               <TrayButton
                                 triggerStyle="link"
                                 label="Edit"
                                 ariaLabel={`Edit ${item.name}`}
                                 title="Edit cost"
+                                className="justify-self-end"
                                 description={item.name}
                               >
                                 <ItemForm
@@ -441,38 +481,7 @@ export default async function BudgetPage({ params }: { params: Promise<{ w: stri
                       })}
                     </ul>
                   )}
-                  {canEdit && (
-                    <TrayButton
-                      triggerStyle="link"
-                      label="Edit category"
-                      ariaLabel={`Edit category ${row.name}`}
-                      title="Edit category"
-                      description={row.name}
-                    >
-                      <CategoryForm
-                        action={updateCategory}
-                        workspaceId={access.wedding.id}
-                        currency={cur}
-                        extraHidden={{ categoryId: cat.id, version: cat.version }}
-                        defaults={{
-                          name: cat.name,
-                          allocation:
-                            cat.allocationMinor === null
-                              ? ""
-                              : minorToMajorInput(cat.allocationMinor, cur),
-                        }}
-                        submitLabel="Save category"
-                        pendingLabel="Saving…"
-                      />
-                      <ArchiveCategoryForm
-                        workspaceId={access.wedding.id}
-                        categoryId={cat.id}
-                        version={cat.version}
-                        name={cat.name}
-                      />
-                    </TrayButton>
-                  )}
-                </Card>
+                </li>
               );
             })}
           </ul>
@@ -486,7 +495,9 @@ function Figure({ label, value, note }: { label: string; value: string; note?: R
   return (
     <div className="space-y-1">
       <dt className="text-label-lg text-ink-muted">{label}</dt>
-      <dd className="text-headline-sm font-serif">{value}</dd>
+      <dd className="font-serif text-headline-sm wrap-anywhere tabular-nums sm:text-headline-md">
+        {value}
+      </dd>
       {note && <dd className="text-body-sm text-ink-muted">{note}</dd>}
     </div>
   );

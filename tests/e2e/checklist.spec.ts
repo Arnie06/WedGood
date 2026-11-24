@@ -85,9 +85,16 @@ test("start the suggested checklist, once, and see it on the dashboard", async (
 
   await page.goto(`/app/${wedding}`);
   await expect(page.getByText(`0 of ${added} done`)).toBeVisible();
-  await expect(
-    page.getByRole("listitem").filter({ hasText: "Talk through your budget" }),
-  ).toBeVisible();
+  const nextSteps = page.getByRole("region", { name: "Next steps" });
+  const nextTask = nextSteps.getByRole("link", { name: /Talk through your budget/ });
+  await expect(nextTask).toBeVisible();
+  await nextTask.click();
+  await expect(page).toHaveURL(/\/plan#task-/);
+  const row = page.locator(new URL(page.url()).hash);
+  await expect(row).toContainText("Talk through your budget");
+  await expect(row).toBeInViewport();
+  await row.getByRole("button", { name: /^Edit "Talk through your budget/ }).click();
+  await expect(page.getByRole("dialog", { name: "Edit task" })).toBeVisible();
 });
 
 test("without a date, suggested tasks are undated and the dashboard asks for one", async ({

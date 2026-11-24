@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { randomUUID } from "node:crypto";
 import { CalendarX } from "lucide-react";
 import Link from "next/link";
+import { WorkspacePageHeading } from "@/components/shell/workspace-page-heading";
 import { Card, CardTitle } from "@/components/ui/card";
 import { DensityToggle } from "@/components/ui/density-toggle";
 import { ProgressBar } from "@/components/ui/progress-bar";
@@ -52,49 +53,62 @@ export default async function PlanPage({ params }: { params: Promise<{ w: string
     ];
 
   return (
-    <div className="max-w-3xl space-y-8">
-      <header className="space-y-2">
-        <h1 className="font-serif text-headline-mobile md:text-headline-lg">Checklist</h1>
-        <p className="text-body-lg text-ink-muted">
-          {settings.date
-            ? "Suggested tasks follow your wedding date. Change a task's date and it stays where you put it."
-            : "Set your wedding date and suggested tasks get dates too. Until then they simply have no date."}
-        </p>
-      </header>
-
-      <p>
-        <Link href={`${base}/plan/budget`} className={link}>
-          Open your budget
+    <div className="space-y-6">
+      <WorkspacePageHeading
+        title="Checklist"
+        description={
+          settings.date
+            ? "Suggested task dates follow your wedding date."
+            : "Set a wedding date to schedule your suggested tasks."
+        }
+        actions={
+          canEdit && (
+            <TrayButton
+              label="Add a task"
+              title="Add a task"
+              openOnParam="add"
+              description="Leave the date blank if you're not sure yet."
+            >
+              <TaskForm
+                action={createTask}
+                rotateKey
+                compact
+                autoFocusTitle
+                assignees={assignees}
+                submitLabel="Add task"
+                pendingLabel="Adding…"
+                defaults={{ title: "", notes: "", dueDate: "", assignee: "" }}
+                hidden={{ workspaceId: access.wedding.id, idempotencyKey: randomUUID() }}
+              />
+            </TrayButton>
+          )
+        }
+      />
+      <nav aria-label="Planning tools" className="tool-nav">
+        <Link href={`${base}/plan/budget`} className="tool-link">
+          Budget
         </Link>
-        {" · "}
-        <Link href={`${base}/plan/documents`} className={link}>
+        <Link href={`${base}/plan/documents`} className="tool-link">
           Documents
         </Link>
-        {" · "}
-        <Link href={`${base}/plan/packages`} className={link}>
+        <Link href={`${base}/plan/packages`} className="tool-link">
           Packages
         </Link>
-        {" · "}
-        <Link href={`${base}/plan/events`} className={link}>
+        <Link href={`${base}/plan/events`} className="tool-link">
           Events
         </Link>
-        {" · "}
         {lodgingEnabled() && hasCapability(access, "guests.manage") && (
-          <>
-            <Link href={`${base}/plan/lodging`} className={link}>
-              Lodging
-            </Link>
-            {" · "}
-          </>
+          <Link href={`${base}/plan/lodging`} className="tool-link">
+            Lodging
+          </Link>
         )}
-        <Link href={`${base}/plan/day-of`} className={link}>
+        <Link href={`${base}/plan/day-of`} className="tool-link">
           Wedding day
         </Link>
-        {" · "}
-        <Link href={`${base}/design`} className={link}>
+        <Link href={`${base}/design`} className="tool-link">
           Design
         </Link>
-      </p>
+      </nav>
 
       {drift > 0 && (
         <Card className="border-border-control">
@@ -112,34 +126,16 @@ export default async function PlanPage({ params }: { params: Promise<{ w: string
       )}
 
       {total > 0 && (
-        <ProgressBar
-          label="Checklist progress"
-          value={done}
-          max={total}
-          valueText={`${done} of ${total} done`}
-        />
-      )}
-
-      {canEdit && (
-        <div>
-          <TrayButton
-            label="Add a task"
-            title="Add a task"
-            openOnParam="add"
-            description="Leave the date blank if you're not sure yet."
-          >
-            <TaskForm
-              action={createTask}
-              rotateKey
-              compact
-              autoFocusTitle
-              assignees={assignees}
-              submitLabel="Add task"
-              pendingLabel="Adding…"
-              defaults={{ title: "", notes: "", dueDate: "", assignee: "" }}
-              hidden={{ workspaceId: access.wedding.id, idempotencyKey: randomUUID() }}
+        <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-3">
+          <div className="min-w-0 max-w-lg flex-1 basis-56">
+            <ProgressBar
+              label="Checklist progress"
+              value={done}
+              max={total}
+              valueText={`${done} of ${total} done`}
             />
-          </TrayButton>
+          </div>
+          <DensityToggle workspaceId={access.wedding.id} density={density} />
         </div>
       )}
 
@@ -165,7 +161,6 @@ export default async function PlanPage({ params }: { params: Promise<{ w: string
         </Card>
       ) : (
         <>
-          <DensityToggle workspaceId={access.wedding.id} density={density} />
           {sections.map(({ key, title }) =>
             groups[key].length === 0 ? null : (
               <section key={key} aria-labelledby={`h-${key}`} className="space-y-3">
@@ -192,14 +187,14 @@ export default async function PlanPage({ params }: { params: Promise<{ w: string
                     ));
                   return (
                     <>
-                      <ul className="space-y-3 compact:space-y-1.5">{items(head)}</ul>
+                      <ul className="record-list">{items(head)}</ul>
                       {rest.length > 0 && (
                         <details className="group">
                           <summary className="flex min-h-11 cursor-pointer items-center text-label-lg font-semibold text-action-emphasis underline underline-offset-4">
                             <span className="group-open:hidden">Show {rest.length} more</span>
                             <span className="hidden group-open:inline">Show fewer</span>
                           </summary>
-                          <ul className="mt-3 space-y-3 compact:space-y-1.5">{items(rest)}</ul>
+                          <ul className="record-list mt-2">{items(rest)}</ul>
                         </details>
                       )}
                     </>
@@ -213,7 +208,7 @@ export default async function PlanPage({ params }: { params: Promise<{ w: string
               <summary className="min-h-11 cursor-pointer py-2 font-serif text-headline-sm">
                 Done ({groups.done.length})
               </summary>
-              <ul className="mt-3 space-y-3 compact:space-y-1.5">
+              <ul className="record-list mt-2">
                 {groups.done.map((s) => (
                   <TaskItem
                     key={s.id}
@@ -267,13 +262,9 @@ function TaskItem({
   const overdue = isOverdue(task.dueDate, today, done);
   const who = task.assigneeUserId ? assignee.get(task.assigneeUserId) : undefined;
   return (
-    <Card
-      as="li"
+    <li
       id={`task-${task.id}`}
-      className={cn(
-        "flex items-start gap-3 p-4 sm:p-4 compact:px-4 compact:py-2",
-        overdue && "border-l-4 border-l-danger",
-      )}
+      className={cn("flex scroll-mt-20 items-start gap-2 px-3 py-2 sm:px-4 sm:py-3 compact:py-0.5")}
     >
       <TaskToggle
         workspaceId={workspaceId}
@@ -283,8 +274,13 @@ function TaskItem({
         done={done}
         disabled={!canEdit}
       />
-      <div className="min-w-0 flex-1 space-y-1">
-        <div className={done ? "text-body-lg text-ink-muted line-through" : "text-body-lg"}>
+      <div className="grid min-w-0 flex-1 gap-x-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,14rem)] sm:items-center">
+        <div
+          className={cn(
+            "min-w-0 text-body-md font-semibold wrap-anywhere",
+            done && "text-ink-muted line-through",
+          )}
+        >
           {canEdit ? (
             <TrayButton
               triggerStyle="plain"
@@ -342,9 +338,9 @@ function TaskItem({
           </span>
         </p>
         {task.dateKind !== "relative" && task.dueDate && !done && (
-          <p className="text-body-sm text-ink-muted">Date set by you, so it won&apos;t move.</p>
+          <p className="text-body-sm text-ink-muted sm:col-start-2">Date set by you</p>
         )}
       </div>
-    </Card>
+    </li>
   );
 }

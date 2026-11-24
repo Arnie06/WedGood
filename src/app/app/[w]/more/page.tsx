@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
-import { Card } from "@/components/ui/card";
+import { WorkspacePageHeading } from "@/components/shell/workspace-page-heading";
 import type { Capability } from "@/domain/permissions";
 import { getNavGroup } from "@/components/shell/nav-groups";
 import { hasCapability, requireWorkspace } from "@/server/auth/workspace-guard";
@@ -81,43 +81,46 @@ export default async function MorePage({ params }: { params: Promise<{ w: string
 
   return (
     <div className="space-y-8">
-      <header className="space-y-3">
-        <h1 className="font-serif text-headline-mobile md:text-headline-lg">{group.label}</h1>
-        <p className="max-w-2xl text-body-lg text-ink-muted">{group.summary}</p>
-      </header>
-      {sections.map((section) => {
-        const links = section.links.filter(
-          (link) => !link.capability || hasCapability(access, link.capability),
-        );
-        if (links.length === 0) return null;
-        return (
-          <section key={section.title} aria-labelledby={`more-${section.id}`} className="space-y-3">
-            <h2 id={`more-${section.id}`} className="text-label-lg font-semibold uppercase">
-              {section.title}
-            </h2>
-            <ul className="grid gap-3 sm:grid-cols-2">
-              {links.map((link) => (
-                <li key={link.href}>
-                  <Card className="p-0 sm:p-0">
+      <WorkspacePageHeading title={group.label} />
+      <div className="grid items-start gap-5 md:grid-cols-2">
+        {sections.map((section) => {
+          const links = section.links.filter(
+            (link) => !link.capability || hasCapability(access, link.capability),
+          );
+          if (links.length === 0) return null;
+          return (
+            <section
+              key={section.title}
+              aria-labelledby={`more-${section.id}`}
+              className="space-y-3"
+            >
+              <h2 id={`more-${section.id}`} className="font-serif text-headline-sm">
+                {section.title}
+              </h2>
+              <ul className="record-list">
+                {links.map((link) => (
+                  <li key={link.href}>
                     <Link
                       href={link.href.startsWith("/") ? link.href : `${base}/${link.href}`}
-                      className="flex min-h-16 items-center justify-between gap-4 rounded-card p-4 sm:p-5"
+                      className="flex min-h-16 items-center justify-between gap-4 rounded-card px-4 py-3 hover:bg-surface-sunken"
                     >
                       <span className="min-w-0 space-y-1">
-                        <span className="block font-serif text-headline-sm">{link.name}</span>
+                        <span className="block text-body-md font-semibold text-action-emphasis">
+                          {link.name}
+                        </span>
                         <span className="block text-body-sm text-ink-muted">
                           {link.description}
                         </span>
                       </span>
                       <ChevronRight aria-hidden="true" className="size-5 shrink-0 text-ink-muted" />
                     </Link>
-                  </Card>
-                </li>
-              ))}
-            </ul>
-          </section>
-        );
-      })}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          );
+        })}
+      </div>
     </div>
   );
 }

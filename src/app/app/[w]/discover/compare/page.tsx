@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { WorkspacePageHeading } from "@/components/shell/workspace-page-heading";
 import { Badge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -16,15 +17,14 @@ export default async function ComparePage({ params }: { params: Promise<{ w: str
   const canManage = hasCapability(access, "vendors.manage");
   const comparisons = await loadComparisons(access.wedding.id);
   return (
-    <div className="max-w-3xl space-y-8">
-      <header className="space-y-2">
-        <h1 className="font-serif text-headline-mobile md:text-headline-lg">Compare quotes</h1>
-        <p className="text-body-lg text-ink-muted">
-          Line up two to four quotes for the same number of guests. Costs you don&apos;t know yet
-          stay visible, and nothing is booked when you choose.
-        </p>
-      </header>
-      {canManage && <ButtonLink href={`${base}/discover/compare/new`}>New comparison</ButtonLink>}
+    <div className="space-y-6">
+      <WorkspacePageHeading
+        title="Compare quotes"
+        description="Compare two to four quotes using the same guest count."
+        actions={
+          canManage && <ButtonLink href={`${base}/discover/compare/new`}>New comparison</ButtonLink>
+        }
+      />
       {comparisons.length === 0 ? (
         <Card>
           <p className="text-body-md text-ink-muted">
@@ -36,14 +36,17 @@ export default async function ComparePage({ params }: { params: Promise<{ w: str
           </p>
         </Card>
       ) : (
-        <ul className="space-y-3">
+        <ul className="record-list">
           {comparisons.map((c) => (
-            <Card as="li" key={c.id} className="space-y-1 p-4 sm:p-4">
+            <li
+              key={c.id}
+              className="flex flex-wrap items-center justify-between gap-x-4 px-4 py-2"
+            >
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="font-serif text-headline-sm break-words">
+                <h2 className="min-w-0 text-body-md font-semibold wrap-anywhere">
                   <Link
                     href={`${base}/discover/compare/${c.id}`}
-                    className="underline-offset-4 hover:underline"
+                    className={`${link} inline-flex min-h-11 items-center`}
                   >
                     {c.title}
                   </Link>
@@ -53,7 +56,7 @@ export default async function ComparePage({ params }: { params: Promise<{ w: str
               <p className="text-body-sm text-ink-muted">
                 {c.optionCount} quotes · priced for {c.guestCount} guests
               </p>
-            </Card>
+            </li>
           ))}
         </ul>
       )}

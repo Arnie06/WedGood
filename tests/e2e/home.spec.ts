@@ -88,7 +88,7 @@ test("an empty workspace is guided; the budget target is set inline", async ({ p
 
   await budget.fill("25000");
   await page.getByRole("button", { name: "Save" }).click();
-  // The prompt resolves itself and the value shows under Event details. A confirmation toast
+  // The prompt resolves itself and the value shows in the overview. A confirmation toast
   // arrives with UX-03, since the prompt unmounts on revalidation.
   await expect(page.getByLabel(/^Budget target/)).toHaveCount(0);
   await expect(page.getByText("$25,000.00").first()).toBeVisible();
@@ -129,7 +129,7 @@ test("a viewer sees no setup prompts they cannot act on", async ({ page }) => {
   await expect(page.getByLabel(/^Budget target/)).toHaveCount(0);
 });
 
-test("the header shows days to go, and Home passes axe at 320 and 1280", async ({ page }) => {
+test("the dashboard shows days to go, and Home passes axe at 320 and 1280", async ({ page }) => {
   const owner = await appUser("home-a11y");
   const date = new Date(Date.now() + 100 * 86_400_000).toISOString().slice(0, 10);
   const wedding = await createWedding(owner, {
@@ -140,7 +140,7 @@ test("the header shows days to go, and Home passes axe at 320 and 1280", async (
   for (const width of [320, 1280]) {
     await page.setViewportSize({ width, height: 800 });
     await page.goto(`/app/${wedding}`);
-    await expect(page.getByRole("banner").getByText(/days to go/)).toBeVisible();
+    await expect(page.getByRole("main").getByText(/days to go/)).toBeVisible();
     const results = await new AxeBuilder({ page })
       .withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"])
       .analyze();
