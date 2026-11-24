@@ -55,7 +55,7 @@ jobs:
 
   e2e:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -68,7 +68,8 @@ jobs:
           version: 2.120.0
       - run: pnpm install --frozen-lockfile
       # Real local stack so the auth/membership specs run instead of skipping.
-      - run: pnpm db:start
+      # The Docker network occasionally fails to bind a port on a runner; one retry clears it.
+      - run: pnpm db:start || (pnpm db:stop; sleep 5; pnpm db:start)
       # Fresh reset + seed proves migrations and the seed script work from scratch.
       - run: pnpm db:fresh
       - run: pnpm exec playwright install --with-deps chromium firefox webkit

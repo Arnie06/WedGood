@@ -25,6 +25,7 @@
     "db:fresh": "supabase db reset && node scripts/seed-local.ts",
     "db:types": "supabase gen types typescript --local --schema public > src/server/db/database.types.ts",
     "test:e2e": "playwright test",
+    "test:e2e:local": "sh scripts/e2e-preflight.sh 3200 && nice -n 10 playwright test",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },

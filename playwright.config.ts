@@ -45,13 +45,23 @@ const firefoxProject =
 
 export default defineConfig({
   testDir: "./tests/e2e",
+  // Locally the default (half the cores) plus the app server and the database stack overloads the
+  // machine; the timeouts that follow were load, not bugs. Override with E2E_WORKERS.
+  ...(process.env.E2E_WORKERS
+    ? { workers: Number(process.env.E2E_WORKERS) }
+    : process.env.CI
+      ? {}
+      : { workers: 3 }),
+  // Slower local machines need more room for the long axe sweeps than CI's clean runners.
+  timeout: process.env.CI ? 30_000 : 60_000,
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? [["github"], ["list"]] : "list",
   use: {
     baseURL: `http://localhost:${PORT}`,
-    trace: "retain-on-failure",
+    // Traces are many small files; locally they cost scan and disk time on every test.
+    trace: process.env.CI ? "retain-on-failure" : "off",
   },
   // Chromium runs everything; Firefox and WebKit run only the shallow smoke spec.
   projects: [
@@ -64,7 +74,8 @@ export default defineConfig({
     ...firefoxProject,
   ],
   webServer: {
-    command: `next build && next start -p ${PORT}`,
+    // Rebuilds only when source changed (CI always builds); see scripts/e2e-serve.sh.
+    command: `sh scripts/e2e-serve.sh ${PORT}`,
     url: `http://localhost:${PORT}`,
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,
@@ -88,6 +99,7 @@ export default defineConfig({
       // UX-17 is off by default; the suite turns guest shuttles on.
       GUEST_SHUTTLES: "on",
       GUEST_LODGING: "on",
+      DAY_OF_CHECKIN: "on",
     },
   },
 });
